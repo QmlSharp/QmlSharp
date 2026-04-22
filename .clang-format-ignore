@@ -1,0 +1,6 @@
+artifacts/**
+build/**
+dist/**
+native/generated/**
+out/**
+src/**/Generated/**

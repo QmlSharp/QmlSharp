@@ -1,0 +1,32 @@
+---
+BasedOnStyle: Google
+Standard: c++20
+ColumnLimit: 120
+IndentWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+IndentCaseLabels: true
+FixNamespaceComments: true
+EmptyLineBeforeAccessModifier: Always
+BreakAfterAttributes: Leave
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"Config\.h"'
+    Priority: -1
+  - Regex: '^"qmlsharp/.*"'
+    Priority: 0
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  - Regex: '^<.*>'
+    Priority: 2
+  - Regex: '.*'
+    Priority: 3
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+LambdaBodyIndentation: Signature
+BreakBeforeConceptDeclarations: Always
+RequiresClausePosition: OwnLine
+IndentRequiresClause: true
+QualifierAlignment: Left
+PointerAlignment: Left

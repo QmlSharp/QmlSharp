@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dotnet restore",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["restore", "QmlSharp.sln"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "dotnet build",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "QmlSharp.sln"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "dotnet test",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test", "QmlSharp.sln"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "cmake configure",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--preset", "windows-debug"],
+      "problemMatcher": []
+    },
+    {
+      "label": "cmake build",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--build", "--preset", "debug"],
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+.worktrees/
+.vs/
+.vscode/*.code-workspace
+artifacts/
+build/
+out/
+dist/
+.compiler-cache/
+.qmlsharp/
+TestResults/
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+Testing/
+**/bin/
+**/obj/

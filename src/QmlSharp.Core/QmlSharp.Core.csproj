@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Core</AssemblyName>
+    <RootNamespace>QmlSharp.Core</RootNamespace>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Registry</AssemblyName>
+    <RootNamespace>QmlSharp.Registry</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QmlSharp.Core\QmlSharp.Core.csproj" />
+  </ItemGroup>
+</Project>
