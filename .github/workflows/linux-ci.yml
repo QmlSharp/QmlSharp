@@ -107,4 +107,16 @@ jobs:
         run: cmake --build --preset linux-ci
 
       - name: Run pre-commit hooks
-        run: pre-commit run --all-files --show-diff-on-failure --color=always
+        run: |
+          set +e
+          pre-commit run --all-files --show-diff-on-failure --color=always
+          status=$?
+          set -e
+          if [[ ${status} -eq 0 ]]; then
+            exit 0
+          fi
+          if git diff --quiet --exit-code; then
+            exit "${status}"
+          fi
+          echo 'pre-commit made changes; rerunning once'
+          pre-commit run --all-files --show-diff-on-failure --color=always
