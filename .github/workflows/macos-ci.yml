@@ -127,8 +127,5 @@ jobs:
           if [[ ${status} -eq 0 ]]; then
             exit 0
           fi
-          if git diff --quiet --exit-code && git diff --quiet --cached --exit-code; then
-            exit "${status}"
-          fi
           echo 'pre-commit made changes; rerunning once'
           pre-commit run --all-files --show-diff-on-failure --color=always
