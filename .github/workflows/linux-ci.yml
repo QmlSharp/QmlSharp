@@ -72,6 +72,21 @@ jobs:
           echo "${fastbuild_root}" >> "${GITHUB_PATH}"
           echo "FASTBuild installed to ${fastbuild_root}"
 
+      - name: Resolve FASTBuild cache path
+        id: fbcache
+        run: |
+          sudo mkdir -p /cache/fastbuild
+          sudo chown "$USER":"$USER" /cache/fastbuild
+          echo "path=/cache/fastbuild" >> "${GITHUB_OUTPUT}"
+          echo "FASTBuild cache: /cache/fastbuild"
+
+      - name: Restore FASTBuild compilation cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.fbcache.outputs.path }}
+          key: fbcache-linux-${{ github.sha }}
+          restore-keys: fbcache-linux-
+
       - name: Install pre-commit
         run: |
           python -m pip install --upgrade pip
@@ -122,3 +137,8 @@ jobs:
           fi
           echo 'pre-commit made changes; rerunning once'
           pre-commit run --all-files --show-diff-on-failure --color=always
+
+      - name: Trim FASTBuild cache
+        if: always()
+        run: FBuild -cachetrim 10240
+        working-directory: ${{ github.workspace }}/build/linux-ci
