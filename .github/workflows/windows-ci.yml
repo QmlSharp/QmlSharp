@@ -37,12 +37,33 @@ jobs:
         with:
           apps: cmake
 
+      - name: Verify CMake version
+        run: |
+          $requiredVersion = [version]'4.2.0'
+          $versionOutput = cmake --version | Select-Object -First 1
+          if ($versionOutput -notmatch '^cmake version (\d+\.\d+\.\d+)') {
+            throw "Unable to determine installed CMake version from output: $versionOutput"
+          }
+
+          $installedVersion = [version]$Matches[1]
+          if ($installedVersion -lt $requiredVersion) {
+            throw "CMake $requiredVersion or newer is required by CMakePresets.json, but Scoop installed $installedVersion."
+          }
+
+          Write-Host "Using CMake $installedVersion"
+
       - name: Install FASTBuild
         run: |
           $url = 'https://www.fastbuild.org/downloads/v1.19/FASTBuild-Windows-x64-v1.19.zip'
+          $expectedSha256 = '30ba4bff1afea10a7d9cd02740cbca7a42a4539a16e8cd7e221223c238951ff6'
           $zip = Join-Path $env:RUNNER_TEMP 'fastbuild.zip'
           $dest = Join-Path $env:RUNNER_TEMP 'fastbuild'
           Invoke-WebRequest -Uri $url -OutFile $zip
+          $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "FASTBuild archive SHA256 mismatch. Expected $expectedSha256, got $actualSha256."
+          }
+
           Expand-Archive -Path $zip -DestinationPath $dest -Force
 
           $exe = Get-ChildItem $dest -Recurse -Filter FBuild.exe | Select-Object -First 1

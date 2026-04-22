@@ -53,15 +53,44 @@ jobs:
             echo "CMake ${current_version} already satisfies ${required_version}"
           else
             brew install cmake
-            echo "$(brew --prefix cmake)/bin" >> "${GITHUB_PATH}"
+            brewed_cmake_bin="$(brew --prefix cmake)/bin"
+            export PATH="${brewed_cmake_bin}:${PATH}"
+            echo "${brewed_cmake_bin}" >> "${GITHUB_PATH}"
+
+            current_version="$(cmake --version 2>/dev/null | head -n 1 | awk '{print $3}' || true)"
+            if [[ -n "${current_version}" ]] && python3 - "${current_version}" "${required_version}" <<'PY'
+            import re
+            import sys
+
+            def parse(version: str):
+                match = re.match(r'^(\d+)\.(\d+)\.(\d+)', version)
+                return tuple(map(int, match.groups())) if match else None
+
+            current = parse(sys.argv[1])
+            required = parse(sys.argv[2])
+            sys.exit(0 if current and required and current >= required else 1)
+            PY
+            then
+              echo "CMake ${current_version} installed and satisfies ${required_version}"
+            else
+              echo "Installed CMake version '${current_version:-unavailable}' does not satisfy required version '${required_version}'." >&2
+              exit 1
+            fi
           fi
 
       - name: Install FASTBuild
         run: |
           fastbuild_url='https://www.fastbuild.org/downloads/v1.19/FASTBuild-OSX-x64+ARM-v1.19.zip'
+          fastbuild_sha256='2dd0eb9d7ba335ac0a4bf1851a3aab03f479ade33f4954ecc41a6ab63f829a91'
           fastbuild_archive="${RUNNER_TEMP}/fastbuild.zip"
           fastbuild_root="${RUNNER_TEMP}/fastbuild"
           curl -fsSL "${fastbuild_url}" -o "${fastbuild_archive}"
+          actual_sha256="$(shasum -a 256 "${fastbuild_archive}" | awk '{print $1}')"
+          if [[ "${actual_sha256}" != "${fastbuild_sha256}" ]]; then
+            echo "FASTBuild archive SHA256 mismatch. Expected ${fastbuild_sha256}, got ${actual_sha256}." >&2
+            exit 1
+          fi
+
           mkdir -p "${fastbuild_root}"
           unzip -q "${fastbuild_archive}" -d "${fastbuild_root}"
 
