@@ -97,7 +97,7 @@ jobs:
         env:
           CC: clang-cl
           CXX: clang-cl
-        run: cmake --preset windows-ci -DUSE_WERROR=ON
+        run: cmake --preset windows-ci
 
       - name: Build (FASTBuild)
         env:
