@@ -1,0 +1,106 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  build:
+    name: Windows x64 (FASTBuild)
+    runs-on: windows-2022
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Install CMake (Scoop)
+        uses: MinoruSekine/setup-scoop@v4
+        with:
+          apps: cmake
+
+      - name: Install FASTBuild
+        run: |
+          $url = 'https://www.fastbuild.org/downloads/v1.19/FASTBuild-Windows-x64-v1.19.zip'
+          $zip = Join-Path $env:RUNNER_TEMP 'fastbuild.zip'
+          $dest = Join-Path $env:RUNNER_TEMP 'fastbuild'
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+
+          $exe = Get-ChildItem $dest -Recurse -Filter FBuild.exe | Select-Object -First 1
+          if (-not $exe) {
+            throw 'FBuild.exe not found after FASTBuild installation'
+          }
+
+          $exe.DirectoryName >> $env:GITHUB_PATH
+          Write-Host "FASTBuild installed to $($exe.DirectoryName)"
+
+      - name: Setup MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Detect Windows SDK
+        run: |
+          $rc = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter rc.exe |
+                Where-Object { $_.FullName -match '\\x64\\' } |
+                Sort-Object FullName |
+                Select-Object -Last 1
+          if (-not $rc) {
+            throw 'rc.exe not found in Windows SDK'
+          }
+
+          Write-Host "Found rc.exe -> $($rc.DirectoryName)"
+          "WindowsKitRC=$($rc.DirectoryName)" >> $env:GITHUB_ENV
+          $rc.DirectoryName >> $env:GITHUB_PATH
+
+      - name: Verify tool versions
+        run: |
+          Write-Host "dotnet: $(& dotnet --version)"
+          Write-Host "CMake:  $(cmake --version | Select-Object -First 1)"
+          Write-Host "MSVC:   $(cl 2>&1 | Select-Object -First 1)"
+          Write-Host "Clang:  $(clang-cl --version | Select-Object -First 1)"
+          Write-Host "FBuild: $(FBuild.exe -version 2>&1 | Select-Object -First 1)"
+          Write-Host "Windows SDK RC: $env:WindowsKitRC"
+
+      - name: Restore .NET solution
+        run: dotnet restore QmlSharp.sln
+
+      - name: Build .NET solution
+        run: dotnet build QmlSharp.sln --configuration Debug --no-restore
+
+      - name: Test .NET solution
+        run: dotnet test QmlSharp.sln --configuration Debug --no-build --verbosity normal
+
+      - name: Check .NET formatting
+        run: dotnet format QmlSharp.sln --verify-no-changes --verbosity minimal
+
+      - name: Configure (CMake)
+        env:
+          CC: clang-cl
+          CXX: clang-cl
+        run: cmake --preset windows-ci -DUSE_WERROR=ON
+
+      - name: Build (FASTBuild)
+        env:
+          CC: clang-cl
+          CXX: clang-cl
+        run: cmake --build --preset windows-ci
