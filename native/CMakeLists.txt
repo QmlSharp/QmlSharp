@@ -1,4 +1,5 @@
 add_library(qmlsharp_native_bootstrap STATIC
+  include/qmlsharp/bootstrap_placeholder.h
   src/bootstrap_placeholder.cpp
 )
 

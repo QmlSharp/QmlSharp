@@ -12,7 +12,7 @@ not implement real `01-registry` behavior yet.
 ## Required local tools
 
 - .NET SDK 10.0.202
-- CMake 4.x or newer
+- CMake 4.2 or newer
 - `pre-commit` (optional but recommended)
 - `clang-format` (optional until native formatting hooks become mandatory)
 
@@ -29,6 +29,9 @@ dotnet format QmlSharp.sln --verify-no-changes
 
 `cmake --preset windows-debug` and `cmake --build --preset debug` are intentionally Qt-free in
 Step 01.00. Real Qt discovery starts in later native-host and build-system steps.
+
+On Windows, run the native preset commands from a Visual Studio developer shell or by calling
+`vcvars64.bat` first so `clang-cl` and `FBuild.exe` are available in `PATH`.
 
 ## Local quality workflow
 

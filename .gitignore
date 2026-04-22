@@ -8,5 +8,9 @@ dist/
 .compiler-cache/
 .qmlsharp/
 TestResults/
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+Testing/
 **/bin/
 **/obj/

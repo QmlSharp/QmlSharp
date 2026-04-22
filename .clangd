@@ -1,5 +1,25 @@
+# https://clangd.llvm.org/config
+---
+CompileFlags:
+  CompilationDatabase: build
+
+Diagnostics:
+  Includes:
+    IgnoreHeader:
+      - \.moc$
+---
+If:
+  PathMatch: .*\.(h|hh|hpp|hxx|inc)
+
 CompileFlags:
   Add:
-    - -std=c++20
+    - -Wno-unneeded-internal-declaration
+    - -Wno-unused-const-variable
+    - -Wno-unused-function
+    - -Wno-unused-variable
+---
+If:
+  PathMatch: (build|dist|out|artifacts|native/generated|src/.*/Generated|3rdParty)/.*
+
 Diagnostics:
-  UnusedIncludes: Strict
+  Suppress: "*"

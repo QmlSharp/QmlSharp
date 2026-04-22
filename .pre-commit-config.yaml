@@ -1,36 +1,68 @@
+default_language_version:
+  python: python3
+
+exclude: |
+  (?x)^(
+    artifacts/.*|
+    build/.*|
+    dist/.*|
+    native/generated/.*|
+    out/.*|
+    src/.*/Generated/.*|
+    tests/fixtures/.*|
+    tools/.*/Generated/.*
+  )$
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: mixed-line-ending
         args: [--fix=lf]
-      - id: check-json
-      - id: check-yaml
-      - id: check-toml
-      - id: check-merge-conflict
       - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+      - id: check-executables-have-shebangs
+        exclude: (?i)\.(qml|txt|md|yaml|ignore)$|^\.clang-tidy$
+      - id: check-shebang-scripts-are-executable
+        exclude: \.sh$
+
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.2
     hooks:
       - id: codespell
-        args: [--ignore-words=.codespell-ignore]
+        additional_dependencies: [tomli]
+        args: [-I, .codespell-ignore]
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v22.1.0
+    hooks:
+      - id: clang-format
+        files: \.(c|h|cpp|hpp|cc|hh|cxx|hxx|mm|inc)$
+        types_or: [c++, c, objective-c, objective-c++]
+
+  - repo: https://github.com/pocc/pre-commit-hooks
+    rev: v1.3.5
+    hooks:
+      - id: clang-tidy
+        files: \.(cpp|hpp|cc|hh|cxx|hxx|mm)$
+        args: [--quiet, --use-color, -p=build]
+        types_or: [c++, c]
+        require_serial: false
+        additional_dependencies: [clang-tidy==22.1.0]
+
   - repo: local
     hooks:
       - id: dotnet-format
         name: dotnet format
         entry: >-
           pwsh -NoLogo -NoProfile -Command
-          "& { if ($args.Count -gt 0) { dotnet format QmlSharp.sln --include $args --verbosity minimal } }"
+          "& { if ($args.Count -gt 0) { dotnet format QmlSharp.sln --include $args --verbosity minimal } else { dotnet format QmlSharp.sln --verbosity minimal } }"
         language: system
         pass_filenames: true
         files: \.cs$
-      - id: clang-format
-        name: clang-format
-        entry: >-
-          pwsh -NoLogo -NoProfile -Command
-          "& { if (Get-Command clang-format -ErrorAction SilentlyContinue) { clang-format -i $args } else { Write-Host 'clang-format not found; skipping native formatting hook.' } }"
-        language: system
-        pass_filenames: true
-        files: \.(c|cc|cpp|cxx|h|hpp|hh)$
