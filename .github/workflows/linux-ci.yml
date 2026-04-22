@@ -1,0 +1,110 @@
+name: Linux CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Linux x64 (FASTBuild)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld curl wget unzip python3-pip python3-venv
+
+      - name: Install CMake 4.2.3
+        run: |
+          cmake_url='https://github.com/Kitware/CMake/releases/download/v4.2.3/cmake-4.2.3-linux-x86_64.tar.gz'
+          cmake_archive="${RUNNER_TEMP}/cmake.tar.gz"
+          cmake_root="${RUNNER_TEMP}/cmake"
+          wget -qO "${cmake_archive}" "${cmake_url}"
+          mkdir -p "${cmake_root}"
+          tar -xzf "${cmake_archive}" -C "${cmake_root}" --strip-components=1
+          echo "${cmake_root}/bin" >> "${GITHUB_PATH}"
+
+      - name: Install FASTBuild
+        run: |
+          fastbuild_url='https://fastbuild.org/downloads/v1.19/FASTBuild-Linux-x64-v1.19.zip'
+          fastbuild_archive="${RUNNER_TEMP}/fastbuild.zip"
+          fastbuild_root="${RUNNER_TEMP}/fastbuild"
+          wget -qO "${fastbuild_archive}" "${fastbuild_url}"
+          mkdir -p "${fastbuild_root}"
+          unzip -q "${fastbuild_archive}" -d "${fastbuild_root}"
+
+          fbuild_exe="$(find "${fastbuild_root}" -type f -name FBuild | head -n 1)"
+          if [[ -z "${fbuild_exe}" ]]; then
+            echo 'FBuild not found after FASTBuild installation' >&2
+            exit 1
+          fi
+
+          chmod +x "${fbuild_exe}"
+          echo "$(dirname "${fbuild_exe}")" >> "${GITHUB_PATH}"
+          echo "FASTBuild installed to $(dirname "${fbuild_exe}")"
+
+      - name: Install pre-commit
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pre-commit
+
+      - name: Verify tool versions
+        run: |
+          echo "dotnet:     $(dotnet --version)"
+          echo "CMake:      $(cmake --version | head -n 1)"
+          echo "Clang:      $(clang --version | head -n 1)"
+          echo "LLD:        $(ld.lld --version | head -n 1)"
+          echo "Python:     $(python3 --version)"
+          echo "pip:        $(python3 -m pip --version)"
+          echo "pre-commit: $(pre-commit --version)"
+          echo "FASTBuild:  $(FBuild -version | head -n 1)"
+
+      - name: Restore .NET solution
+        run: dotnet restore QmlSharp.sln
+
+      - name: Build .NET solution
+        run: dotnet build QmlSharp.sln --configuration Debug --no-restore
+
+      - name: Test .NET solution
+        run: dotnet test QmlSharp.sln --configuration Debug --no-build --verbosity normal
+
+      - name: Check .NET formatting
+        run: dotnet format QmlSharp.sln --verify-no-changes --verbosity minimal
+
+      - name: Configure (CMake)
+        env:
+          CC: clang
+          CXX: clang++
+        run: cmake --preset linux-ci
+
+      - name: Build (FASTBuild)
+        env:
+          CC: clang
+          CXX: clang++
+        run: cmake --build --preset linux-ci
+
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files --show-diff-on-failure --color=always
