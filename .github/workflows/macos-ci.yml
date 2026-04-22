@@ -77,8 +77,12 @@ jobs:
 
       - name: Install pre-commit
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pre-commit
+          precommit_venv="${RUNNER_TEMP}/pre-commit-venv"
+          python3 -m venv "${precommit_venv}"
+          source "${precommit_venv}/bin/activate"
+          python -m pip install --upgrade pip
+          python -m pip install pre-commit
+          echo "${precommit_venv}/bin" >> "${GITHUB_PATH}"
 
       - name: Verify tool versions
         run: |

@@ -55,16 +55,10 @@ jobs:
           wget -qO "${fastbuild_archive}" "${fastbuild_url}"
           mkdir -p "${fastbuild_root}"
           unzip -q "${fastbuild_archive}" -d "${fastbuild_root}"
-
-          fbuild_exe="$(find "${fastbuild_root}" -type f -name FBuild | head -n 1)"
-          if [[ -z "${fbuild_exe}" ]]; then
-            echo 'FBuild not found after FASTBuild installation' >&2
-            exit 1
-          fi
-
-          chmod +x "${fbuild_exe}"
-          echo "$(dirname "${fbuild_exe}")" >> "${GITHUB_PATH}"
-          echo "FASTBuild installed to $(dirname "${fbuild_exe}")"
+          chmod +x "${fastbuild_root}/fbuild" "${fastbuild_root}/fbuildworker"
+          ln -sf "${fastbuild_root}/fbuild" "${fastbuild_root}/FBuild"
+          echo "${fastbuild_root}" >> "${GITHUB_PATH}"
+          echo "FASTBuild installed to ${fastbuild_root}"
 
       - name: Install pre-commit
         run: |
