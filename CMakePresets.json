@@ -233,6 +233,20 @@
       "targets": ["all"]
     },
     {
+      "name": "windows-vs-debug",
+      "configurePreset": "windows-vs",
+      "displayName": "Windows VS Debug",
+      "configuration": "Debug",
+      "targets": ["ALL_BUILD"]
+    },
+    {
+      "name": "windows-vs-release",
+      "configurePreset": "windows-vs",
+      "displayName": "Windows VS Release",
+      "configuration": "Release",
+      "targets": ["ALL_BUILD"]
+    },
+    {
       "name": "linux-debug",
       "configurePreset": "linux-debug",
       "displayName": "Linux Debug",
