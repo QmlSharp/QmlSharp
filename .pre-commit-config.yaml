@@ -55,7 +55,7 @@ repos:
         args: [--quiet, --use-color, -p=build]
         types_or: [c++, c]
         require_serial: false
-        additional_dependencies: [clang-tidy==22.1.0]
+        additional_dependencies: [clang-tidy==22.1.0.1]
 
   - repo: local
     hooks:
