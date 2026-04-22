@@ -32,10 +32,18 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Install system dependencies
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Verify hosted native tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang lld curl wget unzip python3-pip python3-venv
+          clang --version | head -n 1
+          clang++ --version | head -n 1
+          wget --version | head -n 1
+          unzip -v | head -n 1
+          python --version
 
       - name: Install CMake 4.2.3
         run: |
@@ -62,17 +70,16 @@ jobs:
 
       - name: Install pre-commit
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pre-commit
+          python -m pip install --upgrade pip
+          python -m pip install pre-commit
 
       - name: Verify tool versions
         run: |
           echo "dotnet:     $(dotnet --version)"
           echo "CMake:      $(cmake --version | head -n 1)"
           echo "Clang:      $(clang --version | head -n 1)"
-          echo "LLD:        $(ld.lld --version | head -n 1)"
-          echo "Python:     $(python3 --version)"
-          echo "pip:        $(python3 -m pip --version)"
+          echo "Python:     $(python --version)"
+          echo "pip:        $(python -m pip --version)"
           echo "pre-commit: $(pre-commit --version)"
           echo "FASTBuild:  $(FBuild -version | head -n 1)"
 
