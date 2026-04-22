@@ -1,0 +1,10 @@
+Checks: >-
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  readability-*,
+  -readability-identifier-length,
+  -readability-magic-numbers
+WarningsAsErrors: '*'
+HeaderFilterRegex: '^(native[\\/](include|src)|cmake)[\\/]'
+FormatStyle: file

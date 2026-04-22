@@ -1,0 +1,13 @@
+add_library(qmlsharp_native_bootstrap STATIC
+  src/bootstrap_placeholder.cpp
+)
+
+target_compile_features(qmlsharp_native_bootstrap PUBLIC cxx_std_20)
+target_include_directories(qmlsharp_native_bootstrap
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+qmlsharp_apply_warning_settings(qmlsharp_native_bootstrap)
+qmlsharp_enable_sanitizers(qmlsharp_native_bootstrap)
+qmlsharp_configure_static_analysis(qmlsharp_native_bootstrap)

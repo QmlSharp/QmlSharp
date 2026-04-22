@@ -1,0 +1,36 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-json
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args: [--ignore-words=.codespell-ignore]
+  - repo: local
+    hooks:
+      - id: dotnet-format
+        name: dotnet format
+        entry: >-
+          pwsh -NoLogo -NoProfile -Command
+          "& { if ($args.Count -gt 0) { dotnet format QmlSharp.sln --include $args --verbosity minimal } }"
+        language: system
+        pass_filenames: true
+        files: \.cs$
+      - id: clang-format
+        name: clang-format
+        entry: >-
+          pwsh -NoLogo -NoProfile -Command
+          "& { if (Get-Command clang-format -ErrorAction SilentlyContinue) { clang-format -i $args } else { Write-Host 'clang-format not found; skipping native formatting hook.' } }"
+        language: system
+        pass_filenames: true
+        files: \.(c|cc|cpp|cxx|h|hpp|hh)$

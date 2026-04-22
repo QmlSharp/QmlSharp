@@ -1,0 +1,7 @@
+function(qmlsharp_apply_warning_settings target_name)
+  if(MSVC)
+    target_compile_options(${target_name} PRIVATE /W4 /WX /permissive-)
+  else()
+    target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+  endif()
+endfunction()

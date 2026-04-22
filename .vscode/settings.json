@@ -1,0 +1,12 @@
+{
+  "cmake.configureOnOpen": false,
+  "files.eol": "\n",
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "build": true,
+    "artifacts": true,
+    "dist": true
+  },
+  "omnisharp.enableEditorConfigSupport": true
+}

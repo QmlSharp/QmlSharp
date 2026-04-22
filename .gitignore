@@ -1,0 +1,12 @@
+.worktrees/
+.vs/
+.vscode/*.code-workspace
+artifacts/
+build/
+out/
+dist/
+.compiler-cache/
+.qmlsharp/
+TestResults/
+**/bin/
+**/obj/
