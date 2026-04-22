@@ -69,6 +69,12 @@
       }
     },
     {
+      "name": "macos-fastbuild-base",
+      "hidden": true,
+      "inherits": ["macos-base"],
+      "generator": "FASTBuild"
+    },
+    {
       "name": "macos-debug",
       "displayName": "macOS Debug",
       "inherits": ["macos-base"],
@@ -87,6 +93,15 @@
       }
     },
     {
+      "name": "macos-ci",
+      "displayName": "macOS CI Debug",
+      "inherits": ["macos-fastbuild-base"],
+      "binaryDir": "${sourceDir}/build/macos-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
       "name": "linux-base",
       "hidden": true,
       "inherits": ["base"],
@@ -99,6 +114,12 @@
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "clang++"
       }
+    },
+    {
+      "name": "linux-fastbuild-base",
+      "hidden": true,
+      "inherits": ["linux-base"],
+      "generator": "FASTBuild"
     },
     {
       "name": "linux-debug",
@@ -116,6 +137,24 @@
       "binaryDir": "${sourceDir}/build/linux-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-ci",
+      "displayName": "Linux CI Debug",
+      "inherits": ["linux-fastbuild-base"],
+      "binaryDir": "${sourceDir}/build/linux-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-ci",
+      "displayName": "Windows x64 CI Debug",
+      "inherits": ["windows-base"],
+      "binaryDir": "${sourceDir}/build/windows-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     }
   ],
@@ -153,6 +192,27 @@
       "name": "linux-release",
       "configurePreset": "linux-release",
       "displayName": "Linux Release"
+    },
+    {
+      "name": "windows-ci",
+      "configurePreset": "windows-ci",
+      "displayName": "Windows x64 CI",
+      "nativeToolOptions": ["-cache", "-summary"],
+      "targets": ["all"]
+    },
+    {
+      "name": "macos-ci",
+      "configurePreset": "macos-ci",
+      "displayName": "macOS CI",
+      "nativeToolOptions": ["-cache", "-summary"],
+      "targets": ["all"]
+    },
+    {
+      "name": "linux-ci",
+      "configurePreset": "linux-ci",
+      "displayName": "Linux CI",
+      "nativeToolOptions": ["-cache", "-summary"],
+      "targets": ["all"]
     }
   ]
 }
