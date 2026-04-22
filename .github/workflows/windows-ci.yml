@@ -1,0 +1,147 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  build:
+    name: Windows x64 (FASTBuild)
+    runs-on: windows-2022
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Install CMake (Scoop)
+        uses: MinoruSekine/setup-scoop@v4
+        with:
+          apps: cmake
+
+      - name: Verify CMake version
+        run: |
+          $requiredVersion = [version]'4.2.0'
+          $versionOutput = cmake --version | Select-Object -First 1
+          if ($versionOutput -notmatch '^cmake version (\d+\.\d+\.\d+)') {
+            throw "Unable to determine installed CMake version from output: $versionOutput"
+          }
+
+          $installedVersion = [version]$Matches[1]
+          if ($installedVersion -lt $requiredVersion) {
+            throw "CMake $requiredVersion or newer is required by CMakePresets.json, but Scoop installed $installedVersion."
+          }
+
+          Write-Host "Using CMake $installedVersion"
+
+      - name: Install FASTBuild
+        run: |
+          $url = 'https://www.fastbuild.org/downloads/v1.19/FASTBuild-Windows-x64-v1.19.zip'
+          $expectedSha256 = '30ba4bff1afea10a7d9cd02740cbca7a42a4539a16e8cd7e221223c238951ff6'
+          $zip = Join-Path $env:RUNNER_TEMP 'fastbuild.zip'
+          $dest = Join-Path $env:RUNNER_TEMP 'fastbuild'
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "FASTBuild archive SHA256 mismatch. Expected $expectedSha256, got $actualSha256."
+          }
+
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+
+          $exe = Get-ChildItem $dest -Recurse -Filter FBuild.exe | Select-Object -First 1
+          if (-not $exe) {
+            throw 'FBuild.exe not found after FASTBuild installation'
+          }
+
+          $exe.DirectoryName >> $env:GITHUB_PATH
+          Write-Host "FASTBuild installed to $($exe.DirectoryName)"
+
+      - name: Setup MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Detect Windows SDK
+        run: |
+          $rc = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter rc.exe |
+                Where-Object { $_.FullName -match '\\x64\\' } |
+                Sort-Object FullName |
+                Select-Object -Last 1
+          if (-not $rc) {
+            throw 'rc.exe not found in Windows SDK'
+          }
+
+          Write-Host "Found rc.exe -> $($rc.DirectoryName)"
+          "WindowsKitRC=$($rc.DirectoryName)" >> $env:GITHUB_ENV
+          $rc.DirectoryName >> $env:GITHUB_PATH
+
+      - name: Resolve FASTBuild cache path
+        id: fbcache
+        run: |
+          $fbCache = Join-Path $env:LOCALAPPDATA 'FASTBuild' 'Cache'
+          New-Item $fbCache -ItemType Directory -Force | Out-Null
+          "path=$fbCache" >> $env:GITHUB_OUTPUT
+          Write-Host "FASTBuild cache: $fbCache"
+
+      - name: Restore FASTBuild compilation cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.fbcache.outputs.path }}
+          key: fbcache-windows-${{ github.sha }}
+          restore-keys: fbcache-windows-
+
+      - name: Verify tool versions
+        run: |
+          Write-Host "dotnet: $(& dotnet --version)"
+          Write-Host "CMake:  $(cmake --version | Select-Object -First 1)"
+          Write-Host "MSVC:   $(cl 2>&1 | Select-Object -First 1)"
+          Write-Host "Clang:  $(clang-cl --version | Select-Object -First 1)"
+          Write-Host "FBuild: $(FBuild.exe -version 2>&1 | Select-Object -First 1)"
+          Write-Host "Windows SDK RC: $env:WindowsKitRC"
+
+      - name: Restore .NET solution
+        run: dotnet restore QmlSharp.sln
+
+      - name: Build .NET solution
+        run: dotnet build QmlSharp.sln --configuration Debug --no-restore
+
+      - name: Test .NET solution
+        run: dotnet test QmlSharp.sln --configuration Debug --no-build --verbosity normal
+
+      - name: Check .NET formatting
+        run: dotnet format QmlSharp.sln --verify-no-changes --verbosity minimal
+
+      - name: Configure (CMake)
+        env:
+          CC: clang-cl
+          CXX: clang-cl
+        run: cmake --preset windows-ci
+
+      - name: Build (FASTBuild)
+        env:
+          CC: clang-cl
+          CXX: clang-cl
+        run: cmake --build --preset ci
+
+      - name: Trim FASTBuild cache
+        if: always()
+        run: FBuild.exe -cachetrim 10240
+        working-directory: ${{ github.workspace }}/build/windows-ci

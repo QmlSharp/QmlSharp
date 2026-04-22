@@ -3,6 +3,11 @@ function(qmlsharp_enable_compile_commands_sync)
     return()
   endif()
 
+  if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    message(STATUS "compile_commands.json sync disabled for Visual Studio generators.")
+    return()
+  endif()
+
   add_custom_target(
     sync-compile-commands ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/build"

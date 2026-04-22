@@ -19,6 +19,10 @@ function(qmlsharp_apply_warning_settings target_name)
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(qmlsharp_warning_flags -Wuninitialized -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wshadow)
 
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      list(APPEND qmlsharp_warning_flags -Wno-gnu-line-marker)
+    endif()
+
     if(USE_WERROR)
       list(APPEND qmlsharp_warning_flags -Werror)
     endif()

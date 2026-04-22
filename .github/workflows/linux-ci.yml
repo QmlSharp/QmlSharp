@@ -1,0 +1,144 @@
+name: Linux CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Linux x64 (FASTBuild)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Verify hosted native tools
+        run: |
+          clang --version | head -n 1
+          clang++ --version | head -n 1
+          wget --version | head -n 1
+          unzip -v | head -n 1
+          python --version
+
+      - name: Install CMake 4.2.3
+        run: |
+          cmake_url='https://github.com/Kitware/CMake/releases/download/v4.2.3/cmake-4.2.3-linux-x86_64.tar.gz'
+          cmake_sha256='5bb505d5e0cca0480a330f7f27ccf52c2b8b5214c5bba97df08899f5ef650c23'
+          cmake_archive="${RUNNER_TEMP}/cmake.tar.gz"
+          cmake_root="${RUNNER_TEMP}/cmake"
+          wget -qO "${cmake_archive}" "${cmake_url}"
+          echo "${cmake_sha256}  ${cmake_archive}" | sha256sum --check --status
+          mkdir -p "${cmake_root}"
+          tar -xzf "${cmake_archive}" -C "${cmake_root}" --strip-components=1
+          echo "${cmake_root}/bin" >> "${GITHUB_PATH}"
+
+      - name: Install FASTBuild
+        run: |
+          fastbuild_url='https://fastbuild.org/downloads/v1.19/FASTBuild-Linux-x64-v1.19.zip'
+          fastbuild_sha256='8d07bcf7e6840409ee96105caf93093a3a5efc6271a635cbb4e91021472e95a7'
+          fastbuild_archive="${RUNNER_TEMP}/fastbuild.zip"
+          fastbuild_root="${RUNNER_TEMP}/fastbuild"
+          wget -qO "${fastbuild_archive}" "${fastbuild_url}"
+          echo "${fastbuild_sha256}  ${fastbuild_archive}" | sha256sum --check --status
+          mkdir -p "${fastbuild_root}"
+          unzip -q "${fastbuild_archive}" -d "${fastbuild_root}"
+          chmod +x "${fastbuild_root}/fbuild" "${fastbuild_root}/fbuildworker"
+          ln -sf "${fastbuild_root}/fbuild" "${fastbuild_root}/FBuild"
+          echo "${fastbuild_root}" >> "${GITHUB_PATH}"
+          echo "FASTBuild installed to ${fastbuild_root}"
+
+      - name: Resolve FASTBuild cache path
+        id: fbcache
+        run: |
+          sudo mkdir -p /cache/fastbuild
+          sudo chown "$USER":"$USER" /cache/fastbuild
+          echo "path=/cache/fastbuild" >> "${GITHUB_OUTPUT}"
+          echo "FASTBuild cache: /cache/fastbuild"
+
+      - name: Restore FASTBuild compilation cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.fbcache.outputs.path }}
+          key: fbcache-linux-${{ github.sha }}
+          restore-keys: fbcache-linux-
+
+      - name: Install pre-commit
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pre-commit
+
+      - name: Verify tool versions
+        run: |
+          echo "dotnet:     $(dotnet --version)"
+          echo "CMake:      $(cmake --version | head -n 1)"
+          echo "Clang:      $(clang --version | head -n 1)"
+          echo "Python:     $(python --version)"
+          echo "pip:        $(python -m pip --version)"
+          echo "pre-commit: $(pre-commit --version)"
+          echo "FASTBuild:  $(FBuild -version | head -n 1)"
+
+      - name: Restore .NET solution
+        run: dotnet restore QmlSharp.sln
+
+      - name: Build .NET solution
+        run: dotnet build QmlSharp.sln --configuration Debug --no-restore
+
+      - name: Test .NET solution
+        run: dotnet test QmlSharp.sln --configuration Debug --no-build --verbosity normal
+
+      - name: Check .NET formatting
+        run: dotnet format QmlSharp.sln --verify-no-changes --verbosity minimal
+
+      - name: Configure (CMake)
+        env:
+          CC: clang
+          CXX: clang++
+        run: cmake --preset linux-ci
+
+      - name: Build (FASTBuild)
+        env:
+          CC: clang
+          CXX: clang++
+        run: cmake --build --preset linux-ci
+
+      - name: Run pre-commit hooks
+        run: |
+          set +e
+          pre-commit run --all-files --show-diff-on-failure --color=always
+          status=$?
+          set -e
+          if [[ ${status} -eq 0 ]]; then
+            exit 0
+          fi
+          echo 'pre-commit made changes; rerunning once'
+          pre-commit run --all-files --show-diff-on-failure --color=always
+
+      - name: Trim FASTBuild cache
+        if: always()
+        run: FBuild -cachetrim 10240
+        working-directory: ${{ github.workspace }}/build/linux-ci
