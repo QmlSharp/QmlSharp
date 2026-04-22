@@ -14,6 +14,9 @@
         "ENABLE_ASAN": false,
         "ENABLE_CLANG_TIDY": false,
         "USE_WERROR": true
+      },
+      "warnings": {
+        "dev": false
       }
     },
     {
@@ -31,6 +34,7 @@
         "FASTBUILD_CACHE_PATH": "$penv{LOCALAPPDATA}/FASTBuild/Cache"
       },
       "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang-cl",
         "CMAKE_CXX_COMPILER": "clang-cl",
         "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded"
       }
@@ -38,8 +42,9 @@
     {
       "name": "windows-debug",
       "displayName": "Windows x64 Debug",
+      "description": "FASTBuild Debug build",
       "inherits": ["windows-base"],
-      "binaryDir": "${sourceDir}/build/windows-debug",
+      "binaryDir": "${sourceDir}/build/debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
@@ -47,10 +52,107 @@
     {
       "name": "windows-release",
       "displayName": "Windows x64 Release",
+      "description": "FASTBuild Release build",
       "inherits": ["windows-base"],
-      "binaryDir": "${sourceDir}/build/windows-release",
+      "binaryDir": "${sourceDir}/build/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-ci",
+      "displayName": "Windows x64 CI",
+      "description": "CI build with warnings as errors",
+      "inherits": ["windows-base"],
+      "binaryDir": "${sourceDir}/build/windows-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "USE_WERROR": true
+      },
+      "warnings": {
+        "dev": true,
+        "deprecated": true
+      }
+    },
+    {
+      "name": "windows-vsbase",
+      "hidden": true,
+      "inherits": ["base"],
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "generator": "Visual Studio 18 2026",
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      },
+      "cacheVariables": {
+        "CMAKE_GENERATOR_TOOLSET": "ClangCL",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded"
+      }
+    },
+    {
+      "name": "windows-vs",
+      "displayName": "Windows x64 (Visual Studio 2026)",
+      "description": "Multi-config VS 2026 build (Debug and Release in one solution)",
+      "inherits": ["windows-vsbase"],
+      "binaryDir": "${sourceDir}/build/vs"
+    },
+    {
+      "name": "linux-base",
+      "hidden": true,
+      "inherits": ["base"],
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "generator": "FASTBuild",
+      "environment": {
+        "FASTBUILD_CACHE_PATH": "/cache/fastbuild"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "linux-debug",
+      "displayName": "Linux x64 Debug",
+      "description": "FASTBuild Debug build",
+      "inherits": ["linux-base"],
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Linux x64 Release",
+      "description": "FASTBuild Release build",
+      "inherits": ["linux-base"],
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-ci",
+      "displayName": "Linux x64 CI",
+      "description": "Linux CI build with warnings as errors",
+      "inherits": ["linux-base"],
+      "binaryDir": "${sourceDir}/build/linux-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "USE_WERROR": true
+      },
+      "warnings": {
+        "dev": true,
+        "deprecated": true
       }
     },
     {
@@ -62,21 +164,20 @@
         "lhs": "${hostSystemName}",
         "rhs": "Darwin"
       },
-      "generator": "Ninja",
+      "generator": "FASTBuild",
+      "environment": {
+        "FASTBUILD_CACHE_PATH": "$penv{HOME}/Library/Caches/FASTBuild"
+      },
       "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "12.0"
       }
     },
     {
-      "name": "macos-fastbuild-base",
-      "hidden": true,
-      "inherits": ["macos-base"],
-      "generator": "FASTBuild"
-    },
-    {
       "name": "macos-debug",
       "displayName": "macOS Debug",
+      "description": "FASTBuild Debug build",
       "inherits": ["macos-base"],
       "binaryDir": "${sourceDir}/build/macos-debug",
       "cacheVariables": {
@@ -86,6 +187,7 @@
     {
       "name": "macos-release",
       "displayName": "macOS Release",
+      "description": "FASTBuild Release build",
       "inherits": ["macos-base"],
       "binaryDir": "${sourceDir}/build/macos-release",
       "cacheVariables": {
@@ -94,67 +196,17 @@
     },
     {
       "name": "macos-ci",
-      "displayName": "macOS CI Debug",
-      "inherits": ["macos-fastbuild-base"],
+      "displayName": "macOS CI",
+      "description": "macOS CI build with warnings as errors",
+      "inherits": ["macos-base"],
       "binaryDir": "${sourceDir}/build/macos-ci",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "linux-base",
-      "hidden": true,
-      "inherits": ["base"],
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "USE_WERROR": true
       },
-      "generator": "Ninja",
-      "cacheVariables": {
-        "CMAKE_CXX_COMPILER": "clang++"
-      }
-    },
-    {
-      "name": "linux-fastbuild-base",
-      "hidden": true,
-      "inherits": ["linux-base"],
-      "generator": "FASTBuild"
-    },
-    {
-      "name": "linux-debug",
-      "displayName": "Linux Debug",
-      "inherits": ["linux-base"],
-      "binaryDir": "${sourceDir}/build/linux-debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "linux-release",
-      "displayName": "Linux Release",
-      "inherits": ["linux-base"],
-      "binaryDir": "${sourceDir}/build/linux-release",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "linux-ci",
-      "displayName": "Linux CI Debug",
-      "inherits": ["linux-fastbuild-base"],
-      "binaryDir": "${sourceDir}/build/linux-ci",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "windows-ci",
-      "displayName": "Windows x64 CI Debug",
-      "inherits": ["windows-base"],
-      "binaryDir": "${sourceDir}/build/windows-ci",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+      "warnings": {
+        "dev": true,
+        "deprecated": true
       }
     }
   ],
@@ -162,48 +214,35 @@
     {
       "name": "debug",
       "configurePreset": "windows-debug",
-      "displayName": "Windows Debug",
+      "displayName": "Debug",
       "nativeToolOptions": ["-cache", "-summary"],
       "targets": ["all"]
     },
     {
       "name": "release",
       "configurePreset": "windows-release",
-      "displayName": "Windows Release",
+      "displayName": "Release",
       "nativeToolOptions": ["-cache", "-summary"],
       "targets": ["all"]
     },
     {
-      "name": "macos-debug",
-      "configurePreset": "macos-debug",
-      "displayName": "macOS Debug"
-    },
-    {
-      "name": "macos-release",
-      "configurePreset": "macos-release",
-      "displayName": "macOS Release"
+      "name": "ci",
+      "configurePreset": "windows-ci",
+      "displayName": "CI",
+      "nativeToolOptions": ["-cache", "-summary"],
+      "targets": ["all"]
     },
     {
       "name": "linux-debug",
       "configurePreset": "linux-debug",
-      "displayName": "Linux Debug"
-    },
-    {
-      "name": "linux-release",
-      "configurePreset": "linux-release",
-      "displayName": "Linux Release"
-    },
-    {
-      "name": "windows-ci",
-      "configurePreset": "windows-ci",
-      "displayName": "Windows x64 CI",
+      "displayName": "Linux Debug",
       "nativeToolOptions": ["-cache", "-summary"],
       "targets": ["all"]
     },
     {
-      "name": "macos-ci",
-      "configurePreset": "macos-ci",
-      "displayName": "macOS CI",
+      "name": "linux-release",
+      "configurePreset": "linux-release",
+      "displayName": "Linux Release",
       "nativeToolOptions": ["-cache", "-summary"],
       "targets": ["all"]
     },
@@ -211,6 +250,27 @@
       "name": "linux-ci",
       "configurePreset": "linux-ci",
       "displayName": "Linux CI",
+      "nativeToolOptions": ["-cache", "-summary"],
+      "targets": ["all"]
+    },
+    {
+      "name": "macos-debug",
+      "configurePreset": "macos-debug",
+      "displayName": "macOS Debug",
+      "nativeToolOptions": ["-cache", "-summary"],
+      "targets": ["all"]
+    },
+    {
+      "name": "macos-release",
+      "configurePreset": "macos-release",
+      "displayName": "macOS Release",
+      "nativeToolOptions": ["-cache", "-summary"],
+      "targets": ["all"]
+    },
+    {
+      "name": "macos-ci",
+      "configurePreset": "macos-ci",
+      "displayName": "macOS CI",
       "nativeToolOptions": ["-cache", "-summary"],
       "targets": ["all"]
     }

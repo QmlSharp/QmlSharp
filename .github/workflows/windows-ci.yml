@@ -139,7 +139,7 @@ jobs:
         env:
           CC: clang-cl
           CXX: clang-cl
-        run: cmake --build --preset windows-ci
+        run: cmake --build --preset ci
 
       - name: Trim FASTBuild cache
         if: always()
