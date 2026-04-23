@@ -1,0 +1,56 @@
+[
+  {
+    "inputFile": "qtquick.h",
+    "classes": [
+      {
+        "className": "QQuickItem",
+        "qualifiedClassName": "QQuickItem",
+        "object": true,
+        "gadget": false,
+        "namespace": false,
+        "superClasses": [
+          { "name": "QObject", "access": "public" }
+        ],
+        "classInfos": [
+          { "name": "QML.Element", "value": "Item" }
+        ],
+        "properties": [],
+        "signals": [],
+        "methods": [],
+        "enums": []
+      },
+      {
+        "className": "QQuickRectangle",
+        "qualifiedClassName": "QQuickRectangle",
+        "object": true,
+        "gadget": false,
+        "namespace": false,
+        "superClasses": [
+          { "name": "QQuickItem", "access": "public" }
+        ],
+        "classInfos": [
+          { "name": "QML.Element", "value": "Rectangle" }
+        ],
+        "properties": [
+          {
+            "name": "color",
+            "type": "QColor",
+            "read": "color",
+            "write": "setColor",
+            "notify": "colorChanged",
+            "bindableProperty": null,
+            "revision": 0,
+            "index": 1,
+            "isReadonly": false,
+            "isConstant": false,
+            "isFinal": false,
+            "isRequired": false
+          }
+        ],
+        "signals": [],
+        "methods": [],
+        "enums": []
+      }
+    ]
+  }
+]

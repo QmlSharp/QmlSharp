@@ -1,0 +1,67 @@
+[
+  {
+    "inputFile": "qtquick_excerpt.h",
+    "classes": [
+      {
+        "className": "QQuickItem",
+        "qualifiedClassName": "QQuickItem",
+        "object": true,
+        "gadget": false,
+        "namespace": false,
+        "superClasses": [
+          { "name": "QObject", "access": "public" }
+        ],
+        "classInfos": [
+          { "name": "QML.Element", "value": "Item" },
+          { "name": "QML.Attached", "value": "QQuickKeysAttached" }
+        ],
+        "properties": [
+          {
+            "name": "width",
+            "type": "double",
+            "read": "width",
+            "write": "setWidth",
+            "notify": "widthChanged",
+            "bindableProperty": "bindableWidth",
+            "revision": 0,
+            "index": 1,
+            "isReadonly": false,
+            "isConstant": false,
+            "isFinal": false,
+            "isRequired": false
+          }
+        ],
+        "signals": [
+          {
+            "name": "widthChanged",
+            "arguments": [
+              { "name": "value", "type": "double" }
+            ],
+            "revision": 0
+          }
+        ],
+        "methods": [
+          {
+            "name": "forceLayout",
+            "returnType": "void",
+            "arguments": [],
+            "revision": 0,
+            "isCloned": false
+          }
+        ],
+        "enums": [
+          {
+            "name": "TransformOrigin",
+            "alias": null,
+            "isFlag": false,
+            "isClass": false,
+            "values": [
+              "TopLeft",
+              "Center"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

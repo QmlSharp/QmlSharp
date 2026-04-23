@@ -1,0 +1,4 @@
+module QtQuick
+plugin qtquickplugin
+typeinfo plugins.qmltypes
+Item 2.15 Item.qml

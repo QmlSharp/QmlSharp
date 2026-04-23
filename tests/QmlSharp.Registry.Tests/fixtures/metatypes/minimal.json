@@ -1,0 +1,24 @@
+[
+  {
+    "inputFile": "qquickitem.h",
+    "classes": [
+      {
+        "className": "QQuickItem",
+        "qualifiedClassName": "QQuickItem",
+        "object": true,
+        "gadget": false,
+        "namespace": false,
+        "superClasses": [
+          { "name": "QObject", "access": "public" }
+        ],
+        "classInfos": [
+          { "name": "QML.Element", "value": "Item" }
+        ],
+        "properties": [],
+        "signals": [],
+        "methods": [],
+        "enums": []
+      }
+    ]
+  }
+]
