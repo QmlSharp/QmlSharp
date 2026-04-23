@@ -2,6 +2,7 @@ using QmlSharp.Registry.Tests.Helpers;
 
 namespace QmlSharp.Registry.Tests.Infrastructure
 {
+    [Collection(QtEnvironmentCollection.Name)]
     public sealed class SkipUnlessEnvironmentVariableAttributeTests
     {
         [Fact]

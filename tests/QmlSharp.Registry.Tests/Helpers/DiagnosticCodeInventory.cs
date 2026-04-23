@@ -6,10 +6,10 @@ namespace QmlSharp.Registry.Tests.Helpers
     {
         public static ImmutableArray<DiagnosticCodeCoverageEntry> Entries { get; } =
         [
-            new(DiagnosticCodes.InvalidQtDir, DiagnosticCoverageStatus.Pending, null, "Planned for scanner and builder invalid path coverage."),
-            new(DiagnosticCodes.NoQmltypesFound, DiagnosticCoverageStatus.Pending, null, "Planned for scanner discovery coverage."),
-            new(DiagnosticCodes.NoQmldirFound, DiagnosticCoverageStatus.Pending, null, "Planned for scanner discovery coverage."),
-            new(DiagnosticCodes.NoMetatypesFound, DiagnosticCoverageStatus.Pending, null, "Planned for scanner discovery coverage."),
+            new(DiagnosticCodes.InvalidQtDir, DiagnosticCoverageStatus.Covered, "SCN-02", "Covered by scanner invalid path and missing qml directory tests."),
+            new(DiagnosticCodes.NoQmltypesFound, DiagnosticCoverageStatus.Covered, "Scan_returns_REG002_when_no_qmltypes_are_found", "Covered by the dedicated missing-qmltypes diagnostic test."),
+            new(DiagnosticCodes.NoQmldirFound, DiagnosticCoverageStatus.Covered, "Scan_returns_REG003_when_no_qmldir_files_are_found", "Covered by the dedicated missing-qmldir diagnostic test."),
+            new(DiagnosticCodes.NoMetatypesFound, DiagnosticCoverageStatus.Covered, "Scan_returns_REG004_when_no_metatypes_are_found", "Covered by the dedicated missing-metatypes diagnostic test."),
             new(DiagnosticCodes.QmltypesSyntaxError, DiagnosticCoverageStatus.Pending, null, "Planned for qmltypes parser syntax coverage."),
             new(DiagnosticCodes.QmltypesUnexpectedToken, DiagnosticCoverageStatus.Pending, null, "Planned for qmltypes parser token coverage."),
             new(DiagnosticCodes.QmldirSyntaxError, DiagnosticCoverageStatus.Pending, null, "Planned for qmldir parser syntax coverage."),

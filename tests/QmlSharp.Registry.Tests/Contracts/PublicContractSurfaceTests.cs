@@ -122,6 +122,7 @@ namespace QmlSharp.Registry.Tests.Contracts
             HashSet<string> expected = new HashSet<string>(StringComparer.Ordinal)
             {
                 typeof(IQtTypeScanner).FullName!,
+                typeof(QtTypeScanner).FullName!,
                 typeof(IQmltypesParser).FullName!,
                 typeof(IQmldirParser).FullName!,
                 typeof(IMetatypesParser).FullName!,
