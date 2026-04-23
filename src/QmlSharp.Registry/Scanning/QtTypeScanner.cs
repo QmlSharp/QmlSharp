@@ -108,34 +108,28 @@ namespace QmlSharp.Registry.Scanning
                 return null;
             }
 
-            string[] qmldirSegments = SplitPathSegments(qmldirPath);
-            string[] rootSegments = SplitPathSegments(qmlRootDir);
-
-            if (qmldirSegments.Length == 0 || rootSegments.Length == 0)
+            string normalizedQmldirPath = NormalizePathSeparators(qmldirPath);
+            if (!string.Equals(Path.GetFileName(normalizedQmldirPath), QmldirFileName, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
 
-            if (!string.Equals(qmldirSegments[^1], QmldirFileName, StringComparison.OrdinalIgnoreCase))
+            string? relativePath = GetRelativePathUnderRoot(normalizedQmldirPath, qmlRootDir);
+            if (relativePath is null)
             {
                 return null;
             }
 
-            int rootIndex = FindPathSegmentSequence(qmldirSegments, rootSegments);
-            if (rootIndex < 0)
+            string? moduleDirectory = Path.GetDirectoryName(relativePath);
+            if (string.IsNullOrEmpty(moduleDirectory))
             {
                 return null;
             }
 
-            int moduleStartIndex = rootIndex + rootSegments.Length;
-            int moduleSegmentCount = qmldirSegments.Length - moduleStartIndex - 1;
-
-            if (moduleSegmentCount <= 0)
-            {
-                return null;
-            }
-
-            return string.Join('.', qmldirSegments.Skip(moduleStartIndex).Take(moduleSegmentCount));
+            string[] moduleSegments = SplitPathSegments(moduleDirectory);
+            return moduleSegments.Length == 0
+                ? null
+                : string.Join('.', moduleSegments);
         }
 
         private static string DetectQtVersion(string qtDir)
@@ -145,30 +139,6 @@ namespace QmlSharp.Registry.Scanning
                 .Reverse()
                 .Where(segment => Version.TryParse(segment, out _))
                 .FirstOrDefault() ?? "unknown";
-        }
-
-        private static int FindPathSegmentSequence(IReadOnlyList<string> haystack, IReadOnlyList<string> needle)
-        {
-            for (int start = 0; start <= haystack.Count - needle.Count; start++)
-            {
-                bool matched = true;
-
-                for (int index = 0; index < needle.Count; index++)
-                {
-                    if (!string.Equals(haystack[start + index], needle[index], StringComparison.OrdinalIgnoreCase))
-                    {
-                        matched = false;
-                        break;
-                    }
-                }
-
-                if (matched)
-                {
-                    return start;
-                }
-            }
-
-            return -1;
         }
 
         private static string GetMetatypesRootDirectory(string qtDir)
@@ -358,8 +328,7 @@ namespace QmlSharp.Registry.Scanning
 
         private static ImmutableArray<string> ScanMetatypesPaths(string metatypesRootDir, ImmutableArray<string> moduleFilter, bool includeInternal)
         {
-            return Directory
-                .EnumerateFiles(metatypesRootDir, "*_metatypes.json", SearchOption.AllDirectories)
+            return EnumerateFilesRecursively(metatypesRootDir, "*_metatypes.json")
                 .Where(path => ShouldIncludeMetatypesPath(path, moduleFilter, includeInternal))
                 .Select(NormalizeAbsolutePath)
                 .OrderBy(path => path, StringComparer.Ordinal)
@@ -371,8 +340,7 @@ namespace QmlSharp.Registry.Scanning
             ImmutableArray<string> moduleFilter,
             bool includeInternal)
         {
-            string[] qmlMetadataPaths = Directory
-                .EnumerateFiles(qmlRootDir, "*", SearchOption.AllDirectories)
+            string[] qmlMetadataPaths = EnumerateFilesRecursively(qmlRootDir, "*")
                 .Where(IsQmlMetadataPath)
                 .Where(path => ShouldIncludeQmlModulePath(path, qmlRootDir, moduleFilter, includeInternal))
                 .Select(NormalizeAbsolutePath)
@@ -382,6 +350,19 @@ namespace QmlSharp.Registry.Scanning
             return (
                 qmlMetadataPaths.Where(IsQmltypesPath).ToImmutableArray(),
                 qmlMetadataPaths.Where(IsQmldirPath).ToImmutableArray());
+        }
+
+        private static IEnumerable<string> EnumerateFilesRecursively(string rootDirectory, string searchPattern)
+        {
+            return Directory.EnumerateFiles(
+                rootDirectory,
+                searchPattern,
+                new EnumerationOptions
+                {
+                    RecurseSubdirectories = true,
+                    IgnoreInaccessible = true,
+                    AttributesToSkip = FileAttributes.ReparsePoint,
+                });
         }
 
         private static bool ShouldIncludeMetatypesPath(string path, ImmutableArray<string> moduleFilter, bool includeInternal)
@@ -451,23 +432,47 @@ namespace QmlSharp.Registry.Scanning
 
         private static string? InferModuleUriFromPath(string path, string qmlRootDir)
         {
-            string directory = Path.GetDirectoryName(NormalizeAbsolutePath(path)) ?? string.Empty;
-            string[] directorySegments = SplitPathSegments(directory);
-            string[] rootSegments = SplitPathSegments(NormalizeAbsolutePath(qmlRootDir));
-            int rootIndex = FindPathSegmentSequence(directorySegments, rootSegments);
-
-            if (rootIndex < 0)
+            string? relativePath = GetRelativePathUnderRoot(path, qmlRootDir);
+            if (relativePath is null)
             {
                 return null;
             }
 
-            string[] moduleSegments = directorySegments[(rootIndex + rootSegments.Length)..];
+            string? moduleDirectory = Path.GetDirectoryName(relativePath);
+            if (string.IsNullOrEmpty(moduleDirectory))
+            {
+                return null;
+            }
+
+            string[] moduleSegments = SplitPathSegments(moduleDirectory);
             if (moduleSegments.Length == 0)
             {
                 return null;
             }
 
             return string.Join('.', moduleSegments);
+        }
+
+        private static string? GetRelativePathUnderRoot(string path, string rootDirectory)
+        {
+            if (!TryNormalizeAbsolutePath(path, out string? normalizedPath)
+                || !TryNormalizeAbsolutePath(rootDirectory, out string? normalizedRootDirectory))
+            {
+                return null;
+            }
+
+            string relativePath = Path.GetRelativePath(normalizedRootDirectory, normalizedPath);
+
+            if (string.Equals(relativePath, ".", StringComparison.Ordinal)
+                || Path.IsPathRooted(relativePath)
+                || string.Equals(relativePath, "..", StringComparison.Ordinal)
+                || relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                || relativePath.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            return relativePath;
         }
     }
 }

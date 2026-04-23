@@ -199,6 +199,27 @@ namespace QmlSharp.Registry.Tests.Scanning
         }
 
         [Fact]
+        public void SCN_09C_Scan_trims_and_matches_module_filter_case_insensitively()
+        {
+            using ScannerTestWorkspace workspace = CreateSampleQtSdkWorkspace();
+            QtTypeScanner scanner = new QtTypeScanner();
+
+            ScanResult result = scanner.Scan(
+                new ScannerConfig(workspace.RootDirectory, ModuleFilter: [" qtquick.controls "], IncludeInternal: true));
+
+            AssertPathsEqual(
+                [workspace.GetPath("qml/QtQuick/Controls/plugins.qmltypes")],
+                result.QmltypesPaths);
+            AssertPathsEqual(
+                [workspace.GetPath("qml/QtQuick/Controls/qmldir")],
+                result.QmldirPaths);
+            AssertPathsEqual(
+                [],
+                result.MetatypesPaths);
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == DiagnosticCodes.NoMetatypesFound);
+        }
+
+        [Fact]
         public void SCN_10_Scan_excludes_internal_modules_when_requested()
         {
             using ScannerTestWorkspace workspace = CreateSampleQtSdkWorkspace();
@@ -276,6 +297,54 @@ namespace QmlSharp.Registry.Tests.Scanning
         }
 
         [Fact]
+        public void InferModuleUri_handles_absolute_paths_under_qml_root()
+        {
+            using ScannerTestWorkspace workspace = CreateSampleQtSdkWorkspace();
+            QtTypeScanner scanner = new QtTypeScanner();
+
+            string? moduleUri = scanner.InferModuleUri(
+                workspace.GetPath("qml/QtQuick/Controls/qmldir"),
+                workspace.GetPath("qml"));
+
+            Assert.Equal("QtQuick.Controls", moduleUri);
+        }
+
+        [Fact]
+        public void InferModuleUri_returns_null_for_non_qmldir_file()
+        {
+            QtTypeScanner scanner = new QtTypeScanner();
+
+            string? moduleUri = scanner.InferModuleUri("qml/QtQuick/plugins.qmltypes", "qml");
+
+            Assert.Null(moduleUri);
+        }
+
+        [Fact]
+        public void InferModuleUri_returns_null_for_qmldir_outside_qml_root()
+        {
+            using ScannerTestWorkspace workspace = CreateSampleQtSdkWorkspace();
+            using ScannerTestWorkspace otherWorkspace = new ScannerTestWorkspace();
+            _ = otherWorkspace.CreateFile("qml/QtQuick/qmldir");
+            QtTypeScanner scanner = new QtTypeScanner();
+
+            string? moduleUri = scanner.InferModuleUri(
+                otherWorkspace.GetPath("qml/QtQuick/qmldir"),
+                workspace.GetPath("qml"));
+
+            Assert.Null(moduleUri);
+        }
+
+        [Fact]
+        public void InferModuleUri_returns_null_for_qmldir_at_qml_root()
+        {
+            QtTypeScanner scanner = new QtTypeScanner();
+
+            string? moduleUri = scanner.InferModuleUri("qml/qmldir", "qml");
+
+            Assert.Null(moduleUri);
+        }
+
+        [Fact]
         public void Scan_returns_REG002_when_no_qmltypes_are_found()
         {
             using ScannerTestWorkspace workspace = new ScannerTestWorkspace();
@@ -315,6 +384,29 @@ namespace QmlSharp.Registry.Tests.Scanning
             ScanResult result = scanner.Scan(new ScannerConfig(workspace.RootDirectory, ModuleFilter: null, IncludeInternal: true));
 
             Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == DiagnosticCodes.NoMetatypesFound);
+        }
+
+        [Fact]
+        public void Scan_returns_all_missing_file_diagnostics_when_filters_match_no_files()
+        {
+            using ScannerTestWorkspace workspace = CreateSampleQtSdkWorkspace();
+            QtTypeScanner scanner = new QtTypeScanner();
+
+            ScanResult result = scanner.Scan(
+                new ScannerConfig(workspace.RootDirectory, ModuleFilter: ["Does.Not.Exist"], IncludeInternal: true));
+
+            Assert.Empty(result.QmltypesPaths);
+            Assert.Empty(result.QmldirPaths);
+            Assert.Empty(result.MetatypesPaths);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == DiagnosticCodes.NoQmltypesFound
+                && diagnostic.Message.Contains("matched the current scan filters", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == DiagnosticCodes.NoQmldirFound
+                && diagnostic.Message.Contains("matched the current scan filters", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == DiagnosticCodes.NoMetatypesFound
+                && diagnostic.Message.Contains("matched the current scan filters", StringComparison.Ordinal));
         }
 
         [Fact]
