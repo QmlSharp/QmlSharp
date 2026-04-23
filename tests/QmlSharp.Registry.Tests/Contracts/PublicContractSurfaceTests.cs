@@ -16,19 +16,20 @@ namespace QmlSharp.Registry.Tests.Contracts
             object[] implementations =
             [
                 new StubQtTypeScanner(),
-                new QmltypesParser(),
-                new StubQmltypesParser(),
-                new StubQmldirParser(),
-                new StubMetatypesParser(),
-                new StubTypeNameMapper(),
-                new StubTypeNormalizer(),
+                 new QmltypesParser(),
+                 new QmldirParser(),
+                 new StubQmltypesParser(),
+                 new StubQmldirParser(),
+                 new StubMetatypesParser(),
+                 new StubTypeNameMapper(),
+                 new StubTypeNormalizer(),
                 new StubTypeRegistry(RegistryFixtures.CreateMinimalInheritanceFixture()),
                 new StubRegistryQuery(RegistryFixtures.CreateMinimalInheritanceFixture()),
                 new StubRegistrySnapshot(),
                 new StubRegistryBuilder(),
             ];
 
-            Assert.Equal(11, implementations.Length);
+            Assert.Equal(12, implementations.Length);
             Assert.All(implementations, Assert.NotNull);
         }
 
@@ -124,10 +125,11 @@ namespace QmlSharp.Registry.Tests.Contracts
             {
                 typeof(IQtTypeScanner).FullName!,
                 typeof(QtTypeScanner).FullName!,
-                typeof(IQmltypesParser).FullName!,
-                typeof(QmltypesParser).FullName!,
-                typeof(IQmldirParser).FullName!,
-                typeof(IMetatypesParser).FullName!,
+                 typeof(IQmltypesParser).FullName!,
+                 typeof(QmltypesParser).FullName!,
+                 typeof(IQmldirParser).FullName!,
+                 typeof(QmldirParser).FullName!,
+                 typeof(IMetatypesParser).FullName!,
                 typeof(ITypeNameMapper).FullName!,
                 typeof(ITypeNormalizer).FullName!,
                 typeof(ITypeRegistry).FullName!,

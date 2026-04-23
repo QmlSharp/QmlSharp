@@ -5,5 +5,5 @@ import QtQuick 2.15
 depends QtQml 2.15
 singleton Palette 2.15 Palette.qml
 internal Impl 2.15 impl/Impl.qml
-designersupported true
+designersupported
 typeinfo plugins.qmltypes
