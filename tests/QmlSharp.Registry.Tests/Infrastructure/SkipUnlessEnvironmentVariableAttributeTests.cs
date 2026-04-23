@@ -31,7 +31,7 @@ namespace QmlSharp.Registry.Tests.Infrastructure
             const string variableName = RegistryTestEnvironment.QtDirVariableName;
 
             string? original = Environment.GetEnvironmentVariable(variableName);
-            Environment.SetEnvironmentVariable(variableName, @"C:\Qt\6.8.0\msvc2022_64");
+            Environment.SetEnvironmentVariable(variableName, @"C:\Qt\6.11.0\msvc2022_64");
 
             try
             {

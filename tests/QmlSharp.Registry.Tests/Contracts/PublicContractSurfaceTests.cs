@@ -16,6 +16,7 @@ namespace QmlSharp.Registry.Tests.Contracts
             object[] implementations =
             [
                 new StubQtTypeScanner(),
+                new QmltypesParser(),
                 new StubQmltypesParser(),
                 new StubQmldirParser(),
                 new StubMetatypesParser(),
@@ -27,7 +28,7 @@ namespace QmlSharp.Registry.Tests.Contracts
                 new StubRegistryBuilder(),
             ];
 
-            Assert.Equal(10, implementations.Length);
+            Assert.Equal(11, implementations.Length);
             Assert.All(implementations, Assert.NotNull);
         }
 
@@ -85,12 +86,12 @@ namespace QmlSharp.Registry.Tests.Contracts
                 new ResolvedMethod(RegistryFixtures.CreateMethod(), RegistryFixtures.CreateItemType(), true),
                 diagnostics[0],
                 new ScannerConfig(
-                    QtDir: @"C:\Qt\6.8.0\msvc2022_64",
+                    QtDir: @"C:\Qt\6.11.0\msvc2022_64",
                     ModuleFilter: ["QtQuick"],
                     IncludeInternal: false),
                 new BuildConfig(
-                    QtDir: @"C:\Qt\6.8.0\msvc2022_64",
-                    SnapshotPath: @"C:\repo\data\qt-registry-snapshots\qt-6.8.0.bin",
+                    QtDir: @"C:\Qt\6.11.0\msvc2022_64",
+                    SnapshotPath: @"C:\repo\data\qt-registry-snapshots\qt-6.11.0.bin",
                     ForceRebuild: false,
                     ModuleFilter: ["QtQuick"],
                     IncludeInternal: false),
@@ -100,7 +101,7 @@ namespace QmlSharp.Registry.Tests.Contracts
                     QmldirPaths: [@"C:\Qt\qml\QtQuick\qmldir"],
                     MetatypesPaths: [@"C:\Qt\lib\metatypes\qtquick_metatypes.json"],
                     Diagnostics: diagnostics),
-                new ScanValidation(IsValid: true, QtVersion: "6.8.0", ErrorMessage: null),
+                new ScanValidation(IsValid: true, QtVersion: "6.11.0", ErrorMessage: null),
                 new ParseResult<RawQmltypesFile>(RawAstFixtures.CreateQmltypesFile(), diagnostics),
                 new NormalizeResult(registry, diagnostics),
                 new BuildResult(new StubTypeRegistry(registry), new StubRegistryQuery(registry), diagnostics),
@@ -124,6 +125,7 @@ namespace QmlSharp.Registry.Tests.Contracts
                 typeof(IQtTypeScanner).FullName!,
                 typeof(QtTypeScanner).FullName!,
                 typeof(IQmltypesParser).FullName!,
+                typeof(QmltypesParser).FullName!,
                 typeof(IQmldirParser).FullName!,
                 typeof(IMetatypesParser).FullName!,
                 typeof(ITypeNameMapper).FullName!,

@@ -369,6 +369,30 @@ Component {
         }
 
         [Fact]
+        public void Parse_reports_REG011_for_unexpected_characters_and_recovers()
+        {
+            const string content = """
+Component {
+    name: "Recovered"
+    @
+    Signal { name: "stillHere" }
+}
+""";
+
+            ParseResult<RawQmltypesFile> result = CreateParser().ParseContent(content, @"fixtures\qmltypes\unexpected-character.qmltypes");
+
+            RegistryDiagnostic diagnostic = Assert.Single(result.Diagnostics.Where(diagnostic => diagnostic.Code == DiagnosticCodes.QmltypesUnexpectedToken));
+            RawQmltypesComponent component = Assert.Single(result.Value!.Components);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal(@"fixtures\qmltypes\unexpected-character.qmltypes", diagnostic.FilePath);
+            Assert.Equal(3, diagnostic.Line);
+            Assert.Equal(5, diagnostic.Column);
+            Assert.Contains("Unexpected character '@'", diagnostic.Message, StringComparison.Ordinal);
+            Assert.Contains(component.Signals, signal => signal.Name == "stillHere");
+        }
+
+        [Fact]
         public void Parse_preserves_line_and_column_for_unterminated_block_diagnostics()
         {
             const string content = """
@@ -382,6 +406,51 @@ Component {
             Assert.Equal(2, diagnostic.Line);
             Assert.Equal(19, diagnostic.Column);
             Assert.Contains("Expected rbrace", diagnostic.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Parse_reports_REG010_for_unterminated_string_literal()
+        {
+            const string content = """
+Component {
+    name: "Broken
+}
+""";
+
+            ParseResult<RawQmltypesFile> result = CreateParser().ParseContent(content, @"fixtures\qmltypes\unterminated-string.qmltypes");
+
+            RegistryDiagnostic diagnostic = Assert.Single(result.Diagnostics.Where(diagnostic => diagnostic.Message == "Unterminated string literal."));
+            RawQmltypesComponent component = Assert.Single(result.Value!.Components);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal(DiagnosticCodes.QmltypesSyntaxError, diagnostic.Code);
+            Assert.Equal(@"fixtures\qmltypes\unterminated-string.qmltypes", diagnostic.FilePath);
+            Assert.Equal(2, diagnostic.Line);
+            Assert.Equal(11, diagnostic.Column);
+            Assert.Equal("Broken\n}", component.Name);
+        }
+
+        [Fact]
+        public void Parse_reports_REG010_for_unterminated_block_comment()
+        {
+            const string content = """
+Component {
+    name: "Broken"
+    /* unfinished comment
+}
+""";
+
+            ParseResult<RawQmltypesFile> result = CreateParser().ParseContent(content, @"fixtures\qmltypes\unterminated-comment.qmltypes");
+
+            RegistryDiagnostic diagnostic = Assert.Single(result.Diagnostics.Where(diagnostic => diagnostic.Message == "Unterminated block comment."));
+            RawQmltypesComponent component = Assert.Single(result.Value!.Components);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal(DiagnosticCodes.QmltypesSyntaxError, diagnostic.Code);
+            Assert.Equal(@"fixtures\qmltypes\unterminated-comment.qmltypes", diagnostic.FilePath);
+            Assert.Equal(3, diagnostic.Line);
+            Assert.Equal(5, diagnostic.Column);
+            Assert.Equal("Broken", component.Name);
         }
 
         [Fact]

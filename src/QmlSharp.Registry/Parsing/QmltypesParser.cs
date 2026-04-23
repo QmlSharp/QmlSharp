@@ -4,7 +4,7 @@ using QmlSharp.Registry.Diagnostics;
 
 namespace QmlSharp.Registry.Parsing
 {
-    internal sealed class QmltypesParser : IQmltypesParser
+    public sealed class QmltypesParser : IQmltypesParser
     {
         public ParseResult<RawQmltypesFile> Parse(string filePath)
         {
