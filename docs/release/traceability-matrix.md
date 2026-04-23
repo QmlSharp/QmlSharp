@@ -2,11 +2,11 @@
 
 | TestId | SourceSpec | OwnerStep | BranchOrPR | TestProject | TestFile | Status | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| STEP-01.00-RESTORE | Step 01.00 bootstrap verification | 01.00 | QmlSharp/QmlSharp#1 | n/a | n/a | implemented | `dotnet restore QmlSharp.sln` must pass on a fresh clone. |
-| STEP-01.00-BUILD | Step 01.00 bootstrap verification | 01.00 | QmlSharp/QmlSharp#1 | n/a | n/a | implemented | `dotnet build QmlSharp.sln` must pass with production warnings as errors. |
+| STEP-01.00-RESTORE | Step 01.00 bootstrap verification | 01.00 | QmlSharp/QmlSharp#1 | n/a | n/a | implemented | `dotnet restore QmlSharp.slnx` must pass on a fresh clone. |
+| STEP-01.00-BUILD | Step 01.00 bootstrap verification | 01.00 | QmlSharp/QmlSharp#1 | n/a | n/a | implemented | `dotnet build QmlSharp.slnx` must pass with production warnings as errors. |
 | STEP-01.00-TEST | Step 01.00 bootstrap verification | 01.00 | QmlSharp/QmlSharp#1 | tests/QmlSharp.Registry.Tests | tests/QmlSharp.Registry.Tests/PlaceholderTests.cs | implemented | Placeholder test proves test discovery and solution wiring. |
 | STEP-01.00-CMAKE | Step 01.00 bootstrap verification | 01.00 | QmlSharp/QmlSharp#1 | n/a | native/CMakeLists.txt | implemented | Placeholder native bootstrap must configure and build without Qt. |
-| STEP-01.00-FORMAT | Step 01.00 bootstrap verification | 01.00 | QmlSharp/QmlSharp#1 | n/a | .editorconfig | implemented | `dotnet format QmlSharp.sln --verify-no-changes` is part of the required bootstrap gate. |
+| STEP-01.00-FORMAT | Step 01.00 bootstrap verification | 01.00 | QmlSharp/QmlSharp#1 | n/a | .editorconfig | implemented | `dotnet format QmlSharp.slnx --verify-no-changes` is part of the required bootstrap gate. |
 | SCN-01 | 01-registry/test-spec.md | pending | pending | tests/QmlSharp.Registry.Tests | pending | pending | Seeded in Step 01.00 for later implementation mapping. |
 | SCN-02 | 01-registry/test-spec.md | pending | pending | tests/QmlSharp.Registry.Tests | pending | pending | Seeded in Step 01.00 for later implementation mapping. |
 | SCN-03 | 01-registry/test-spec.md | pending | pending | tests/QmlSharp.Registry.Tests | pending | pending | Seeded in Step 01.00 for later implementation mapping. |

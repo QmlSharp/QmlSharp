@@ -21,7 +21,6 @@ repos:
       - id: end-of-file-fixer
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: \.sln$
       - id: check-added-large-files
         args: [--maxkb=2048]
       - id: check-merge-conflict
@@ -63,7 +62,7 @@ repos:
         name: dotnet format
         entry: >-
           pwsh -NoLogo -NoProfile -Command
-          "& { if ($args.Count -gt 0) { dotnet format QmlSharp.sln --include $args --verbosity minimal } else { dotnet format QmlSharp.sln --verbosity minimal } }"
+          "& { if ($args.Count -gt 0) { dotnet format QmlSharp.slnx --include $args --verbosity minimal } else { dotnet format QmlSharp.slnx --verbosity minimal } }"
         language: system
         pass_filenames: true
         files: \.cs$

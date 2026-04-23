@@ -19,12 +19,12 @@ not implement real `01-registry` behavior yet.
 ## Bootstrap commands
 
 ```powershell
-dotnet restore QmlSharp.sln
-dotnet build QmlSharp.sln
-dotnet test QmlSharp.sln
+dotnet restore QmlSharp.slnx
+dotnet build QmlSharp.slnx
+dotnet test QmlSharp.slnx
 cmake --preset windows-debug
 cmake --build --preset debug
-dotnet format QmlSharp.sln --verify-no-changes
+dotnet format QmlSharp.slnx --verify-no-changes
 ```
 
 `cmake --preset windows-debug` and `cmake --build --preset debug` are intentionally Qt-free in
