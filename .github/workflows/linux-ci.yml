@@ -40,7 +40,7 @@ jobs:
           target: 'desktop'
           arch: 'linux_gcc_64'
           cache: true
-          setup-python: false
+          setup-python: true
           install-deps: true
 
       - name: Export Qt environment
@@ -164,5 +164,7 @@ jobs:
 
       - name: Trim FASTBuild cache
         if: always()
-        run: FBuild -cachetrim 10240
-        working-directory: ${{ github.workspace }}/build/linux-ci
+        run: |
+          if [[ -d "${GITHUB_WORKSPACE}/build/linux-ci" ]]; then
+            FBuild -cachetrim 10240
+          fi

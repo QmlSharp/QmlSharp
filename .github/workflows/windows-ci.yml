@@ -40,7 +40,7 @@ jobs:
           target: 'desktop'
           arch: 'win64_msvc2022_64'
           cache: true
-          setup-python: false
+          setup-python: true
 
       - name: Export Qt environment
         run: |
@@ -171,5 +171,7 @@ jobs:
 
       - name: Trim FASTBuild cache
         if: always()
-        run: FBuild.exe -cachetrim 10240
-        working-directory: ${{ github.workspace }}/build/windows-ci
+        run: |
+          if (Test-Path "${{ github.workspace }}\build\windows-ci") {
+            FBuild.exe -cachetrim 10240
+          }

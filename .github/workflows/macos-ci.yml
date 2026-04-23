@@ -40,7 +40,7 @@ jobs:
           target: 'desktop'
           arch: 'clang_64'
           cache: true
-          setup-python: false
+          setup-python: true
 
       - name: Export Qt environment
         run: |
@@ -181,5 +181,7 @@ jobs:
 
       - name: Trim FASTBuild cache
         if: always()
-        run: FBuild -cachetrim 10240
-        working-directory: ${{ github.workspace }}/build/macos-ci
+        run: |
+          if [[ -d "${GITHUB_WORKSPACE}/build/macos-ci" ]]; then
+            FBuild -cachetrim 10240
+          fi
