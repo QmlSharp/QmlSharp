@@ -17,6 +17,7 @@ namespace QmlSharp.Registry.Tests.Contracts
             [
                 new StubQtTypeScanner(),
                 new QmltypesParser(),
+                new QmldirParser(),
                 new StubQmltypesParser(),
                 new StubQmldirParser(),
                 new StubMetatypesParser(),
@@ -28,7 +29,7 @@ namespace QmlSharp.Registry.Tests.Contracts
                 new StubRegistryBuilder(),
             ];
 
-            Assert.Equal(11, implementations.Length);
+            Assert.Equal(12, implementations.Length);
             Assert.All(implementations, Assert.NotNull);
         }
 
@@ -127,6 +128,7 @@ namespace QmlSharp.Registry.Tests.Contracts
                 typeof(IQmltypesParser).FullName!,
                 typeof(QmltypesParser).FullName!,
                 typeof(IQmldirParser).FullName!,
+                typeof(QmldirParser).FullName!,
                 typeof(IMetatypesParser).FullName!,
                 typeof(ITypeNameMapper).FullName!,
                 typeof(ITypeNormalizer).FullName!,
