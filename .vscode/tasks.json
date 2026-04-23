@@ -5,21 +5,21 @@
       "label": "dotnet restore",
       "type": "process",
       "command": "dotnet",
-      "args": ["restore", "QmlSharp.sln"],
+      "args": ["restore", "QmlSharp.slnx"],
       "problemMatcher": "$msCompile"
     },
     {
       "label": "dotnet build",
       "type": "process",
       "command": "dotnet",
-      "args": ["build", "QmlSharp.sln"],
+      "args": ["build", "QmlSharp.slnx"],
       "problemMatcher": "$msCompile"
     },
     {
       "label": "dotnet test",
       "type": "process",
       "command": "dotnet",
-      "args": ["test", "QmlSharp.sln"],
+      "args": ["test", "QmlSharp.slnx"],
       "problemMatcher": "$msCompile"
     },
     {

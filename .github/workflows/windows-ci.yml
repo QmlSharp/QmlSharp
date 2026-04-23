@@ -118,16 +118,16 @@ jobs:
           Write-Host "Windows SDK RC: $env:WindowsKitRC"
 
       - name: Restore .NET solution
-        run: dotnet restore QmlSharp.sln
+        run: dotnet restore QmlSharp.slnx
 
       - name: Build .NET solution
-        run: dotnet build QmlSharp.sln --configuration Debug --no-restore
+        run: dotnet build QmlSharp.slnx --configuration Debug --no-restore
 
       - name: Test .NET solution
-        run: dotnet test QmlSharp.sln --configuration Debug --no-build --verbosity normal
+        run: dotnet test QmlSharp.slnx --configuration Debug --no-build --verbosity normal
 
       - name: Check .NET formatting
-        run: dotnet format QmlSharp.sln --verify-no-changes --verbosity minimal
+        run: dotnet format QmlSharp.slnx --verify-no-changes --verbosity minimal
 
       - name: Configure (CMake)
         env:
