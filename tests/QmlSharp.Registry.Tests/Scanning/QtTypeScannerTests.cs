@@ -10,7 +10,11 @@ namespace QmlSharp.Registry.Tests.Scanning
         public void SCN_02_Scan_non_existent_directory_returns_REG001()
         {
             QtTypeScanner scanner = new QtTypeScanner();
-            string qtDir = Path.Combine(AppContext.BaseDirectory, "scanner-workspaces", "missing-sdk");
+            string qtDir = Path.Join(
+                Path.GetTempPath(),
+                "qmlsharp-registry-tests",
+                "missing-sdk",
+                Guid.NewGuid().ToString("N"));
 
             ScanResult result = scanner.Scan(new ScannerConfig(qtDir, ModuleFilter: null, IncludeInternal: true));
 

@@ -2,7 +2,7 @@ using QmlSharp.Registry.Diagnostics;
 
 namespace QmlSharp.Registry.Scanning
 {
-    internal sealed class QtTypeScanner : IQtTypeScanner
+    public sealed class QtTypeScanner : IQtTypeScanner
     {
         private const string QmlDirectoryName = "qml";
         private const string QmldirFileName = "qmldir";
@@ -30,18 +30,12 @@ namespace QmlSharp.Registry.Scanning
             }
 
             string qtDir = NormalizeAbsolutePath(config.QtDir);
-            string qmlRootDir = Path.Combine(qtDir, QmlDirectoryName);
+            string qmlRootDir = Path.Join(qtDir, QmlDirectoryName);
             string metatypesRootDir = GetMetatypesRootDirectory(qtDir);
             ImmutableArray<string> moduleFilter = NormalizeModuleFilter(config.ModuleFilter);
 
-            ImmutableArray<string> qmltypesPaths = ScanQmlMetadataPaths(
+            (ImmutableArray<string> qmltypesPaths, ImmutableArray<string> qmldirPaths) = ScanQmlMetadataPaths(
                 qmlRootDir,
-                "*.qmltypes",
-                moduleFilter,
-                config.IncludeInternal);
-            ImmutableArray<string> qmldirPaths = ScanQmlMetadataPaths(
-                qmlRootDir,
-                QmldirFileName,
                 moduleFilter,
                 config.IncludeInternal);
             ImmutableArray<string> metatypesPaths = ScanMetatypesPaths(
@@ -83,7 +77,7 @@ namespace QmlSharp.Registry.Scanning
                     ErrorMessage: $"Qt SDK directory '{normalizedQtDir}' does not exist.");
             }
 
-            string qmlRootDir = Path.Combine(normalizedQtDir, QmlDirectoryName);
+            string qmlRootDir = Path.Join(normalizedQtDir, QmlDirectoryName);
             if (!Directory.Exists(qmlRootDir))
             {
                 return new ScanValidation(
@@ -147,16 +141,10 @@ namespace QmlSharp.Registry.Scanning
         private static string DetectQtVersion(string qtDir)
         {
             string[] segments = SplitPathSegments(qtDir);
-
-            foreach (string segment in segments.Reverse())
-            {
-                if (Version.TryParse(segment, out _))
-                {
-                    return segment;
-                }
-            }
-
-            return "unknown";
+            return segments
+                .Reverse()
+                .Where(segment => Version.TryParse(segment, out _))
+                .FirstOrDefault() ?? "unknown";
         }
 
         private static int FindPathSegmentSequence(IReadOnlyList<string> haystack, IReadOnlyList<string> needle)
@@ -185,13 +173,13 @@ namespace QmlSharp.Registry.Scanning
 
         private static string GetMetatypesRootDirectory(string qtDir)
         {
-            string legacyPath = Path.Combine(qtDir, "lib", "metatypes");
+            string legacyPath = Path.Join(qtDir, "lib", "metatypes");
             if (Directory.Exists(legacyPath))
             {
                 return legacyPath;
             }
 
-            string currentPath = Path.Combine(qtDir, "metatypes");
+            string currentPath = Path.Join(qtDir, "metatypes");
             if (Directory.Exists(currentPath))
             {
                 return currentPath;
@@ -214,16 +202,9 @@ namespace QmlSharp.Registry.Scanning
                 return true;
             }
 
-            foreach (string filter in moduleFilter)
-            {
-                if (string.Equals(moduleUri, filter, StringComparison.OrdinalIgnoreCase)
-                    || moduleUri.StartsWith($"{filter}.", StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return moduleFilter.Any(filter =>
+                string.Equals(moduleUri, filter, StringComparison.OrdinalIgnoreCase)
+                || moduleUri.StartsWith($"{filter}.", StringComparison.OrdinalIgnoreCase));
         }
 
         private static string NormalizeAbsolutePath(string path)
@@ -249,19 +230,10 @@ namespace QmlSharp.Registry.Scanning
 
         private static string NormalizeModuleToken(string value)
         {
-            Span<char> buffer = stackalloc char[value.Length];
-            int length = 0;
-
-            foreach (char character in value)
-            {
-                if (char.IsLetterOrDigit(character))
-                {
-                    buffer[length] = char.ToLowerInvariant(character);
-                    length++;
-                }
-            }
-
-            return new string(buffer[..length]);
+            return new string(value
+                .Where(char.IsLetterOrDigit)
+                .Select(char.ToLowerInvariant)
+                .ToArray());
         }
 
         private static string NormalizeMetatypesModuleToken(string value)
@@ -345,19 +317,19 @@ namespace QmlSharp.Registry.Scanning
                 diagnostics,
                 qmltypesPaths,
                 DiagnosticCodes.NoQmltypesFound,
-                "No .qmltypes files were found under the Qt qml directory.",
+                "No .qmltypes files matched the current scan filters under the Qt qml directory.",
                 qmlRootDir);
             AddMissingFileDiagnostic(
                 diagnostics,
                 qmldirPaths,
                 DiagnosticCodes.NoQmldirFound,
-                "No qmldir files were found under the Qt qml directory.",
+                "No qmldir files matched the current scan filters under the Qt qml directory.",
                 qmlRootDir);
             AddMissingFileDiagnostic(
                 diagnostics,
                 metatypesPaths,
                 DiagnosticCodes.NoMetatypesFound,
-                "No *_metatypes.json files were found under the Qt metatypes directory.",
+                "No *_metatypes.json files matched the current scan filters under the Qt metatypes directory.",
                 metatypesRootDir);
 
             return diagnostics.ToImmutableArray();
@@ -394,18 +366,22 @@ namespace QmlSharp.Registry.Scanning
                 .ToImmutableArray();
         }
 
-        private static ImmutableArray<string> ScanQmlMetadataPaths(
+        private static (ImmutableArray<string> QmltypesPaths, ImmutableArray<string> QmldirPaths) ScanQmlMetadataPaths(
             string qmlRootDir,
-            string searchPattern,
             ImmutableArray<string> moduleFilter,
             bool includeInternal)
         {
-            return Directory
-                .EnumerateFiles(qmlRootDir, searchPattern, SearchOption.AllDirectories)
+            string[] qmlMetadataPaths = Directory
+                .EnumerateFiles(qmlRootDir, "*", SearchOption.AllDirectories)
+                .Where(IsQmlMetadataPath)
                 .Where(path => ShouldIncludeQmlModulePath(path, qmlRootDir, moduleFilter, includeInternal))
                 .Select(NormalizeAbsolutePath)
                 .OrderBy(path => path, StringComparer.Ordinal)
-                .ToImmutableArray();
+                .ToArray();
+
+            return (
+                qmlMetadataPaths.Where(IsQmltypesPath).ToImmutableArray(),
+                qmlMetadataPaths.Where(IsQmldirPath).ToImmutableArray());
         }
 
         private static bool ShouldIncludeMetatypesPath(string path, ImmutableArray<string> moduleFilter, bool includeInternal)
@@ -449,6 +425,21 @@ namespace QmlSharp.Registry.Scanning
             }
 
             return MatchesModuleFilter(moduleUri, moduleFilter);
+        }
+
+        private static bool IsQmlMetadataPath(string path)
+        {
+            return IsQmltypesPath(path) || IsQmldirPath(path);
+        }
+
+        private static bool IsQmltypesPath(string path)
+        {
+            return path.EndsWith(".qmltypes", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsQmldirPath(string path)
+        {
+            return string.Equals(Path.GetFileName(path), QmldirFileName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string[] SplitPathSegments(string path)

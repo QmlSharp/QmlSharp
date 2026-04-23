@@ -6,7 +6,7 @@ namespace QmlSharp.Registry.Tests.Helpers
 
         public ScannerTestWorkspace()
         {
-            rootDirectory = Path.Combine(
+            rootDirectory = Path.Join(
                 AppContext.BaseDirectory,
                 "scanner-workspaces",
                 Guid.NewGuid().ToString("N"));
@@ -43,7 +43,12 @@ namespace QmlSharp.Registry.Tests.Helpers
                 .Replace('/', Path.DirectorySeparatorChar)
                 .Replace('\\', Path.DirectorySeparatorChar);
 
-            return Path.Combine(rootDirectory, normalizedRelativePath);
+            if (Path.IsPathRooted(normalizedRelativePath))
+            {
+                throw new ArgumentException("Path must be relative.", nameof(relativePath));
+            }
+
+            return Path.Join(rootDirectory, normalizedRelativePath);
         }
 
         public void Dispose()
