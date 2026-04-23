@@ -42,6 +42,8 @@ jobs:
       - name: Install Qt 6.11.0
         if: steps.qtcache.outputs.cache-hit != 'true'
         run: |
+          # TODO: Switch this back to jurplel/install-qt-action once aqtinstall supports
+          # the Qt 6.11.0 Windows msvc2022_64 repository layout used by download.qt.io.
           $qtRoot = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'Qt\6.11.0\msvc2022_64'
           New-Item -ItemType Directory -Force -Path $qtRoot | Out-Null
 

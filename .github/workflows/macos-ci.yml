@@ -36,9 +36,16 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.11.0'
-          host: 'mac'
-          target: 'desktop'
-          arch: 'clang_64'
+          target: desktop
+          arch: clang_64
+          modules: >-
+            qt5compat qt3d qtcharts qtconnectivity qtgraphs qtgrpc
+            qthttpserver qtimageformats qtlottie qtmultimedia
+            qtnetworkauth qtpositioning qtquick3d qtquick3dphysics
+            qtquicktimeline qtremoteobjects qtscxml qtsensors
+            qtserialbus qtserialport qtshadertools qtspeech
+            qtvirtualkeyboard qtwebchannel qtwebsockets qtwebview
+            qtlocation
           cache: true
           setup-python: true
 
