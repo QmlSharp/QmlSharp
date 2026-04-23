@@ -1,0 +1,37 @@
+import QtQuick.tooling 1.2
+
+Module {
+    Component {
+        name: "QQuickItem"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        defaultProperty: "data"
+        exports: ["QtQuick/Item 2.15"]
+
+        Property {
+            name: "width"
+            type: "double"
+            read: "width"
+            write: "setWidth"
+            notify: "widthChanged"
+        }
+
+        Signal {
+            name: "widthChanged"
+            Parameter { name: "value"; type: "double" }
+        }
+    }
+
+    Component {
+        name: "QQuickRectangle"
+        accessSemantics: "reference"
+        prototype: "QQuickItem"
+        exports: ["QtQuick/Rectangle 2.15"]
+
+        Property {
+            name: "color"
+            type: "QColor"
+            notify: "colorChanged"
+        }
+    }
+}

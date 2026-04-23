@@ -1,0 +1,17 @@
+import QtQuick.tooling 1.2
+
+Module {
+    Component {
+        name: "QQuickItem"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["QtQuick/Item 2.15"]
+    }
+
+    Component {
+        name: "QQuickRectangle"
+        accessSemantics: "reference"
+        prototype: "QQuickItem"
+        exports: ["QtQuick/Rectangle 2.15"]
+    }
+}
