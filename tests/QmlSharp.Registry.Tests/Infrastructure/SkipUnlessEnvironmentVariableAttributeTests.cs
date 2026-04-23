@@ -7,8 +7,8 @@ namespace QmlSharp.Registry.Tests.Infrastructure
         [Fact]
         public void SkipUnlessEnvironmentVariableFact_sets_skip_when_variable_is_missing()
         {
-            const string variableName = "QMLSHARP_TEST_QT_DIR";
-            const string reason = "Qt SDK not available";
+            const string variableName = RegistryTestEnvironment.QtDirVariableName;
+            const string reason = RegistryTestEnvironment.QtSdkUnavailableReason;
 
             string? original = Environment.GetEnvironmentVariable(variableName);
             Environment.SetEnvironmentVariable(variableName, null);
@@ -27,7 +27,7 @@ namespace QmlSharp.Registry.Tests.Infrastructure
         [Fact]
         public void SkipUnlessEnvironmentVariableTheory_leaves_tests_enabled_when_variable_is_present()
         {
-            const string variableName = "QMLSHARP_TEST_QT_DIR";
+            const string variableName = RegistryTestEnvironment.QtDirVariableName;
 
             string? original = Environment.GetEnvironmentVariable(variableName);
             Environment.SetEnvironmentVariable(variableName, @"C:\Qt\6.8.0\msvc2022_64");

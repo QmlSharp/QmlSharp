@@ -40,7 +40,7 @@ namespace QmlSharp.Registry
     {
         public bool IsSuccess =>
             Value is not null
-            && !Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            && !RegistryDiagnosticCollection.HasErrors(Diagnostics);
     }
 
     /// <summary>Result of normalization.</summary>
@@ -50,7 +50,7 @@ namespace QmlSharp.Registry
     {
         public bool IsSuccess =>
             Registry is not null
-            && !Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            && !RegistryDiagnosticCollection.HasErrors(Diagnostics);
     }
 
     /// <summary>Result of a full build or snapshot load.</summary>
@@ -61,7 +61,17 @@ namespace QmlSharp.Registry
     {
         public bool IsSuccess =>
             TypeRegistry is not null
-            && !Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            && Query is not null
+            && !RegistryDiagnosticCollection.HasErrors(Diagnostics);
+    }
+
+    internal static class RegistryDiagnosticCollection
+    {
+        public static bool HasErrors(ImmutableArray<RegistryDiagnostic> diagnostics)
+        {
+            return !diagnostics.IsDefaultOrEmpty
+                && diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        }
     }
 
     /// <summary>Snapshot file validity info.</summary>

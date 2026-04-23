@@ -64,20 +64,37 @@ namespace QmlSharp.Registry.Tests.Contracts
             ParseResult<string> empty = new ParseResult<string>(
                 Value: null,
                 Diagnostics: ImmutableArray<RegistryDiagnostic>.Empty);
+            ParseResult<string> defaultDiagnostics = new ParseResult<string>(
+                Value: "ok",
+                Diagnostics: default);
 
             Assert.True(success.IsSuccess);
             Assert.False(failure.IsSuccess);
             Assert.False(empty.IsSuccess);
+            Assert.True(defaultDiagnostics.IsSuccess);
         }
 
         [Fact]
-        public void BuildResult_success_requires_a_registry_and_no_error_diagnostics()
+        public void NormalizeResult_success_treats_default_diagnostics_as_empty()
+        {
+            QmlRegistry registry = RegistryFixtures.CreateMinimalInheritanceFixture();
+            NormalizeResult result = new NormalizeResult(Registry: registry, Diagnostics: default);
+
+            Assert.True(result.IsSuccess);
+        }
+
+        [Fact]
+        public void BuildResult_success_requires_a_registry_query_and_no_error_diagnostics()
         {
             QmlRegistry registry = RegistryFixtures.CreateMinimalInheritanceFixture();
             BuildResult success = new BuildResult(
                 TypeRegistry: new StubTypeRegistry(registry),
                 Query: new StubRegistryQuery(registry),
                 Diagnostics: ImmutableArray<RegistryDiagnostic>.Empty);
+            BuildResult successWithDefaultDiagnostics = new BuildResult(
+                TypeRegistry: new StubTypeRegistry(registry),
+                Query: new StubRegistryQuery(registry),
+                Diagnostics: default);
             BuildResult failure = new BuildResult(
                 TypeRegistry: new StubTypeRegistry(registry),
                 Query: new StubRegistryQuery(registry),
@@ -85,9 +102,15 @@ namespace QmlSharp.Registry.Tests.Contracts
                 [
                     new RegistryDiagnostic(DiagnosticSeverity.Error, DiagnosticCodes.InvalidQtDir, "bad qt", null, null, null),
                 ]);
+            BuildResult missingQuery = new BuildResult(
+                TypeRegistry: new StubTypeRegistry(registry),
+                Query: null,
+                Diagnostics: ImmutableArray<RegistryDiagnostic>.Empty);
 
             Assert.True(success.IsSuccess);
+            Assert.True(successWithDefaultDiagnostics.IsSuccess);
             Assert.False(failure.IsSuccess);
+            Assert.False(missingQuery.IsSuccess);
         }
 
         [Fact]
