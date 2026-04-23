@@ -32,6 +32,32 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install Qt 6.11.0
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.11.0'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          cache: true
+          setup-python: false
+
+      - name: Export Qt environment
+        run: |
+          if (-not (Test-Path $env:QT_ROOT_DIR)) {
+            throw "QT_ROOT_DIR does not exist: $env:QT_ROOT_DIR"
+          }
+
+          $qt6Dir = Join-Path $env:QT_ROOT_DIR 'lib\cmake\Qt6'
+          if (-not (Test-Path $qt6Dir)) {
+            throw "Qt6Config.cmake not found under $qt6Dir"
+          }
+
+          "QT_DIR=$env:QT_ROOT_DIR" >> $env:GITHUB_ENV
+          "Qt6_DIR=$qt6Dir" >> $env:GITHUB_ENV
+          Write-Host "QT_DIR=$env:QT_ROOT_DIR"
+          Write-Host "Qt6_DIR=$qt6Dir"
+
       - name: Install CMake (Scoop)
         uses: MinoruSekine/setup-scoop@v4
         with:
@@ -116,6 +142,8 @@ jobs:
           Write-Host "Clang:  $(clang-cl --version | Select-Object -First 1)"
           Write-Host "FBuild: $(FBuild.exe -version 2>&1 | Select-Object -First 1)"
           Write-Host "Windows SDK RC: $env:WindowsKitRC"
+          Write-Host "QT_DIR: $env:QT_DIR"
+          Write-Host "Qt6_DIR: $env:Qt6_DIR"
 
       - name: Restore .NET solution
         run: dotnet restore QmlSharp.slnx

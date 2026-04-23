@@ -219,15 +219,20 @@ namespace QmlSharp.Registry.Parsing
                 }
 
                 return items
-                    .Select(item => item switch
-                    {
-                        int intValue => intValue,
-                        string stringValue when int.TryParse(stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedValue) => parsedValue,
-                        _ => (int?)null,
-                    })
+                    .Select(GetIntArrayValue)
                     .Where(item => item.HasValue)
                     .Select(item => item!.Value)
                     .ToImmutableArray();
+            }
+
+            private static int? GetIntArrayValue(object? item)
+            {
+                return item switch
+                {
+                    int intValue => intValue,
+                    string stringValue when int.TryParse(stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedValue) => parsedValue,
+                    _ => null,
+                };
             }
 
             private static string? GetString(IReadOnlyDictionary<string, object?> properties, string key)
@@ -309,11 +314,7 @@ namespace QmlSharp.Registry.Parsing
                         ReportMissingColonAfterPropertyName(Current, Peek(1));
 
                         Advance();
-
-                        if (Current.Type != TokenKind.EndOfFile)
-                        {
-                            Advance();
-                        }
+                        TrySkipMalformedPropertyValue();
 
                         continue;
                     }
@@ -374,10 +375,7 @@ namespace QmlSharp.Registry.Parsing
                         Current.Line,
                         Current.Column));
 
-                    if (Current.Type != TokenKind.EndOfFile)
-                    {
-                        Advance();
-                    }
+                    TrySkipMalformedPropertyValue();
 
                     return;
                 }
@@ -439,6 +437,25 @@ namespace QmlSharp.Registry.Parsing
                     sourcePath,
                     unexpectedToken.Line,
                     unexpectedToken.Column));
+            }
+
+            private bool IsRecoverablePropertyValueToken(Token token)
+            {
+                if (token.Type is TokenKind.String or TokenKind.Number)
+                {
+                    return true;
+                }
+
+                return token.Type == TokenKind.Identifier
+                    && Peek(1).Type != TokenKind.LeftBrace;
+            }
+
+            private void TrySkipMalformedPropertyValue()
+            {
+                if (IsRecoverablePropertyValueToken(Current))
+                {
+                    Advance();
+                }
             }
 
             private void SkipCurrentLine()

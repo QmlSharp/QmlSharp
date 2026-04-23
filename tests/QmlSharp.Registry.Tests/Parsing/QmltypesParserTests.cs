@@ -412,6 +412,48 @@ Component {
             Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == DiagnosticCodes.QmltypesSyntaxError);
         }
 
+        [Fact]
+        public void Parse_missing_colon_recovery_does_not_consume_block_terminator()
+        {
+            const string content = """
+Component {
+    name: "Recovered"
+    Property {
+        name
+    }
+    Signal { name: "stillHere" }
+}
+""";
+
+            ParseResult<RawQmltypesFile> result = CreateParser().ParseContent(content, @"fixtures\qmltypes\missing-colon-before-brace.qmltypes");
+
+            RawQmltypesComponent component = Assert.Single(result.Value!.Components);
+
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == DiagnosticCodes.QmltypesSyntaxError);
+            Assert.Contains(component.Signals, signal => signal.Name == "stillHere");
+        }
+
+        [Fact]
+        public void Parse_missing_colon_recovery_does_not_consume_following_child_block()
+        {
+            const string content = """
+Component {
+    name: "Recovered"
+    Property {
+        name Signal { name: "nestedReady" }
+    }
+    Method { name: "stillHere" }
+}
+""";
+
+            ParseResult<RawQmltypesFile> result = CreateParser().ParseContent(content, @"fixtures\qmltypes\missing-colon-before-child.qmltypes");
+
+            RawQmltypesComponent component = Assert.Single(result.Value!.Components);
+
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == DiagnosticCodes.QmltypesSyntaxError);
+            Assert.Contains(component.Methods, method => method.Name == "stillHere");
+        }
+
         private static IQmltypesParser CreateParser()
         {
             return new QmltypesParser();
@@ -438,7 +480,12 @@ Component {
 
         private static string GetFixturePath(string fileName)
         {
-            return Path.Combine(AppContext.BaseDirectory, "fixtures", "qmltypes", fileName);
+            if (Path.IsPathRooted(fileName))
+            {
+                throw new ArgumentException("Fixture file name must be a relative path.", nameof(fileName));
+            }
+
+            return Path.Join(AppContext.BaseDirectory, "fixtures", "qmltypes", fileName);
         }
 
         private static RawQmltypesComponent ParseRichComponent()
