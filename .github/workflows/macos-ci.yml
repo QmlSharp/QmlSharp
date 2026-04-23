@@ -183,5 +183,8 @@ jobs:
         if: always()
         run: |
           if [[ -d "${GITHUB_WORKSPACE}/build/macos-ci" ]]; then
-            FBuild -cachetrim 10240
+            (
+              cd "${GITHUB_WORKSPACE}/build/macos-ci"
+              FBuild -cachetrim 10240
+            )
           fi
