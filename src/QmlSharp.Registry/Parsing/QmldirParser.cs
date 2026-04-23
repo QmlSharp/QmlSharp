@@ -267,6 +267,19 @@ namespace QmlSharp.Registry.Parsing
                 ParseRegularTypeEntry(parts, lineNumber, column);
             }
 
+            private static string? GetStyleSelector(string filePath)
+            {
+                if (!filePath.StartsWith('+') || filePath.Length <= 1)
+                {
+                    return null;
+                }
+
+                int separatorIndex = filePath.IndexOfAny(['/', '\\']);
+                return separatorIndex > 1
+                    ? filePath[1..separatorIndex]
+                    : null;
+            }
+
             private RawQmldirTypeEntry CreateTypeEntry(string name, string version, string filePath, bool isSingleton, bool isInternal)
             {
                 return new RawQmldirTypeEntry(
@@ -275,7 +288,7 @@ namespace QmlSharp.Registry.Parsing
                     FilePath: filePath,
                     IsSingleton: isSingleton,
                     IsInternal: isInternal,
-                    StyleSelector: null);
+                    StyleSelector: GetStyleSelector(filePath));
             }
 
             private void ReportSyntaxError(string message, int lineNumber, int column)

@@ -149,6 +149,45 @@ namespace QmlSharp.Registry.Tests.Parsing
         }
 
         [Fact]
+        public void Parse_type_entry_with_style_selector()
+        {
+            RawQmldirFile file = ParseContent(
+                """
+                module QtQuick.Controls
+                Button 2.15 +Material/Button.qml
+                singleton Palette 2.15 +Universal/Palette.qml
+                internal Impl 2.15 +Fusion/impl/Impl.qml
+                """);
+
+            Assert.Collection(
+                file.TypeEntries,
+                entry =>
+                {
+                    Assert.Equal("Button", entry.Name);
+                    Assert.Equal("+Material/Button.qml", entry.FilePath);
+                    Assert.Equal("Material", entry.StyleSelector);
+                    Assert.False(entry.IsSingleton);
+                    Assert.False(entry.IsInternal);
+                },
+                entry =>
+                {
+                    Assert.Equal("Palette", entry.Name);
+                    Assert.Equal("+Universal/Palette.qml", entry.FilePath);
+                    Assert.Equal("Universal", entry.StyleSelector);
+                    Assert.True(entry.IsSingleton);
+                    Assert.False(entry.IsInternal);
+                },
+                entry =>
+                {
+                    Assert.Equal("Impl", entry.Name);
+                    Assert.Equal("+Fusion/impl/Impl.qml", entry.FilePath);
+                    Assert.Equal("Fusion", entry.StyleSelector);
+                    Assert.False(entry.IsSingleton);
+                    Assert.True(entry.IsInternal);
+                });
+        }
+
+        [Fact]
         public void QDP_14_Parse_designersupported_directive()
         {
             Assert.Equal(["true"], ParseFixture("full-qmldir").Designersupported.ToArray());
@@ -277,7 +316,12 @@ namespace QmlSharp.Registry.Tests.Parsing
 
         private static string GetFixturePath(string fixtureName)
         {
-            return Path.Combine(AppContext.BaseDirectory, "fixtures", "qmldir", fixtureName);
+            if (Path.IsPathRooted(fixtureName))
+            {
+                throw new ArgumentException("Fixture name must be a relative path.", nameof(fixtureName));
+            }
+
+            return Path.Join(AppContext.BaseDirectory, "fixtures", "qmldir", fixtureName);
         }
     }
 }
