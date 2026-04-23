@@ -3,9 +3,5 @@ import QtQuick.tooling 1.2
 Module {
     Component {
         name: "QQuickItem"
-        accessSemantics: "reference"
-        prototype: "QObject"
-        defaultProperty: "data"
-        exports: ["QtQuick/Item 2.15"]
     }
 }

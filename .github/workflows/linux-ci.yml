@@ -32,6 +32,35 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install Qt 6.11.0
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.11.0'
+          target: desktop
+          arch: linux_gcc_64
+          modules: >-
+            qt5compat qt3d qtcharts qtconnectivity qtgraphs qtgrpc
+            qthttpserver qtimageformats qtlottie qtmultimedia
+            qtnetworkauth qtpositioning qtquick3d qtquick3dphysics
+            qtquicktimeline qtremoteobjects qtscxml qtsensors
+            qtserialbus qtserialport qtshadertools qtspeech
+            qtvirtualkeyboard qtwebchannel qtwebsockets qtwebview
+            qtlocation
+          cache: true
+          setup-python: true
+          install-deps: true
+
+      - name: Export Qt environment
+        run: |
+          set -euo pipefail
+          test -d "${QT_ROOT_DIR}"
+          qt6_dir="${QT_ROOT_DIR}/lib/cmake/Qt6"
+          test -f "${qt6_dir}/Qt6Config.cmake"
+          echo "QT_DIR=${QT_ROOT_DIR}" >> "${GITHUB_ENV}"
+          echo "Qt6_DIR=${qt6_dir}" >> "${GITHUB_ENV}"
+          echo "QT_DIR=${QT_ROOT_DIR}"
+          echo "Qt6_DIR=${qt6_dir}"
+
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -101,6 +130,8 @@ jobs:
           echo "pip:        $(python -m pip --version)"
           echo "pre-commit: $(pre-commit --version)"
           echo "FASTBuild:  $(FBuild -version | head -n 1)"
+          echo "QT_DIR:     ${QT_DIR}"
+          echo "Qt6_DIR:    ${Qt6_DIR}"
 
       - name: Restore .NET solution
         run: dotnet restore QmlSharp.slnx
@@ -140,5 +171,10 @@ jobs:
 
       - name: Trim FASTBuild cache
         if: always()
-        run: FBuild -cachetrim 10240
-        working-directory: ${{ github.workspace }}/build/linux-ci
+        run: |
+          if [[ -d "${GITHUB_WORKSPACE}/build/linux-ci" ]]; then
+            (
+              cd "${GITHUB_WORKSPACE}/build/linux-ci"
+              FBuild -cachetrim 10240
+            )
+          fi

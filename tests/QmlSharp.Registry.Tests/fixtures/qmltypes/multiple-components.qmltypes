@@ -14,4 +14,11 @@ Module {
         prototype: "QQuickItem"
         exports: ["QtQuick/Rectangle 2.15"]
     }
+
+    Component {
+        name: "QQuickText"
+        accessSemantics: "reference"
+        prototype: "QQuickItem"
+        exports: ["QtQuick/Text 2.15"]
+    }
 }

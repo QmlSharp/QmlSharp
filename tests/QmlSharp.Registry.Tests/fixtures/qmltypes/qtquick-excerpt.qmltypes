@@ -2,36 +2,101 @@ import QtQuick.tooling 1.2
 
 Module {
     Component {
+        file: "qquickitem.h"
+        lineNumber: 63
         name: "QQuickItem"
         accessSemantics: "reference"
-        prototype: "QObject"
         defaultProperty: "data"
-        exports: ["QtQuick/Item 2.15"]
+        parentProperty: "parent"
+        prototype: "QObject"
+        interfaces: ["QQmlParserStatus"]
+        exports: [
+            "QtQuick/Item 2.0",
+            "QtQuick/Item 6.0"
+        ]
+        exportMetaObjectRevisions: [512, 1536]
+
+        Enum {
+            name: "Flags"
+            alias: "Flag"
+            isFlag: true
+            values: ["ItemClipsChildrenToShape"]
+        }
+
+        Enum {
+            name: "TransformOrigin"
+            values: ["TopLeft", "Top", "TopRight", "Left", "Center"]
+        }
 
         Property {
-            name: "width"
-            type: "double"
-            read: "width"
-            write: "setWidth"
-            notify: "widthChanged"
+            name: "parent"
+            type: "QQuickItem"
+            isPointer: true
+            read: "parentItem"
+            write: "setParentItem"
+            notify: "parentChanged"
+            index: 0
+            lineNumber: 68
+            isFinal: true
+        }
+
+        Property {
+            name: "data"
+            type: "QObject"
+            isList: true
+            read: "data"
+            index: 1
+            lineNumber: 69
+            isReadonly: true
         }
 
         Signal {
-            name: "widthChanged"
-            Parameter { name: "value"; type: "double" }
+            name: "childrenChanged"
+            lineNumber: 180
+        }
+
+        Method {
+            name: "childAt"
+            type: "QQuickItem"
+            lineNumber: 320
+            Parameter { name: "x"; type: "double" }
+            Parameter { name: "y"; type: "double" }
         }
     }
 
     Component {
+        file: "private/qquickrectangle_p.h"
+        lineNumber: 129
         name: "QQuickRectangle"
         accessSemantics: "reference"
+        defaultProperty: "data"
+        parentProperty: "parent"
         prototype: "QQuickItem"
-        exports: ["QtQuick/Rectangle 2.15"]
+        exports: [
+            "QtQuick/Rectangle 2.0",
+            "QtQuick/Rectangle 6.0"
+        ]
+        exportMetaObjectRevisions: [512, 1536]
 
         Property {
             name: "color"
             type: "QColor"
+            read: "color"
+            write: "setColor"
             notify: "colorChanged"
+            index: 0
+            lineNumber: 133
+        }
+
+        Property {
+            name: "border"
+            type: "QQuickPen"
+            isPointer: true
+            read: "border"
+            index: 2
+            lineNumber: 135
+            isReadonly: true
+            isPropertyConstant: true
         }
     }
 }

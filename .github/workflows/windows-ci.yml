@@ -32,6 +32,75 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Restore Qt 6.11.0 cache
+        id: qtcache
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}\..\Qt\6.11.0\msvc2022_64
+          key: qt-windows-6.11.0-msvc2022-64-qtbase-qtdeclarative-v1
+
+      - name: Install Qt 6.11.0
+        if: steps.qtcache.outputs.cache-hit != 'true'
+        run: |
+          # TODO: Switch this back to jurplel/install-qt-action once aqtinstall supports
+          # the Qt 6.11.0 Windows msvc2022_64 repository layout used by download.qt.io.
+          $qtRoot = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'Qt\6.11.0\msvc2022_64'
+          New-Item -ItemType Directory -Force -Path $qtRoot | Out-Null
+
+          $sevenZip = (Get-Command 7z -ErrorAction SilentlyContinue).Source
+          if (-not $sevenZip) {
+            $sevenZip = Join-Path $env:ProgramFiles '7-Zip\7z.exe'
+          }
+
+          if (-not (Test-Path $sevenZip)) {
+            throw '7z was not found on the Windows runner.'
+          }
+
+          $packageRoot = 'https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6110/qt6_6110_msvc2022_64/qt.qt6.6110.win64_msvc2022_64'
+          $packages = @(
+            @{
+              Name = '6.11.0-0-202603180535qtbase-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z'
+              Sha256 = 'ba0e343cb8aa067f04d6f2e54a60d911660df0aac5cf9f096f1a8a98467f8614'
+            },
+            @{
+              Name = '6.11.0-0-202603180535qtdeclarative-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z'
+              Sha256 = 'b4da442317a2d7a2bc932a3ec5b4742c19b672d1a7db5bff4793b0abd15c0f69'
+            }
+          )
+
+          foreach ($package in $packages) {
+            $archive = Join-Path $env:RUNNER_TEMP $package.Name
+            Invoke-WebRequest -Uri "$packageRoot/$($package.Name)" -OutFile $archive
+
+            $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+            if ($actualSha256 -ne $package.Sha256) {
+              throw "Qt package SHA256 mismatch for $($package.Name). Expected $($package.Sha256), got $actualSha256."
+            }
+
+            & $sevenZip x $archive "-o$qtRoot" -y
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to extract $($package.Name)."
+            }
+          }
+
+      - name: Export Qt environment
+        run: |
+          $qtRoot = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'Qt\6.11.0\msvc2022_64'
+          if (-not (Test-Path $qtRoot)) {
+            throw "Qt root directory does not exist: $qtRoot"
+          }
+
+          $qt6Dir = Join-Path $qtRoot 'lib\cmake\Qt6'
+          if (-not (Test-Path $qt6Dir)) {
+            throw "Qt6Config.cmake not found under $qt6Dir"
+          }
+
+          "QT_ROOT_DIR=$qtRoot" >> $env:GITHUB_ENV
+          "QT_DIR=$qtRoot" >> $env:GITHUB_ENV
+          "Qt6_DIR=$qt6Dir" >> $env:GITHUB_ENV
+          Write-Host "QT_DIR=$qtRoot"
+          Write-Host "Qt6_DIR=$qt6Dir"
+
       - name: Install CMake (Scoop)
         uses: MinoruSekine/setup-scoop@v4
         with:
@@ -116,6 +185,8 @@ jobs:
           Write-Host "Clang:  $(clang-cl --version | Select-Object -First 1)"
           Write-Host "FBuild: $(FBuild.exe -version 2>&1 | Select-Object -First 1)"
           Write-Host "Windows SDK RC: $env:WindowsKitRC"
+          Write-Host "QT_DIR: $env:QT_DIR"
+          Write-Host "Qt6_DIR: $env:Qt6_DIR"
 
       - name: Restore .NET solution
         run: dotnet restore QmlSharp.slnx
@@ -143,5 +214,10 @@ jobs:
 
       - name: Trim FASTBuild cache
         if: always()
-        run: FBuild.exe -cachetrim 10240
-        working-directory: ${{ github.workspace }}/build/windows-ci
+        run: |
+          $buildDir = "${{ github.workspace }}\build\windows-ci"
+          if (Test-Path $buildDir) {
+            Push-Location $buildDir
+            FBuild.exe -cachetrim 10240
+            Pop-Location
+          }

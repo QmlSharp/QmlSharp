@@ -25,7 +25,7 @@ namespace QmlSharp.Registry.Tests.Helpers
 
         public ScanValidation ValidateQtDir(string qtDir)
         {
-            return new ScanValidation(IsValid: true, QtVersion: "6.8.0", ErrorMessage: null);
+            return new ScanValidation(IsValid: true, QtVersion: "6.11.0", ErrorMessage: null);
         }
     }
 
@@ -291,7 +291,7 @@ namespace QmlSharp.Registry.Tests.Helpers
             return new SnapshotValidity(
                 IsValid: true,
                 FormatVersion: 1,
-                QtVersion: "6.8.0",
+                QtVersion: "6.11.0",
                 BuildTimestamp: DateTimeOffset.UtcNow,
                 ErrorMessage: null);
         }

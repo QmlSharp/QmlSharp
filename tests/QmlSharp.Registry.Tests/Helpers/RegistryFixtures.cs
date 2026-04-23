@@ -38,7 +38,7 @@ namespace QmlSharp.Registry.Tests.Helpers
                         Interfaces: ImmutableArray<string>.Empty),
                 ],
                 FormatVersion: 1,
-                QtVersion: "6.8.0",
+                QtVersion: "6.11.0",
                 BuildTimestamp: new DateTimeOffset(2026, 4, 23, 12, 0, 0, TimeSpan.Zero));
         }
 
