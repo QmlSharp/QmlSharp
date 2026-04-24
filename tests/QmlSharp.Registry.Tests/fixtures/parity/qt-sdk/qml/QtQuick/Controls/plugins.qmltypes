@@ -1,0 +1,50 @@
+import QtQuick.tooling 1.2
+
+Module {
+    Component {
+        name: "QQuickControl"
+        accessSemantics: "reference"
+        prototype: "QQuickItem"
+        exports: ["QtQuick.Controls/Control 2.15"]
+        exportMetaObjectRevisions: [527]
+
+        Property { name: "enabled"; type: "bool"; notify: "enabledChanged" }
+
+        Signal {
+            name: "enabledChanged"
+        }
+    }
+
+    Component {
+        name: "QQuickButton"
+        accessSemantics: "reference"
+        prototype: "QQuickControl"
+        exports: ["QtQuick.Controls/Button 2.15"]
+        exportMetaObjectRevisions: [527]
+
+        Property { name: "text"; type: "QString"; notify: "textChanged" }
+
+        Signal {
+            name: "textChanged"
+        }
+
+        Method {
+            name: "click"
+            type: "void"
+        }
+    }
+
+    Component {
+        name: "QQuickPalette"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["QtQuick.Controls/Palette 2.15"]
+        exportMetaObjectRevisions: [527]
+
+        Property { name: "buttonText"; type: "QColor"; notify: "buttonTextChanged" }
+
+        Signal {
+            name: "buttonTextChanged"
+        }
+    }
+}

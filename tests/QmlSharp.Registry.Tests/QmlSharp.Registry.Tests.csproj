@@ -25,6 +25,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\QmlSharp.Core\QmlSharp.Core.csproj" />
     <ProjectReference Include="..\..\src\QmlSharp.Registry\QmlSharp.Registry.csproj" />
+    <ProjectReference Include="..\..\tools\GenerateRegistrySnapshot\QmlSharp.GenerateRegistrySnapshot.csproj" />
   </ItemGroup>
 
   <ItemGroup>

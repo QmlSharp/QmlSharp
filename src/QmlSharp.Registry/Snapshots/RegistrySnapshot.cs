@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Globalization;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using QmlSharp.Registry.Diagnostics;
@@ -17,14 +18,16 @@ namespace QmlSharp.Registry.Snapshots
 
         private const int HeaderLengthFieldSize = sizeof(int);
         private const int SupportedFormatVersion = 1;
+        private const string PayloadCompression = "br";
 
         public byte[] Serialize(QmlRegistry registry)
         {
             ArgumentNullException.ThrowIfNull(registry);
 
-            byte[] payloadBytes = JsonSerializer.SerializeToUtf8Bytes(
+            byte[] payloadJsonBytes = JsonSerializer.SerializeToUtf8Bytes(
                 SnapshotPayload.FromRegistry(registry),
                 JsonOptions);
+            byte[] payloadBytes = CompressPayload(payloadJsonBytes);
 
             string payloadSha256 = ComputeSha256(payloadBytes);
             SnapshotMetadata metadata = new()
@@ -34,6 +37,7 @@ namespace QmlSharp.Registry.Snapshots
                 BuildTimestamp = registry.BuildTimestamp.ToString("O", CultureInfo.InvariantCulture),
                 PayloadLength = payloadBytes.Length,
                 PayloadSha256 = payloadSha256,
+                PayloadCompression = PayloadCompression,
                 EnvelopeSha256 = string.Empty,
             };
             metadata = metadata with { EnvelopeSha256 = ComputeEnvelopeSha256(metadata, payloadBytes) };
@@ -61,7 +65,7 @@ namespace QmlSharp.Registry.Snapshots
             ArgumentNullException.ThrowIfNull(data);
 
             Envelope envelope = ReadEnvelope(data, validatePayloadHash: true, throwOnVersionMismatch: true);
-            SnapshotPayload payload = DeserializePayload(envelope.Payload);
+            SnapshotPayload payload = DeserializePayload(DecompressPayload(envelope.Payload.Span));
 
             return BuildRegistry(payload, envelope.Metadata);
         }
@@ -318,6 +322,7 @@ namespace QmlSharp.Registry.Snapshots
                 buildTimestamp,
                 metadata.PayloadLength,
                 payloadSha256,
+                PayloadCompression,
                 envelopeSha256);
         }
 
@@ -343,6 +348,11 @@ namespace QmlSharp.Registry.Snapshots
 
             string payloadSha256 = ReadSha256(metadata.PayloadSha256, "Snapshot metadata contains an invalid payload checksum.");
             string envelopeSha256 = ReadSha256(metadata.EnvelopeSha256, "Snapshot metadata contains an invalid envelope checksum.");
+            if (!string.Equals(metadata.PayloadCompression, PayloadCompression, StringComparison.Ordinal))
+            {
+                throw CreateCorruptException($"Snapshot metadata contains an unsupported payload compression '{metadata.PayloadCompression}'.");
+            }
+
             return (qtVersion, buildTimestamp, payloadSha256, envelopeSha256);
         }
 
@@ -411,6 +421,37 @@ namespace QmlSharp.Registry.Snapshots
             return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         }
 
+        private static byte[] CompressPayload(ReadOnlySpan<byte> payloadBytes)
+        {
+            using MemoryStream output = new();
+            using (BrotliStream compressor = new(output, CompressionLevel.SmallestSize, leaveOpen: true))
+            {
+                compressor.Write(payloadBytes);
+            }
+
+            return output.ToArray();
+        }
+
+        private static byte[] DecompressPayload(ReadOnlySpan<byte> payloadBytes)
+        {
+            try
+            {
+                using MemoryStream input = new(payloadBytes.ToArray());
+                using BrotliStream decompressor = new(input, CompressionMode.Decompress);
+                using MemoryStream output = new();
+                decompressor.CopyTo(output);
+                return output.ToArray();
+            }
+            catch (InvalidDataException exception)
+            {
+                throw CreateCorruptException($"Failed to decompress snapshot payload: {exception.Message}");
+            }
+            catch (IOException exception)
+            {
+                throw CreateCorruptException($"Failed to decompress snapshot payload: {exception.Message}");
+            }
+        }
+
         private static string ComputeEnvelopeSha256(ParsedMetadata metadata, ReadOnlySpan<byte> payloadBytes)
         {
             SnapshotMetadata metadataForHash = new()
@@ -420,6 +461,7 @@ namespace QmlSharp.Registry.Snapshots
                 BuildTimestamp = metadata.BuildTimestamp.ToString("O", CultureInfo.InvariantCulture),
                 PayloadLength = metadata.PayloadLength,
                 PayloadSha256 = metadata.PayloadSha256,
+                PayloadCompression = metadata.PayloadCompression,
                 EnvelopeSha256 = string.Empty,
             };
 
@@ -462,6 +504,7 @@ namespace QmlSharp.Registry.Snapshots
             DateTimeOffset BuildTimestamp,
             int PayloadLength,
             string PayloadSha256,
+            string PayloadCompression,
             string EnvelopeSha256);
 
         private sealed record SnapshotMetadata
@@ -475,6 +518,8 @@ namespace QmlSharp.Registry.Snapshots
             public int PayloadLength { get; init; }
 
             public string? PayloadSha256 { get; init; }
+
+            public string? PayloadCompression { get; init; }
 
             public string? EnvelopeSha256 { get; init; }
         }

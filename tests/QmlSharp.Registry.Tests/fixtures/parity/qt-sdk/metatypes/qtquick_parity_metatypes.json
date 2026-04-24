@@ -1,0 +1,170 @@
+[
+  {
+    "inputFile": "qtquick_parity.h",
+    "outputRevision": 69,
+    "classes": [
+      {
+        "className": "QQuickItem",
+        "qualifiedClassName": "QQuickItem",
+        "object": true,
+        "superClasses": [
+          { "name": "QObject", "access": "public" }
+        ],
+        "classInfos": [
+          { "name": "QML.Element", "value": "Item" },
+          { "name": "QML.Attached", "value": "QQuickKeysAttached" },
+          { "name": "DefaultProperty", "value": "data" }
+        ],
+        "properties": [
+          {
+            "name": "width",
+            "type": "double",
+            "read": "width",
+            "write": "setWidth",
+            "notify": "widthChanged",
+            "bindable": "bindableWidth",
+            "index": 0,
+            "constant": false,
+            "required": false,
+            "designable": true,
+            "scriptable": true,
+            "stored": true,
+            "user": false,
+            "final": false,
+            "override": false,
+            "virtual": false
+          },
+          {
+            "name": "height",
+            "type": "double",
+            "read": "height",
+            "write": "setHeight",
+            "notify": "heightChanged",
+            "bindable": "bindableHeight",
+            "index": 1,
+            "constant": false,
+            "required": false,
+            "designable": true,
+            "scriptable": true,
+            "stored": true,
+            "user": false,
+            "final": false,
+            "override": false,
+            "virtual": false
+          },
+          {
+            "name": "visible",
+            "type": "bool",
+            "read": "isVisible",
+            "write": "setVisible",
+            "notify": "visibleChanged",
+            "index": 2,
+            "constant": false,
+            "required": false,
+            "designable": true,
+            "scriptable": true,
+            "stored": true,
+            "user": false,
+            "final": false,
+            "override": false,
+            "virtual": false
+          }
+        ],
+        "signals": [
+          {
+            "name": "widthChanged",
+            "returnType": "void",
+            "access": "public",
+            "index": 0,
+            "arguments": []
+          },
+          {
+            "name": "heightChanged",
+            "returnType": "void",
+            "access": "public",
+            "index": 1,
+            "arguments": []
+          },
+          {
+            "name": "visibleChanged",
+            "returnType": "void",
+            "access": "public",
+            "index": 2,
+            "arguments": []
+          }
+        ],
+        "methods": [
+          {
+            "name": "mapToItem",
+            "returnType": "QPointF",
+            "access": "public",
+            "index": 3,
+            "arguments": [
+              { "name": "item", "type": "QQuickItem*" },
+              { "name": "point", "type": "QPointF" }
+            ]
+          }
+        ],
+        "enums": []
+      },
+      {
+        "className": "QObject",
+        "qualifiedClassName": "QObject",
+        "object": true,
+        "classInfos": [
+          { "name": "QML.Element", "value": "QtObject" },
+          { "name": "QML.Creatable", "value": "false" }
+        ],
+        "properties": [
+          {
+            "name": "objectName",
+            "type": "QString",
+            "read": "objectName",
+            "write": "setObjectName",
+            "notify": "objectNameChanged",
+            "index": 0,
+            "constant": false,
+            "required": false,
+            "designable": true,
+            "scriptable": true,
+            "stored": true,
+            "user": false,
+            "final": false,
+            "override": false,
+            "virtual": false
+          }
+        ],
+        "signals": [
+          {
+            "name": "destroyed",
+            "returnType": "void",
+            "access": "public",
+            "index": 0,
+            "arguments": [
+              { "name": "obj", "type": "QObject*" }
+            ]
+          },
+          {
+            "name": "objectNameChanged",
+            "returnType": "void",
+            "access": "public",
+            "index": 1,
+            "arguments": [
+              { "name": "objectName", "type": "QString" }
+            ]
+          }
+        ],
+        "methods": [
+          {
+            "name": "deleteLater",
+            "returnType": "void",
+            "access": "public",
+            "index": 2,
+            "arguments": []
+          }
+        ],
+        "enums": []
+      }
+    ]
+  }
+]

@@ -1,0 +1,140 @@
+[
+  {
+    "inputFile": "qtquickcontrols_parity.h",
+    "outputRevision": 69,
+    "classes": [
+      {
+        "className": "QQuickControl",
+        "qualifiedClassName": "QQuickControl",
+        "object": true,
+        "superClasses": [
+          { "name": "QQuickItem", "access": "public" }
+        ],
+        "classInfos": [
+          { "name": "QML.Element", "value": "Control" }
+        ],
+        "properties": [
+          {
+            "name": "enabled",
+            "type": "bool",
+            "read": "isEnabled",
+            "write": "setEnabled",
+            "notify": "enabledChanged",
+            "index": 0,
+            "constant": false,
+            "required": false,
+            "designable": true,
+            "scriptable": true,
+            "stored": true,
+            "user": false,
+            "final": false,
+            "override": false,
+            "virtual": false
+          }
+        ],
+        "signals": [
+          {
+            "name": "enabledChanged",
+            "returnType": "void",
+            "access": "public",
+            "index": 0,
+            "arguments": []
+          }
+        ],
+        "methods": [],
+        "enums": []
+      },
+      {
+        "className": "QQuickButton",
+        "qualifiedClassName": "QQuickButton",
+        "object": true,
+        "superClasses": [
+          { "name": "QQuickControl", "access": "public" }
+        ],
+        "classInfos": [
+          { "name": "QML.Element", "value": "Button" }
+        ],
+        "properties": [
+          {
+            "name": "text",
+            "type": "QString",
+            "read": "text",
+            "write": "setText",
+            "notify": "textChanged",
+            "index": 0,
+            "constant": false,
+            "required": false,
+            "designable": true,
+            "scriptable": true,
+            "stored": true,
+            "user": false,
+            "final": false,
+            "override": false,
+            "virtual": false
+          }
+        ],
+        "signals": [
+          {
+            "name": "textChanged",
+            "returnType": "void",
+            "access": "public",
+            "index": 0,
+            "arguments": []
+          }
+        ],
+        "methods": [
+          {
+            "name": "click",
+            "returnType": "void",
+            "access": "public",
+            "index": 1,
+            "arguments": []
+          }
+        ],
+        "enums": []
+      },
+      {
+        "className": "QQuickPalette",
+        "qualifiedClassName": "QQuickPalette",
+        "object": true,
+        "superClasses": [
+          { "name": "QObject", "access": "public" }
+        ],
+        "classInfos": [
+          { "name": "QML.Element", "value": "Palette" },
+          { "name": "QML.Singleton", "value": "true" }
+        ],
+        "properties": [
+          {
+            "name": "buttonText",
+            "type": "QColor",
+            "read": "buttonText",
+            "write": "setButtonText",
+            "notify": "buttonTextChanged",
+            "index": 0,
+            "constant": false,
+            "required": false,
+            "designable": true,
+            "scriptable": true,
+            "stored": true,
+            "user": false,
+            "final": false,
+            "override": false,
+            "virtual": false
+          }
+        ],
+        "signals": [
+          {
+            "name": "buttonTextChanged",
+            "returnType": "void",
+            "access": "public",
+            "index": 0,
+            "arguments": []
+          }
+        ],
+        "methods": [],
+        "enums": []
+      }
+    ]
+  }
+]

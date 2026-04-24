@@ -1,0 +1,10 @@
+module QtQuick.Controls
+plugin qtquickcontrols2plugin
+classname QtQuickControls2Plugin
+designersupported
+typeinfo plugins.qmltypes
+import QtQuick 2.15
+depends QtQml 2.15
+Control 2.15 Control.qml
+Button 2.15 Button.qml
+singleton Palette 2.15 Palette.qml
