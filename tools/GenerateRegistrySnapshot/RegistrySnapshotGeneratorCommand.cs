@@ -21,18 +21,14 @@ namespace QmlSharp.Tools.GenerateRegistrySnapshot
             }
 
             GenerateRegistrySnapshotOptions options = parseResult.Options!;
-            string outputPath = Path.GetFullPath(options.OutputPath);
             RegistryBuilder builder = new();
+            string outputPath;
 
             BuildResult result;
             try
             {
-                result = builder.Build(new BuildConfig(
-                    QtDir: options.QtDir,
-                    SnapshotPath: outputPath,
-                    ForceRebuild: true,
-                    ModuleFilter: options.ModuleFilter.IsEmpty ? null : options.ModuleFilter,
-                    IncludeInternal: false));
+                outputPath = Path.GetFullPath(options.OutputPath);
+                result = BuildSnapshot(builder, options, outputPath);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
@@ -45,7 +41,7 @@ namespace QmlSharp.Tools.GenerateRegistrySnapshot
 
             if (!result.IsSuccess || result.TypeRegistry is null)
             {
-                TryDeleteFile(outputPath);
+                TryDeleteFile(outputPath, standardError);
 
                 foreach (RegistryDiagnostic diagnostic in result.Diagnostics
                     .OrderByDescending(diagnostic => diagnostic.Severity)
@@ -69,6 +65,19 @@ namespace QmlSharp.Tools.GenerateRegistrySnapshot
             standardOutput.WriteLine($"Output: {outputPath}");
 
             return 0;
+        }
+
+        private static BuildResult BuildSnapshot(
+            RegistryBuilder builder,
+            GenerateRegistrySnapshotOptions options,
+            string outputPath)
+        {
+            return builder.Build(new BuildConfig(
+                QtDir: options.QtDir,
+                SnapshotPath: outputPath,
+                ForceRebuild: true,
+                ModuleFilter: options.ModuleFilter.IsEmpty ? null : options.ModuleFilter,
+                IncludeInternal: false));
         }
 
         [SuppressMessage("Maintainability", "MA0051:Method is too long", Justification = "The command-line parser keeps the supported CLI contract in one deterministic place.")]
@@ -205,7 +214,7 @@ namespace QmlSharp.Tools.GenerateRegistrySnapshot
             return true;
         }
 
-        private static void TryDeleteFile(string filePath)
+        private static void TryDeleteFile(string filePath, TextWriter standardError)
         {
             try
             {
@@ -214,11 +223,13 @@ namespace QmlSharp.Tools.GenerateRegistrySnapshot
                     File.Delete(filePath);
                 }
             }
-            catch (IOException)
+            catch (IOException exception)
             {
+                standardError.WriteLine($"Warning: Failed to delete file '{filePath}': {exception.Message}");
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException exception)
             {
+                standardError.WriteLine($"Warning: Failed to delete file '{filePath}': {exception.Message}");
             }
         }
 
@@ -228,7 +239,7 @@ namespace QmlSharp.Tools.GenerateRegistrySnapshot
             writer.WriteLine("  dotnet run --project tools/GenerateRegistrySnapshot -- --qt-dir <path> --output <file> [--module-filter <uri[,uri...]>]");
             writer.WriteLine();
             writer.WriteLine("Options:");
-            writer.WriteLine("  --qt-dir         Absolute path to the Qt 6.11.0 SDK root.");
+            writer.WriteLine("  --qt-dir         Absolute path to the Qt SDK root.");
             writer.WriteLine("  --output         Path to the registry snapshot file to write.");
             writer.WriteLine("  --module-filter  Optional module URI filter. Repeat the option or pass a comma-separated list.");
         }

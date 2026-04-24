@@ -9,8 +9,8 @@ namespace QmlSharp.Registry.Tests.Building
         {
             using TemporaryDirectory temporaryDirectory = new();
             string outputPath = Path.Join(temporaryDirectory.Path, "qt-6.11.0-registry.snapshot.bin");
-            StringWriter standardOutput = new();
-            StringWriter standardError = new();
+            using StringWriter standardOutput = new();
+            using StringWriter standardError = new();
 
             int exitCode = RegistrySnapshotGeneratorCommand.Run(
                 ["--qt-dir", GetParityQtDir(), "--output", outputPath],
@@ -41,8 +41,8 @@ namespace QmlSharp.Registry.Tests.Building
         {
             using TemporaryDirectory temporaryDirectory = new();
             string outputPath = Path.Join(temporaryDirectory.Path, "qtquick-controls-only.snapshot.bin");
-            StringWriter standardOutput = new();
-            StringWriter standardError = new();
+            using StringWriter standardOutput = new();
+            using StringWriter standardError = new();
 
             int exitCode = RegistrySnapshotGeneratorCommand.Run(
                 ["--qt-dir", GetParityQtDir(), "--output", outputPath, "--module-filter", "QtQuick.Controls"],
@@ -65,6 +65,36 @@ namespace QmlSharp.Registry.Tests.Building
             Assert.Equal(3, loadResult.TypeRegistry.Types.Count);
             Assert.Null(loadResult.Query!.FindTypeByQmlName("QtQuick", "Item"));
             Assert.NotNull(loadResult.Query.FindTypeByQmlName("QtQuick.Controls", "Button"));
+        }
+
+        [Fact]
+        public void Run_help_prints_version_agnostic_qt_dir_description()
+        {
+            using StringWriter standardOutput = new();
+            using StringWriter standardError = new();
+
+            int exitCode = RegistrySnapshotGeneratorCommand.Run(["--help"], standardOutput, standardError);
+
+            Assert.Equal(0, exitCode);
+            Assert.Contains("Absolute path to the Qt SDK root.", standardOutput.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("Qt 6.11.0 SDK root", standardOutput.ToString(), StringComparison.Ordinal);
+            Assert.Equal(string.Empty, standardError.ToString());
+        }
+
+        [Fact]
+        public void Run_with_invalid_output_path_returns_error_without_throwing()
+        {
+            using StringWriter standardOutput = new();
+            using StringWriter standardError = new();
+
+            int exitCode = RegistrySnapshotGeneratorCommand.Run(
+                ["--qt-dir", GetParityQtDir(), "--output", "invalid\0snapshot.bin"],
+                standardOutput,
+                standardError);
+
+            Assert.Equal(1, exitCode);
+            Assert.Equal(string.Empty, standardOutput.ToString());
+            Assert.Contains("Failed to generate registry snapshot:", standardError.ToString(), StringComparison.Ordinal);
         }
 
         private static string FormatDiagnostics(IEnumerable<QmlSharp.Registry.Diagnostics.RegistryDiagnostic> diagnostics)
@@ -103,11 +133,13 @@ namespace QmlSharp.Registry.Tests.Building
                         Directory.Delete(Path, recursive: true);
                     }
                 }
-                catch (IOException)
+                catch (IOException exception)
                 {
+                    System.Diagnostics.Trace.WriteLine($"Failed to delete temporary directory '{Path}': {exception}");
                 }
-                catch (UnauthorizedAccessException)
+                catch (UnauthorizedAccessException exception)
                 {
+                    System.Diagnostics.Trace.WriteLine($"Failed to delete temporary directory '{Path}': {exception}");
                 }
             }
         }
