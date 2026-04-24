@@ -130,6 +130,7 @@ namespace QmlSharp.Registry.Tests.Contracts
                 typeof(IQmldirParser).FullName!,
                 typeof(QmldirParser).FullName!,
                 typeof(IMetatypesParser).FullName!,
+                typeof(MetatypesParser).FullName!,
                 typeof(ITypeNameMapper).FullName!,
                 typeof(ITypeNormalizer).FullName!,
                 typeof(ITypeRegistry).FullName!,

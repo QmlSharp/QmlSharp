@@ -1,10 +1,11 @@
 [
   {
     "inputFile": "qtquick.h",
+    "outputRevision": 69,
     "classes": [
       {
-        "className": "QQuickItem",
-        "qualifiedClassName": "QQuickItem",
+        "className": "QQuickRichItem",
+        "qualifiedClassName": "QQuickRichItem",
         "object": true,
         "gadget": false,
         "namespace": false,
@@ -12,7 +13,83 @@
           { "name": "QObject", "access": "public" }
         ],
         "classInfos": [
-          { "name": "QML.Element", "value": "Item" }
+          { "name": "QML.Element", "value": "RichItem" },
+          { "name": "QML.Attached", "value": "QQuickKeysAttached" }
+        ],
+        "properties": [
+          {
+            "name": "width",
+            "type": "double",
+            "read": "width",
+            "write": "setWidth",
+            "notify": "widthChanged",
+            "bindableProperty": "bindableWidth",
+            "revision": 0,
+            "index": 1,
+            "isReadonly": false,
+            "isConstant": false,
+            "isFinal": false,
+            "isRequired": false
+          },
+          {
+            "name": "title",
+            "type": "QString",
+            "read": "title",
+            "write": "setTitle",
+            "notify": "titleChanged",
+            "bindable": "bindableTitle",
+            "revision": "2",
+            "index": "3",
+            "readonly": true,
+            "constant": true,
+            "final": true,
+            "required": true
+          }
+        ],
+        "signals": [
+          {
+            "name": "titleChanged",
+            "arguments": [
+              { "name": "value", "type": "QString" }
+            ],
+            "revision": 2
+          }
+        ],
+        "methods": [
+          {
+            "name": "mapToItem",
+            "returnType": "QPointF",
+            "arguments": [
+              { "name": "item", "type": "QQuickItem*" },
+              { "name": "point", "type": "QPointF" }
+            ],
+            "revision": 3,
+            "isCloned": false
+          }
+        ],
+        "enums": [
+          {
+            "name": "TransformOrigin",
+            "alias": null,
+            "isFlag": false,
+            "isClass": false,
+            "values": {
+              "TopLeft": 0,
+              "Center": 4,
+              "BottomRight": 8
+            }
+          }
+        ]
+      },
+      {
+        "className": "QQuickPaletteGadget",
+        "qualifiedClassName": "QQuickPaletteGadget",
+        "object": false,
+        "gadget": true,
+        "namespace": false,
+        "superClasses": [],
+        "classInfos": [
+          { "name": "QML.Foreign", "value": "QPalette" }
         ],
         "properties": [],
         "signals": [],
@@ -20,36 +97,27 @@
         "enums": []
       },
       {
-        "className": "QQuickRectangle",
-        "qualifiedClassName": "QQuickRectangle",
-        "object": true,
+        "className": "QQuickNamespace",
+        "qualifiedClassName": "QQuickNamespace",
+        "object": false,
         "gadget": false,
-        "namespace": false,
-        "superClasses": [
-          { "name": "QQuickItem", "access": "public" }
-        ],
+        "namespace": true,
+        "superClasses": [],
         "classInfos": [
-          { "name": "QML.Element", "value": "Rectangle" }
+          { "name": "QML.Element", "value": "QuickNamespace" }
         ],
-        "properties": [
-          {
-            "name": "color",
-            "type": "QColor",
-            "read": "color",
-            "write": "setColor",
-            "notify": "colorChanged",
-            "bindableProperty": null,
-            "revision": 0,
-            "index": 1,
-            "isReadonly": false,
-            "isConstant": false,
-            "isFinal": false,
-            "isRequired": false
-          }
-        ],
+        "properties": [],
         "signals": [],
         "methods": [],
-        "enums": []
+        "enums": [
+          {
+            "name": "Mode",
+            "alias": null,
+            "isFlag": false,
+            "isClass": false,
+            "values": ["Alpha", "Beta"]
+          }
+        ]
       }
     ]
   }
