@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.GenerateRegistrySnapshot</AssemblyName>
+    <RootNamespace>QmlSharp.Tools.GenerateRegistrySnapshot</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\QmlSharp.Registry\QmlSharp.Registry.csproj" />
+  </ItemGroup>
+</Project>

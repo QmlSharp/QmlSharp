@@ -1,0 +1,54 @@
+{
+  "forward": [
+    {
+      "cppType": "QString",
+      "qmlType": "string"
+    },
+    {
+      "cppType": "QColor",
+      "qmlType": "color"
+    },
+    {
+      "cppType": "QPointF",
+      "qmlType": "point"
+    },
+    {
+      "cppType": "QSizeF",
+      "qmlType": "size"
+    },
+    {
+      "cppType": "QRectF",
+      "qmlType": "rect"
+    },
+    {
+      "cppType": "QVariantList",
+      "qmlType": "list"
+    }
+  ],
+  "reverse": [
+    {
+      "qmlType": "string",
+      "cppType": "QString"
+    },
+    {
+      "qmlType": "color",
+      "cppType": "QColor"
+    },
+    {
+      "qmlType": "point",
+      "cppType": "QPointF"
+    },
+    {
+      "qmlType": "size",
+      "cppType": "QSizeF"
+    },
+    {
+      "qmlType": "rect",
+      "cppType": "QRectF"
+    },
+    {
+      "qmlType": "list",
+      "cppType": "QVariantList"
+    }
+  ]
+}

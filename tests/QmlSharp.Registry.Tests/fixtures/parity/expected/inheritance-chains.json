@@ -1,0 +1,28 @@
+{
+  "chains": [
+    {
+      "qualifiedName": "QQuickRectangle",
+      "types": [
+        "QQuickRectangle",
+        "QQuickItem",
+        "QObject"
+      ]
+    },
+    {
+      "qualifiedName": "QQuickButton",
+      "types": [
+        "QQuickButton",
+        "QQuickControl",
+        "QQuickItem",
+        "QObject"
+      ]
+    },
+    {
+      "qualifiedName": "QQuickPalette",
+      "types": [
+        "QQuickPalette",
+        "QObject"
+      ]
+    }
+  ]
+}

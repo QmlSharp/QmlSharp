@@ -1,0 +1,238 @@
+{
+  "formatVersion": 1,
+  "qtVersion": "6.11.0",
+  "types": [
+    {
+      "qualifiedName": "QQuickItem",
+      "qmlName": "Item",
+      "moduleUri": "QtQuick",
+      "accessSemantics": "reference",
+      "prototype": "QObject",
+      "defaultProperty": "data",
+      "attachedType": "QQuickKeysAttached",
+      "isSingleton": false,
+      "isCreatable": true,
+      "exports": [
+        "QtQuick/Item 2.0"
+      ],
+      "properties": [
+        {
+          "name": "data",
+          "typeName": "QtObject",
+          "isReadonly": true,
+          "isList": true,
+          "isRequired": false
+        },
+        {
+          "name": "height",
+          "typeName": "double",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false,
+          "notifySignal": "heightChanged"
+        },
+        {
+          "name": "visible",
+          "typeName": "bool",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false,
+          "notifySignal": "visibleChanged"
+        },
+        {
+          "name": "width",
+          "typeName": "double",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false,
+          "notifySignal": "widthChanged"
+        }
+      ],
+      "signals": [
+        {
+          "name": "heightChanged",
+          "parameterTypes": []
+        },
+        {
+          "name": "visibleChanged",
+          "parameterTypes": []
+        },
+        {
+          "name": "widthChanged",
+          "parameterTypes": []
+        }
+      ],
+      "methods": [
+        {
+          "name": "mapToItem",
+          "returnType": "point",
+          "parameterTypes": [
+            "Item",
+            "point"
+          ]
+        }
+      ]
+    },
+    {
+      "qualifiedName": "QQuickRectangle",
+      "qmlName": "Rectangle",
+      "moduleUri": "QtQuick",
+      "accessSemantics": "reference",
+      "prototype": "QQuickItem",
+      "isSingleton": false,
+      "isCreatable": true,
+      "exports": [
+        "QtQuick/Rectangle 2.0",
+        "QtQuick/Rectangle 6.0"
+      ],
+      "properties": [
+        {
+          "name": "border",
+          "typeName": "QQuickPen",
+          "isReadonly": true,
+          "isList": false,
+          "isRequired": false
+        },
+        {
+          "name": "color",
+          "typeName": "color",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false,
+          "notifySignal": "colorChanged"
+        },
+        {
+          "name": "gradient",
+          "typeName": "QQuickGradient",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false
+        },
+        {
+          "name": "radius",
+          "typeName": "double",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false
+        }
+      ],
+      "signals": [
+        {
+          "name": "colorChanged",
+          "parameterTypes": []
+        }
+      ],
+      "methods": []
+    },
+    {
+      "qualifiedName": "QQuickButton",
+      "qmlName": "Button",
+      "moduleUri": "QtQuick.Controls",
+      "accessSemantics": "reference",
+      "prototype": "QQuickControl",
+      "isSingleton": false,
+      "isCreatable": true,
+      "exports": [
+        "QtQuick.Controls/Button 2.15"
+      ],
+      "properties": [
+        {
+          "name": "text",
+          "typeName": "string",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false,
+          "notifySignal": "textChanged"
+        }
+      ],
+      "signals": [
+        {
+          "name": "textChanged",
+          "parameterTypes": []
+        }
+      ],
+      "methods": [
+        {
+          "name": "click",
+          "returnType": "void",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "qualifiedName": "QQuickPalette",
+      "qmlName": "Palette",
+      "moduleUri": "QtQuick.Controls",
+      "accessSemantics": "reference",
+      "prototype": "QObject",
+      "isSingleton": true,
+      "isCreatable": false,
+      "exports": [
+        "QtQuick.Controls/Palette 2.15"
+      ],
+      "properties": [
+        {
+          "name": "buttonText",
+          "typeName": "color",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false,
+          "notifySignal": "buttonTextChanged"
+        }
+      ],
+      "signals": [
+        {
+          "name": "buttonTextChanged",
+          "parameterTypes": []
+        }
+      ],
+      "methods": []
+    },
+    {
+      "qualifiedName": "QColor",
+      "accessSemantics": "value",
+      "extension": "QColorValueType",
+      "isSingleton": false,
+      "isCreatable": false,
+      "exports": [],
+      "properties": [
+        {
+          "name": "a",
+          "typeName": "double",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false
+        },
+        {
+          "name": "b",
+          "typeName": "double",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false
+        },
+        {
+          "name": "g",
+          "typeName": "double",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false
+        },
+        {
+          "name": "r",
+          "typeName": "double",
+          "isReadonly": false,
+          "isList": false,
+          "isRequired": false
+        }
+      ],
+      "signals": [],
+      "methods": [
+        {
+          "name": "toString",
+          "returnType": "string",
+          "parameterTypes": []
+        }
+      ]
+    }
+  ]
+}

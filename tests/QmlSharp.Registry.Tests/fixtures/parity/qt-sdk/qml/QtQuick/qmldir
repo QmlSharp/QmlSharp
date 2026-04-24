@@ -1,0 +1,10 @@
+module QtQuick
+plugin qtquick2plugin
+classname QtQuick2Plugin
+designersupported
+typeinfo plugins.qmltypes
+import QtQml auto
+depends QtQml auto
+Item 2.0 Item.qml
+Rectangle 2.0 Rectangle.qml
+Rectangle 6.0 Rectangle.qml

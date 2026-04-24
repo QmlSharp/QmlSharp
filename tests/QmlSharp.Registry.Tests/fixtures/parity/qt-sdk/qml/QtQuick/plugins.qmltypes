@@ -1,0 +1,127 @@
+import QtQuick.tooling 1.2
+
+Module {
+    Component {
+        name: "QObject"
+        accessSemantics: "reference"
+        exports: ["QtQml/QtObject 2.0"]
+        exportMetaObjectRevisions: [512]
+
+        Property { name: "objectName"; type: "QString"; notify: "objectNameChanged" }
+
+        Signal {
+            name: "destroyed"
+            Parameter { name: "obj"; type: "QObject"; isPointer: true }
+        }
+
+        Method {
+            name: "deleteLater"
+        }
+    }
+
+    Component {
+        name: "QQuickKeysAttached"
+        accessSemantics: "reference"
+        prototype: "QObject"
+
+        Property { name: "enabled"; type: "bool" }
+
+        Enum {
+            name: "Priority"
+            values: ["BeforeItem", "AfterItem"]
+        }
+    }
+
+    Component {
+        name: "QQuickItem"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["QtQuick/Item 2.0"]
+        exportMetaObjectRevisions: [512]
+        attachedType: "QQuickKeysAttached"
+        defaultProperty: "data"
+
+        Property { name: "width"; type: "double"; notify: "widthChanged" }
+        Property { name: "height"; type: "double"; notify: "heightChanged" }
+        Property { name: "visible"; type: "bool"; notify: "visibleChanged" }
+        Property { name: "data"; type: "QObject"; isList: true; isReadonly: true }
+
+        Signal {
+            name: "widthChanged"
+        }
+
+        Signal {
+            name: "heightChanged"
+        }
+
+        Signal {
+            name: "visibleChanged"
+        }
+
+        Method {
+            name: "mapToItem"
+            type: "QPointF"
+            Parameter { name: "item"; type: "QQuickItem"; isPointer: true }
+            Parameter { name: "point"; type: "QPointF" }
+        }
+    }
+
+    Component {
+        name: "QQuickRectangle"
+        accessSemantics: "reference"
+        prototype: "QQuickItem"
+        exports: ["QtQuick/Rectangle 2.0", "QtQuick/Rectangle 6.0"]
+        exportMetaObjectRevisions: [512, 1536]
+
+        Property { name: "color"; type: "QColor"; notify: "colorChanged" }
+        Property { name: "radius"; type: "double" }
+        Property { name: "gradient"; type: "QQuickGradient"; isPointer: true }
+        Property { name: "border"; type: "QQuickPen"; isReadonly: true; isPointer: true }
+
+        Signal {
+            name: "colorChanged"
+        }
+    }
+
+    Component {
+        name: "QColor"
+        accessSemantics: "value"
+        extension: "QColorValueType"
+
+        Property { name: "r"; type: "double" }
+        Property { name: "g"; type: "double" }
+        Property { name: "b"; type: "double" }
+        Property { name: "a"; type: "double" }
+
+        Method {
+            name: "toString"
+            type: "QString"
+        }
+    }
+
+    Component {
+        name: "QPointF"
+        accessSemantics: "value"
+
+        Property { name: "x"; type: "double" }
+        Property { name: "y"; type: "double" }
+    }
+
+    Component {
+        name: "QSizeF"
+        accessSemantics: "value"
+
+        Property { name: "width"; type: "double" }
+        Property { name: "height"; type: "double" }
+    }
+
+    Component {
+        name: "QRectF"
+        accessSemantics: "value"
+
+        Property { name: "x"; type: "double" }
+        Property { name: "y"; type: "double" }
+        Property { name: "width"; type: "double" }
+        Property { name: "height"; type: "double" }
+    }
+}
