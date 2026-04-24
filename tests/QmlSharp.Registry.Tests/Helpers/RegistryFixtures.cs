@@ -39,7 +39,8 @@ namespace QmlSharp.Registry.Tests.Helpers
                 ],
                 FormatVersion: 1,
                 QtVersion: "6.11.0",
-                BuildTimestamp: new DateTimeOffset(2026, 4, 23, 12, 0, 0, TimeSpan.Zero));
+                BuildTimestamp: new DateTimeOffset(2026, 4, 23, 12, 0, 0, TimeSpan.Zero))
+                .WithLookupIndexes();
         }
 
         public static QmlRegistry CreateModuleQueryFixture()
@@ -72,11 +73,11 @@ namespace QmlSharp.Registry.Tests.Helpers
                 Enums: ImmutableArray<QmlEnum>.Empty,
                 Interfaces: ImmutableArray<string>.Empty);
 
-            return baseFixture with
+            return (baseFixture with
             {
                 Modules = [CreateQtQuickModule(), controlsModule],
                 TypesByQualifiedName = baseFixture.TypesByQualifiedName.Add(button.QualifiedName, button),
-            };
+            }).WithLookupIndexes();
         }
 
         public static QmlRegistry CreateCategoryFixture()
@@ -134,13 +135,13 @@ namespace QmlSharp.Registry.Tests.Helpers
                 Enums: ImmutableArray<QmlEnum>.Empty,
                 Interfaces: ImmutableArray<string>.Empty);
 
-            return baseFixture with
+            return (baseFixture with
             {
                 TypesByQualifiedName = baseFixture.TypesByQualifiedName
                     .Add(valueType.QualifiedName, valueType)
                     .Add(singleton.QualifiedName, singleton)
                     .Add(sequence.QualifiedName, sequence),
-            };
+            }).WithLookupIndexes();
         }
 
         public static QmlModule CreateQtQuickModule()
