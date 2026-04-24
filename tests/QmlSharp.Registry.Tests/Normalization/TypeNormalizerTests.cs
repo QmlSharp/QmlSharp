@@ -307,6 +307,109 @@ namespace QmlSharp.Registry.Tests.Normalization
             Assert.Equal("QQuickItem", result.Registry.LookupIndexes.TypesByModuleAndQmlName[("QtQuick", "Item")].QualifiedName);
         }
 
+        [Fact]
+        public void Duplicate_qmldir_modules_are_merged_before_lookup_indexes_are_built()
+        {
+            RawQmltypesFile qmltypesFile = CreateQmltypesFile(
+                CreateComponent(name: "QQuickItem", prototype: null, exports: ["QtQuick/Item 2.0"]),
+                CreateComponent(name: "QQuickRectangle", prototype: null, exports: ["QtQuick/Rectangle 6.0"]));
+            RawQmldirFile firstQmldirFile = CreateQmldirFile(
+                sourcePath: @"fixtures\qmldir\qtquick-a",
+                module: "QtQuick",
+                imports: [new RawQmldirImport("QtQml", "2.15")],
+                depends: [new RawQmldirImport("QtCore", "6.0")],
+                typeEntries: [new RawQmldirTypeEntry("Item", "2.0", "Item.qml", IsSingleton: false, IsInternal: false, StyleSelector: null)]);
+            RawQmldirFile secondQmldirFile = CreateQmldirFile(
+                sourcePath: @"fixtures\qmldir\qtquick-b",
+                module: "QtQuick",
+                imports: [new RawQmldirImport("QtQuick.Window", "6.0")],
+                depends: [new RawQmldirImport("QtGui", "6.0")],
+                typeEntries: [new RawQmldirTypeEntry("Rectangle", "6.0", "Rectangle.qml", IsSingleton: false, IsInternal: false, StyleSelector: null)]);
+
+            NormalizeResult result = CreateNormalizer().Normalize(
+                [qmltypesFile],
+                [("QtQuick", firstQmldirFile), ("QtQuick", secondQmldirFile)],
+                [],
+                CreateMapper());
+
+            Assert.True(result.IsSuccess);
+
+            QmlModule module = Assert.Single(result.Registry!.Modules);
+            Assert.Equal("QtQuick", module.Uri);
+            Assert.Equal(new QmlVersion(6, 0), module.Version);
+            Assert.Equal(["QtCore", "QtGui"], module.Dependencies.ToArray());
+            Assert.Equal(["QtQml", "QtQuick.Window"], module.Imports.ToArray());
+            Assert.Contains(module.Types, moduleType => moduleType.QualifiedName == "QQuickItem");
+            Assert.Contains(module.Types, moduleType => moduleType.QualifiedName == "QQuickRectangle");
+            Assert.Equal(module, result.Registry.LookupIndexes.ModulesByUri["QtQuick"]);
+        }
+
+        [Fact]
+        public void Qmldir_export_matching_compares_versions_semantically()
+        {
+            RawQmltypesFile qmltypesFile = CreateQmltypesFile(
+                CreateComponent(name: "QQuickItem", prototype: null, exports: ["QtQuick/Item 2.0"]),
+                CreateComponent(name: "QQuickLegacyItem", prototype: null, exports: ["QtQuick/Item 1.0"]));
+            RawQmldirFile qmldirFile = CreateQmldirFile(
+                sourcePath: @"fixtures\qmldir\qtquick",
+                module: "QtQuick",
+                imports: [],
+                depends: [],
+                typeEntries: [new RawQmldirTypeEntry("Item", "2.00", "Item.qml", IsSingleton: true, IsInternal: false, StyleSelector: null)]);
+
+            NormalizeResult result = CreateNormalizer().Normalize([qmltypesFile], [("QtQuick", qmldirFile)], [], CreateMapper());
+
+            Assert.True(result.IsSuccess);
+            Assert.True(AssertType(result.Registry!, "QQuickItem").IsSingleton);
+            Assert.False(AssertType(result.Registry!, "QQuickLegacyItem").IsSingleton);
+        }
+
+        [Fact]
+        public void Conflict_diagnostics_use_source_neutral_existing_and_incoming_language()
+        {
+            RawQmltypesFile qmltypesFile = CreateQmltypesFile(
+                CreateComponent(
+                    name: "QQuickItem",
+                    prototype: null,
+                    exports: ["QtQuick/Item 2.0"],
+                    properties: [RawAstFixtures.CreateQmltypesProperty()]),
+                CreateComponent(
+                    name: "QQuickItem",
+                    prototype: null,
+                    exports: ["QtQuick/Item 2.0"],
+                    properties: [RawAstFixtures.CreateQmltypesProperty() with { Type = "int" }]));
+
+            NormalizeResult result = CreateNormalizer().Normalize([qmltypesFile], [], [], CreateMapper());
+
+            RegistryDiagnostic diagnostic = Assert.Single(result.Diagnostics.Where(diagnostic => diagnostic.Code == DiagnosticCodes.TypeConflict));
+            Assert.Contains("existing value 'double' wins over incoming value 'int'", diagnostic.Message);
+            Assert.DoesNotContain("qmltypes value", diagnostic.Message);
+            Assert.DoesNotContain("metatypes value", diagnostic.Message);
+        }
+
+        [Fact]
+        public void Enum_conflict_diagnostics_describe_conflicting_definitions()
+        {
+            RawQmltypesFile qmltypesFile = CreateQmltypesFile(
+                CreateComponent(
+                    name: "QQuickItem",
+                    prototype: null,
+                    exports: ["QtQuick/Item 2.0"],
+                    enums: [new RawQmltypesEnum("Mode", Alias: null, IsFlag: false, Values: ["First"])]),
+                CreateComponent(
+                    name: "QQuickItem",
+                    prototype: null,
+                    exports: ["QtQuick/Item 2.0"],
+                    enums: [new RawQmltypesEnum("Mode", Alias: null, IsFlag: true, Values: ["Second"])]));
+
+            NormalizeResult result = CreateNormalizer().Normalize([qmltypesFile], [], [], CreateMapper());
+
+            RegistryDiagnostic diagnostic = Assert.Single(result.Diagnostics.Where(diagnostic => diagnostic.Code == DiagnosticCodes.TypeConflict));
+            Assert.Contains("enum 'Mode'", diagnostic.Message);
+            Assert.Contains("existing value 'enum [First]'", diagnostic.Message);
+            Assert.Contains("incoming value 'flag [Second]'", diagnostic.Message);
+        }
+
         private static QmlType AssertType(QmlRegistry registry, string qualifiedName)
         {
             KeyValuePair<string, QmlType> entry = Assert.Single(registry.TypesByQualifiedName, pair => pair.Key == qualifiedName);
@@ -385,6 +488,26 @@ namespace QmlSharp.Registry.Tests.Normalization
             return new RawMetatypesFile(
                 SourcePath: @"fixtures\metatypes\inline.json",
                 Entries: [new RawMetatypesEntry(InputFile: "inline.h", Classes: [.. classes])],
+                Diagnostics: ImmutableArray<RegistryDiagnostic>.Empty);
+        }
+
+        private static RawQmldirFile CreateQmldirFile(
+            string sourcePath,
+            string module,
+            IEnumerable<RawQmldirImport> imports,
+            IEnumerable<RawQmldirImport> depends,
+            IEnumerable<RawQmldirTypeEntry> typeEntries)
+        {
+            return new RawQmldirFile(
+                SourcePath: sourcePath,
+                Module: module,
+                Plugins: ImmutableArray<RawQmldirPlugin>.Empty,
+                Classname: null,
+                Imports: [.. imports],
+                Depends: [.. depends],
+                TypeEntries: [.. typeEntries],
+                Designersupported: ImmutableArray<string>.Empty,
+                Typeinfo: null,
                 Diagnostics: ImmutableArray<RegistryDiagnostic>.Empty);
         }
 

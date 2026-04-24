@@ -155,12 +155,16 @@ namespace QmlSharp.Registry.Normalization
                     }
                 }
 
-                foreach (RawQmldirTypeEntry typeEntry in file.TypeEntries)
-                {
-                    if (TryParseVersion(typeEntry.Version, out QmlVersion version))
+                foreach (QmlVersion version in file.TypeEntries
+                    .Select(typeEntry =>
                     {
-                        knownVersions.Add(version);
-                    }
+                        bool success = TryParseVersion(typeEntry.Version, out QmlVersion parsedVersion);
+                        return (Success: success, Version: parsedVersion);
+                    })
+                    .Where(result => result.Success)
+                    .Select(result => result.Version))
+                {
+                    knownVersions.Add(version);
                 }
 
                 QmlVersion moduleVersion = SelectHighestVersion(knownVersions);
@@ -189,8 +193,40 @@ namespace QmlSharp.Registry.Normalization
                     Types: orderedModuleTypes));
             }
 
+            return MergeDuplicateModules(modules);
+        }
+
+        private static ImmutableArray<QmlModule> MergeDuplicateModules(IEnumerable<QmlModule> modules)
+        {
             return modules
-                .OrderBy(module => module.Uri, StringComparer.Ordinal)
+                .GroupBy(module => module.Uri, StringComparer.Ordinal)
+                .OrderBy(grouping => grouping.Key, StringComparer.Ordinal)
+                .Select(grouping => new QmlModule(
+                    Uri: grouping.Key,
+                    Version: SelectHighestVersion(grouping.Select(module => module.Version)),
+                    Dependencies: grouping
+                        .SelectMany(module => module.Dependencies)
+                        .Where(dependency => !string.IsNullOrWhiteSpace(dependency))
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(dependency => dependency, StringComparer.Ordinal)
+                        .ToImmutableArray(),
+                    Imports: grouping
+                        .SelectMany(module => module.Imports)
+                        .Where(import => !string.IsNullOrWhiteSpace(import))
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(import => import, StringComparer.Ordinal)
+                        .ToImmutableArray(),
+                    Types: grouping
+                        .SelectMany(module => module.Types)
+                        .GroupBy(
+                            moduleType => (moduleType.QualifiedName, moduleType.QmlName, moduleType.ExportVersion),
+                            EqualityComparer<(string QualifiedName, string QmlName, QmlVersion ExportVersion)>.Default)
+                        .Select(group => group.First())
+                        .OrderBy(moduleType => moduleType.QmlName, StringComparer.Ordinal)
+                        .ThenBy(moduleType => moduleType.ExportVersion.Major)
+                        .ThenBy(moduleType => moduleType.ExportVersion.Minor)
+                        .ThenBy(moduleType => moduleType.QualifiedName, StringComparer.Ordinal)
+                        .ToImmutableArray()))
                 .ToImmutableArray();
         }
 
@@ -730,12 +766,16 @@ namespace QmlSharp.Registry.Normalization
                     explicitCreatableValue = true;
                 }
 
-                foreach (string exportValue in component.Exports)
-                {
-                    if (TryParseExport(exportValue, out ExportSpec export))
+                foreach (ExportSpec export in component.Exports
+                    .Select(exportValue =>
                     {
-                        AddExport(export);
-                    }
+                        bool success = TryParseExport(exportValue, out ExportSpec parsedExport);
+                        return (Success: success, Export: parsedExport);
+                    })
+                    .Where(result => result.Success)
+                    .Select(result => result.Export))
+                {
+                    AddExport(export);
                 }
 
                 ExportSpec? bestExport = GetBestExport();
@@ -858,9 +898,14 @@ namespace QmlSharp.Registry.Normalization
 
             public bool HasExport(string module, string name, string version)
             {
+                if (!TryParseVersion(version, out QmlVersion parsedVersion))
+                {
+                    return false;
+                }
+
                 return exports.Any(export => StringComparer.Ordinal.Equals(export.Module, module)
                     && StringComparer.Ordinal.Equals(export.Name, name)
-                    && StringComparer.Ordinal.Equals(export.Version.ToString(), version));
+                    && export.Version == parsedVersion);
             }
 
             public bool HasExportForModule(string module, string name)
@@ -976,7 +1021,7 @@ namespace QmlSharp.Registry.Normalization
                 diagnostics.Add(new RegistryDiagnostic(
                     Severity: DiagnosticSeverity.Warning,
                     Code: DiagnosticCodes.TypeConflict,
-                    Message: $"Type '{qualifiedName}' has a conflicting {description}; qmltypes value '{existingValue}' wins over metatypes value '{incomingValue}'.",
+                    Message: $"Type '{qualifiedName}' has a conflicting {description}; existing value '{existingValue}' wins over incoming value '{incomingValue}'.",
                     FilePath: filePath,
                     Line: null,
                     Column: null));
@@ -1097,7 +1142,7 @@ namespace QmlSharp.Registry.Normalization
                 {
                     if (!existing.Equals(incoming))
                     {
-                        ReportConflict(QualifiedName, $"enum '{incoming.Name}'", existing.Name, incoming.Name, sourcePath, diagnostics);
+                        ReportConflict(QualifiedName, $"enum '{incoming.Name}'", existing.GetDiagnosticSummary(), incoming.GetDiagnosticSummary(), sourcePath, diagnostics);
                     }
 
                     return;
@@ -1157,7 +1202,7 @@ namespace QmlSharp.Registry.Normalization
                 {
                     if (!existing.Equals(incoming))
                     {
-                        ReportConflict(QualifiedName, $"enum '{incoming.Name}'", existing.Name, incoming.Name, sourcePath, diagnostics);
+                        ReportConflict(QualifiedName, $"enum '{incoming.Name}'", existing.GetDiagnosticSummary(), incoming.GetDiagnosticSummary(), sourcePath, diagnostics);
                     }
 
                     return;
@@ -1216,6 +1261,15 @@ namespace QmlSharp.Registry.Normalization
             bool IsFlag,
             ImmutableArray<string> Values)
         {
+            public string GetDiagnosticSummary()
+            {
+                string flags = IsFlag ? "flag" : "enum";
+                string values = Values.IsDefaultOrEmpty
+                    ? "no values"
+                    : string.Join("|", Values);
+                return $"{flags} [{values}]";
+            }
+
             public QmlEnum Build()
             {
                 return new QmlEnum(

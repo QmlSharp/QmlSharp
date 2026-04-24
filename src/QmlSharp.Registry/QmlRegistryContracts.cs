@@ -141,7 +141,12 @@ namespace QmlSharp.Registry
             ArgumentNullException.ThrowIfNull(registry);
 
             FrozenDictionary<string, QmlModule> modulesByUri = registry.Modules
-                .ToDictionary(module => module.Uri, StringComparer.Ordinal)
+                .OrderBy(module => module.Uri, StringComparer.Ordinal)
+                .GroupBy(module => module.Uri, StringComparer.Ordinal)
+                .ToDictionary(
+                    grouping => grouping.Key,
+                    grouping => grouping.First(),
+                    StringComparer.Ordinal)
                 .ToFrozenDictionary(StringComparer.Ordinal);
 
             FrozenDictionary<string, ImmutableArray<QmlType>> typesByModuleUri = registry.TypesByQualifiedName.Values
