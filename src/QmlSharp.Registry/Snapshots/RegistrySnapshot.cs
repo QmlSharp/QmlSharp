@@ -736,7 +736,7 @@ namespace QmlSharp.Registry.Snapshots
 
             public QmlProperty ToModel()
             {
-                if (string.IsNullOrWhiteSpace(Name) || string.IsNullOrWhiteSpace(TypeName))
+                if (Name is null || TypeName is null)
                 {
                     throw CreateCorruptException("Snapshot property is missing one or more required fields.");
                 }
@@ -762,7 +762,7 @@ namespace QmlSharp.Registry.Snapshots
 
             public QmlSignal ToModel()
             {
-                if (string.IsNullOrWhiteSpace(Name) || Parameters is null)
+                if (Name is null || Parameters is null)
                 {
                     throw CreateCorruptException("Snapshot signal is missing one or more required fields.");
                 }
@@ -791,7 +791,7 @@ namespace QmlSharp.Registry.Snapshots
 
             public QmlMethod ToModel()
             {
-                if (string.IsNullOrWhiteSpace(Name) || Parameters is null)
+                if (Name is null || Parameters is null)
                 {
                     throw CreateCorruptException("Snapshot method is missing one or more required fields.");
                 }
@@ -817,7 +817,7 @@ namespace QmlSharp.Registry.Snapshots
 
             public QmlParameter ToModel()
             {
-                if (string.IsNullOrWhiteSpace(Name) || string.IsNullOrWhiteSpace(TypeName))
+                if (Name is null || TypeName is null)
                 {
                     throw CreateCorruptException("Snapshot parameter is missing one or more required fields.");
                 }
@@ -846,7 +846,7 @@ namespace QmlSharp.Registry.Snapshots
 
             public QmlEnum ToModel()
             {
-                if (string.IsNullOrWhiteSpace(Name) || Values is null)
+                if (Name is null || Values is null)
                 {
                     throw CreateCorruptException("Snapshot enum is missing one or more required fields.");
                 }
@@ -872,7 +872,7 @@ namespace QmlSharp.Registry.Snapshots
 
             public QmlEnumValue ToModel()
             {
-                if (string.IsNullOrWhiteSpace(Name))
+                if (Name is null)
                 {
                     throw CreateCorruptException("Snapshot enum value is missing its name.");
                 }
