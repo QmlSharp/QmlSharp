@@ -441,6 +441,43 @@ namespace QmlSharp.Registry.Tests.Scanning
             Assert.Empty(result.MetatypesPaths);
         }
 
+        [Fact]
+        public void ValidateQtDir_with_invalid_characters_returns_error_message()
+        {
+            QtTypeScanner scanner = new QtTypeScanner();
+
+            ScanValidation validation = scanner.ValidateQtDir("\0bad-path");
+
+            Assert.False(validation.IsValid);
+            Assert.Null(validation.QtVersion);
+            Assert.Contains("not a valid path", validation.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public void ValidateQtDir_without_version_segment_returns_unknown_version()
+        {
+            using ScannerTestWorkspace workspace = new ScannerTestWorkspace();
+            CreateSdkStructure(workspace);
+
+            QtTypeScanner scanner = new QtTypeScanner();
+            ScanValidation validation = scanner.ValidateQtDir(workspace.RootDirectory);
+
+            Assert.True(validation.IsValid);
+            Assert.Equal("unknown", validation.QtVersion);
+            Assert.Null(validation.ErrorMessage);
+        }
+
+        [Fact]
+        public void InferModuleUri_returns_null_when_paths_are_null_or_whitespace()
+        {
+            QtTypeScanner scanner = new QtTypeScanner();
+
+            Assert.Null(scanner.InferModuleUri(null!, "qml"));
+            Assert.Null(scanner.InferModuleUri("qml/QtQuick/qmldir", null!));
+            Assert.Null(scanner.InferModuleUri(string.Empty, "qml"));
+            Assert.Null(scanner.InferModuleUri("qml/QtQuick/qmldir", string.Empty));
+        }
+
         private static ScannerTestWorkspace CreateSampleQtSdkWorkspace()
         {
             ScannerTestWorkspace workspace = new ScannerTestWorkspace();

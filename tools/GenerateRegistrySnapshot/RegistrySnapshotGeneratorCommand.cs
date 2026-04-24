@@ -10,9 +10,28 @@ namespace QmlSharp.Tools.GenerateRegistrySnapshot
     {
         public static int Run(IReadOnlyList<string> args, TextWriter standardOutput, TextWriter standardError)
         {
+            return Run(
+                args,
+                standardOutput,
+                standardError,
+                static (qtDir, outputPath, moduleFilter) => new RegistryBuilder().Build(new BuildConfig(
+                    QtDir: qtDir,
+                    SnapshotPath: outputPath,
+                    ForceRebuild: true,
+                    ModuleFilter: moduleFilter.IsEmpty ? null : moduleFilter,
+                    IncludeInternal: false)));
+        }
+
+        internal static int Run(
+            IReadOnlyList<string> args,
+            TextWriter standardOutput,
+            TextWriter standardError,
+            Func<string, string, ImmutableArray<string>, BuildResult> buildSnapshot)
+        {
             ArgumentNullException.ThrowIfNull(args);
             ArgumentNullException.ThrowIfNull(standardOutput);
             ArgumentNullException.ThrowIfNull(standardError);
+            ArgumentNullException.ThrowIfNull(buildSnapshot);
 
             ParseArgumentsResult parseResult = ParseArguments(args, standardOutput, standardError);
             if (parseResult.ExitCode.HasValue)
@@ -21,14 +40,13 @@ namespace QmlSharp.Tools.GenerateRegistrySnapshot
             }
 
             GenerateRegistrySnapshotOptions options = parseResult.Options!;
-            RegistryBuilder builder = new();
             string outputPath;
 
             BuildResult result;
             try
             {
                 outputPath = Path.GetFullPath(options.OutputPath);
-                result = BuildSnapshot(builder, options, outputPath);
+                result = buildSnapshot(options.QtDir, outputPath, options.ModuleFilter);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
@@ -65,19 +83,6 @@ namespace QmlSharp.Tools.GenerateRegistrySnapshot
             standardOutput.WriteLine($"Output: {outputPath}");
 
             return 0;
-        }
-
-        private static BuildResult BuildSnapshot(
-            RegistryBuilder builder,
-            GenerateRegistrySnapshotOptions options,
-            string outputPath)
-        {
-            return builder.Build(new BuildConfig(
-                QtDir: options.QtDir,
-                SnapshotPath: outputPath,
-                ForceRebuild: true,
-                ModuleFilter: options.ModuleFilter.IsEmpty ? null : options.ModuleFilter,
-                IncludeInternal: false));
         }
 
         [SuppressMessage("Maintainability", "MA0051:Method is too long", Justification = "The command-line parser keeps the supported CLI contract in one deterministic place.")]

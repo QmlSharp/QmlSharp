@@ -340,16 +340,19 @@ namespace QmlSharp.Registry.Scanning
             ImmutableArray<string> moduleFilter,
             bool includeInternal)
         {
-            string[] qmlMetadataPaths = EnumerateFilesRecursively(qmlRootDir, "*")
-                .Where(IsQmlMetadataPath)
+            ImmutableArray<string> qmltypesPaths = EnumerateFilesRecursively(qmlRootDir, "*.qmltypes")
                 .Where(path => ShouldIncludeQmlModulePath(path, qmlRootDir, moduleFilter, includeInternal))
                 .Select(NormalizeAbsolutePath)
                 .OrderBy(path => path, StringComparer.Ordinal)
-                .ToArray();
+                .ToImmutableArray();
 
-            return (
-                qmlMetadataPaths.Where(IsQmltypesPath).ToImmutableArray(),
-                qmlMetadataPaths.Where(IsQmldirPath).ToImmutableArray());
+            ImmutableArray<string> qmldirPaths = EnumerateFilesRecursively(qmlRootDir, QmldirFileName)
+                .Where(path => ShouldIncludeQmlModulePath(path, qmlRootDir, moduleFilter, includeInternal))
+                .Select(NormalizeAbsolutePath)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToImmutableArray();
+
+            return (qmltypesPaths, qmldirPaths);
         }
 
         private static IEnumerable<string> EnumerateFilesRecursively(string rootDirectory, string searchPattern)
@@ -406,21 +409,6 @@ namespace QmlSharp.Registry.Scanning
             }
 
             return MatchesModuleFilter(moduleUri, moduleFilter);
-        }
-
-        private static bool IsQmlMetadataPath(string path)
-        {
-            return IsQmltypesPath(path) || IsQmldirPath(path);
-        }
-
-        private static bool IsQmltypesPath(string path)
-        {
-            return path.EndsWith(".qmltypes", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsQmldirPath(string path)
-        {
-            return string.Equals(Path.GetFileName(path), QmldirFileName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string[] SplitPathSegments(string path)

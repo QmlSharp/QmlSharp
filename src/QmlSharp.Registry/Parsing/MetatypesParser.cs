@@ -97,7 +97,6 @@ namespace QmlSharp.Registry.Parsing
                     entryElement,
                     context,
                     propertyName: "classes",
-                    required: false,
                     ParseClass);
 
                 return new RawMetatypesEntry(
@@ -129,12 +128,12 @@ namespace QmlSharp.Registry.Parsing
                     IsObject: GetOptionalBoolean(classElement, context, defaultValue: false, "object"),
                     IsGadget: GetOptionalBoolean(classElement, context, defaultValue: false, "gadget"),
                     IsNamespace: GetOptionalBoolean(classElement, context, defaultValue: false, "namespace"),
-                    SuperClasses: ParseArray(classElement, context, "superClasses", required: false, ParseSuperClass),
-                    ClassInfos: ParseArray(classElement, context, "classInfos", required: false, ParseClassInfo),
-                    Properties: ParseArray(classElement, context, "properties", required: false, ParseProperty),
-                    Signals: ParseArray(classElement, context, "signals", required: false, ParseSignal),
+                    SuperClasses: ParseArray(classElement, context, "superClasses", ParseSuperClass),
+                    ClassInfos: ParseArray(classElement, context, "classInfos", ParseClassInfo),
+                    Properties: ParseArray(classElement, context, "properties", ParseProperty),
+                    Signals: ParseArray(classElement, context, "signals", ParseSignal),
                     Methods: methods.ToImmutable(),
-                    Enums: ParseArray(classElement, context, "enums", required: false, ParseEnum));
+                    Enums: ParseArray(classElement, context, "enums", ParseEnum));
             }
 
             private RawMetatypesSuperClass? ParseSuperClass(JsonElement superClassElement, string context)
@@ -222,7 +221,7 @@ namespace QmlSharp.Registry.Parsing
 
                 return new RawMetatypesSignal(
                     Name: name,
-                    Arguments: ParseArray(signalElement, context, "arguments", required: false, ParseParameter),
+                    Arguments: ParseArray(signalElement, context, "arguments", ParseParameter),
                     Revision: GetOptionalInt(signalElement, context, defaultValue: 0, "revision"));
             }
 
@@ -243,7 +242,7 @@ namespace QmlSharp.Registry.Parsing
                 return new RawMetatypesMethod(
                     Name: name,
                     ReturnType: GetOptionalString(methodElement, context, "returnType"),
-                    Arguments: ParseArray(methodElement, context, "arguments", required: false, ParseParameter),
+                    Arguments: ParseArray(methodElement, context, "arguments", ParseParameter),
                     Revision: GetOptionalInt(methodElement, context, defaultValue: 0, "revision"),
                     IsCloned: GetOptionalBoolean(methodElement, context, defaultValue: false, "isCloned"));
             }
@@ -344,11 +343,10 @@ namespace QmlSharp.Registry.Parsing
                 JsonElement ownerElement,
                 string context,
                 string propertyName,
-                bool required,
                 Func<JsonElement, string, T?> parser)
                 where T : class
             {
-                if (!TryGetArray(ownerElement, context, propertyName, required, out JsonElement arrayElement))
+                if (!TryGetArray(ownerElement, context, propertyName, out JsonElement arrayElement))
                 {
                     return ImmutableArray<T>.Empty;
                 }
@@ -378,7 +376,7 @@ namespace QmlSharp.Registry.Parsing
                 ImmutableArray<T>.Builder items)
                 where T : class
             {
-                if (!TryGetArray(ownerElement, context, propertyName, required: false, out JsonElement arrayElement))
+                if (!TryGetArray(ownerElement, context, propertyName, out JsonElement arrayElement))
                 {
                     return;
                 }
@@ -535,25 +533,15 @@ namespace QmlSharp.Registry.Parsing
                 return false;
             }
 
-            private bool TryGetArray(JsonElement objectElement, string context, string propertyName, bool required, out JsonElement arrayElement)
+            private bool TryGetArray(JsonElement objectElement, string context, string propertyName, out JsonElement arrayElement)
             {
                 if (!objectElement.TryGetProperty(propertyName, out arrayElement))
                 {
-                    if (required)
-                    {
-                        ReportShapeError($"{context} is missing required array property '{propertyName}'.");
-                    }
-
                     return false;
                 }
 
                 if (arrayElement.ValueKind == JsonValueKind.Null)
                 {
-                    if (required)
-                    {
-                        ReportShapeError($"{context} property '{propertyName}' must be a JSON array.");
-                    }
-
                     return false;
                 }
 

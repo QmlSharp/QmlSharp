@@ -322,6 +322,190 @@ namespace QmlSharp.Registry.Tests.Parsing
                 entry => Assert.Equal("Valid", Assert.Single(entry.Classes).ClassName));
         }
 
+        [Fact]
+        public void Parse_top_level_non_array_reports_shape_error()
+        {
+            ParseResult<RawMetatypesFile> result = CreateParser().ParseContent(
+                "{}",
+                @"fixtures\metatypes\object-root.json");
+
+            Assert.False(result.IsSuccess);
+            RegistryDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(DiagnosticCodes.MetatypesMissingField, diagnostic.Code);
+            Assert.Contains("top-level JSON array", diagnostic.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Parse_nested_non_object_members_report_shape_errors_and_preserve_valid_entries()
+        {
+            const string content = """
+[
+    true,
+    {
+        "inputFile": "broken.h",
+        "classes": [
+            42,
+            {
+                "className": "Broken",
+                "superClasses": [true],
+                "classInfos": [false],
+                "properties": [1],
+                "signals": [2],
+                "methods": [3],
+                "enums": [
+                    {
+                        "name": "Mode",
+                        "values": ["Ok", null, { "bad": 1 }]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "inputFile": "valid.h",
+        "classes": [
+            {
+                "className": "Valid"
+            }
+        ]
+    }
+]
+""";
+
+            ParseResult<RawMetatypesFile> result = CreateParser().ParseContent(content, @"fixtures\metatypes\shape-errors.json");
+
+            Assert.False(result.IsSuccess);
+            Assert.NotNull(result.Value);
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("entry[0] must be a JSON object", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("entry[1].classes[0] must be a JSON object", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("superClasses[0] must be a JSON object", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("classInfos[0] must be a JSON object", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("properties[0] must be a JSON object", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("signals[0] must be a JSON object", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("methods[0] must be a JSON object", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("values[1] must be a string, number, or boolean value", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("values[2] must be a string, number, or boolean value", StringComparison.Ordinal));
+            Assert.Equal(["Broken", "Valid"], result.Value!.Entries.SelectMany(entry => entry.Classes).Select(@class => @class.ClassName).ToArray());
+        }
+
+        [Fact]
+        public void Parse_string_and_numeric_scalar_variants_are_coerced_without_shape_errors()
+        {
+            const string content = """
+[
+    {
+        "inputFile": "coerced.h",
+        "classes": [
+            {
+                "className": "Coerced",
+                "object": "1",
+                "gadget": "false",
+                "namespace": 0,
+                "properties": [
+                    {
+                        "name": "value",
+                        "type": "int",
+                        "readonly": "true",
+                        "constant": "1",
+                        "final": 1,
+                        "required": "0",
+                        "revision": "7",
+                        "index": "9"
+                    }
+                ],
+                "signals": [
+                    {
+                        "name": "changed",
+                        "revision": "2",
+                        "arguments": [
+                            { "type": "int" }
+                        ]
+                    }
+                ],
+                "methods": [
+                    {
+                        "name": "setValue",
+                        "revision": "3",
+                        "isCloned": "1",
+                        "arguments": [
+                            { "type": "int" }
+                        ]
+                    }
+                ],
+                "enums": [
+                    {
+                        "name": "Mode",
+                        "isFlag": "true",
+                        "isClass": 0,
+                        "values": [1, true, "Ok"]
+                    }
+                ]
+            }
+        ]
+    }
+]
+""";
+
+            ParseResult<RawMetatypesFile> result = CreateParser().ParseContent(content, @"fixtures\metatypes\coerced-values.json");
+
+            Assert.True(result.IsSuccess);
+            RawMetatypesClass parsedClass = Assert.Single(result.Value!.Entries.SelectMany(entry => entry.Classes));
+            RawMetatypesProperty property = Assert.Single(parsedClass.Properties);
+            RawMetatypesSignal signal = Assert.Single(parsedClass.Signals);
+            RawMetatypesMethod method = Assert.Single(parsedClass.Methods);
+            RawMetatypesEnum @enum = Assert.Single(parsedClass.Enums);
+
+            Assert.True(parsedClass.IsObject);
+            Assert.False(parsedClass.IsGadget);
+            Assert.False(parsedClass.IsNamespace);
+            Assert.True(property.IsReadonly);
+            Assert.True(property.IsConstant);
+            Assert.True(property.IsFinal);
+            Assert.False(property.IsRequired);
+            Assert.Equal(7, property.Revision);
+            Assert.Equal(9, property.Index);
+            Assert.Equal(2, signal.Revision);
+            Assert.Equal(3, method.Revision);
+            Assert.True(method.IsCloned);
+            Assert.True(@enum.IsFlag);
+            Assert.False(@enum.IsClass);
+            Assert.Contains(@enum.Values, value => string.Equals(value, "1", StringComparison.Ordinal));
+            Assert.Contains(@enum.Values, value => string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
+        public void Parse_missing_and_invalid_required_member_fields_report_shape_errors()
+        {
+            const string content = """
+[
+    {
+        "inputFile": "invalid-members.h",
+        "classes": [
+            {
+                "className": "InvalidMembers",
+                "qualifiedClassName": 17,
+                "superClasses": [ {} ],
+                "classInfos": [ { "value": 1 } ],
+                "properties": [ { "name": 3, "type": 4, "read": 5, "revision": "oops", "readonly": "maybe" } ],
+                "signals": [ { "arguments": [ {} ] } ],
+                "methods": [ { "arguments": [ {} ] } ],
+                "enums": [ { "name": "", "values": 5 } ]
+            }
+        ]
+    }
+]
+""";
+
+            ParseResult<RawMetatypesFile> result = CreateParser().ParseContent(content, @"fixtures\metatypes\invalid-members.json");
+
+            Assert.False(result.IsSuccess);
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("property 'qualifiedClassName' must be a string", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("superClasses[0] is missing required string property 'name'", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("classInfos[0] is missing required string property 'name'", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("methods[0] is missing required string property 'name'", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("classInfos[0] property 'value' must be a string", StringComparison.Ordinal));
+        }
+
         private static IMetatypesParser CreateParser()
         {
             return new MetatypesParser();

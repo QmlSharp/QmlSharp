@@ -523,6 +523,81 @@ Component {
             Assert.Contains(component.Methods, method => method.Name == "stillHere");
         }
 
+        [Fact]
+        public void Parse_ignores_import_lines_and_non_component_top_level_blocks()
+        {
+            const string content = """
+import QtQuick 2.15
+
+Helper {
+    name: "Ignored"
+}
+
+Module {
+    Component {
+        name: "Visible"
+    }
+}
+""";
+
+            ParseResult<RawQmltypesFile> result = CreateParser().ParseContent(content, @"fixtures\qmltypes\module-wrapper.qmltypes");
+
+            Assert.True(result.IsSuccess);
+            RawQmltypesComponent component = Assert.Single(result.Value!.Components);
+            Assert.Equal("Visible", component.Name);
+        }
+
+        [Fact]
+        public void Parse_export_meta_object_revisions_accepts_string_and_negative_number_entries()
+        {
+            RawQmltypesComponent component = ParseSingleComponent(
+                CreateComponentContent(
+                    "name: \"QQuickVersioned\"",
+                    "exportMetaObjectRevisions: [1, \"2\", -3, true]"));
+
+            Assert.Equal([1, 2, -3], component.ExportMetaObjectRevisions.ToArray());
+        }
+
+        [Fact]
+        public void Parse_string_escapes_and_unknown_escape_sequences_are_preserved()
+        {
+            RawQmltypesComponent component = ParseSingleComponent(
+                CreateComponentContent(
+                    "name: \"line\\nnext\\tquote\\\"slash\\\\tail\\x\""));
+
+            Assert.Equal("line\nnext\tquote\"slash\\tailx", component.Name);
+        }
+
+        [Fact]
+        public void Parse_reports_REG011_for_unexpected_top_level_identifier_tokens()
+        {
+            ParseResult<RawQmltypesFile> result = CreateParser().ParseContent(
+                "DanglingIdentifier",
+                @"fixtures\qmltypes\dangling-identifier.qmltypes");
+
+            RegistryDiagnostic diagnostic = Assert.Single(result.Diagnostics.Where(diagnostic => diagnostic.Code == DiagnosticCodes.QmltypesUnexpectedToken));
+            Assert.Equal(1, diagnostic.Line);
+            Assert.Equal(1, diagnostic.Column);
+            Assert.Contains("top-level declaration", diagnostic.Message, StringComparison.Ordinal);
+            Assert.Empty(result.Value!.Components);
+        }
+
+        [Fact]
+        public void Parse_reports_REG011_for_unexpected_object_property_values_and_array_items()
+        {
+            const string content = """
+Component {
+    name: "Recovered"
+    exports: [;, "QtQuick/Fancy 2.0"]
+}
+""";
+
+            ParseResult<RawQmltypesFile> result = CreateParser().ParseContent(content, @"fixtures\qmltypes\unexpected-object-values.qmltypes");
+
+            Assert.False(result.IsSuccess);
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("array value for property 'exports'", StringComparison.Ordinal));
+        }
+
         private static IQmltypesParser CreateParser()
         {
             return new QmltypesParser();

@@ -2,6 +2,7 @@
 
 using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using QmlSharp.Registry.Querying;
 
 namespace QmlSharp.Registry
@@ -18,7 +19,19 @@ namespace QmlSharp.Registry
         string QtVersion,
         DateTimeOffset BuildTimestamp)
     {
+        private static readonly ConditionalWeakTable<QmlRegistry, QmlRegistryLookupIndexes> LookupIndexCache = new();
+
         internal QmlRegistryLookupIndexes LookupIndexes { get; init; } = QmlRegistryLookupIndexes.Empty;
+
+        internal QmlRegistryLookupIndexes GetLookupIndexes()
+        {
+            if (LookupIndexes.IsPopulated)
+            {
+                return LookupIndexes;
+            }
+
+            return LookupIndexCache.GetValue(this, static registry => QmlRegistryLookupIndexes.Create(registry));
+        }
 
         internal QmlRegistry WithLookupIndexes()
         {
