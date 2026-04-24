@@ -21,8 +21,8 @@ namespace QmlSharp.Registry.Tests.Helpers
             new(DiagnosticCodes.UnresolvedAttachedType, DiagnosticCoverageStatus.Covered, "NRM_04_Normalize_single_metatypes_source_only_creates_fallback_types", "Covered by metatypes fallback normalization coverage for unresolved attached types."),
             new(DiagnosticCodes.CircularInheritance, DiagnosticCoverageStatus.Covered, "NRM_11_Circular_inheritance_is_detected", "Covered by circular inheritance normalization coverage."),
             new(DiagnosticCodes.DuplicateExport, DiagnosticCoverageStatus.Covered, "NRM_14_Duplicate_exports_produce_REG044_warning", "Covered by duplicate export normalization coverage."),
-            new(DiagnosticCodes.SnapshotVersionMismatch, DiagnosticCoverageStatus.Pending, null, "Planned for snapshot compatibility coverage."),
-            new(DiagnosticCodes.SnapshotCorrupt, DiagnosticCoverageStatus.Pending, null, "Planned for snapshot corruption coverage."),
+            new(DiagnosticCodes.SnapshotVersionMismatch, DiagnosticCoverageStatus.Covered, "SNP_08_CheckValidity_on_incompatible_format_version_returns_SnapshotVersionMismatch", "Covered by snapshot compatibility validation coverage for unsupported format versions."),
+            new(DiagnosticCodes.SnapshotCorrupt, DiagnosticCoverageStatus.Covered, "SNP_09_CheckValidity_on_corrupt_snapshot_returns_SnapshotCorrupt", "Covered by snapshot corruption validation coverage for checksum and structural corruption failures."),
         ];
     }
 
