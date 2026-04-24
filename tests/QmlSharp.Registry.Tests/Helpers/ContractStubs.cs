@@ -233,7 +233,7 @@ namespace QmlSharp.Registry.Tests.Helpers
         public IReadOnlyList<QmlType> GetCreatableTypes()
         {
             return registry.TypesByQualifiedName.Values
-                .Where(type => type.AccessSemantics == AccessSemantics.Reference && type.Exports.Length > 0)
+                .Where(type => type.IsCreatable)
                 .ToImmutableArray();
         }
 

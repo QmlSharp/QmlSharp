@@ -289,5 +289,105 @@ namespace QmlSharp.Registry.Tests.Querying
             Assert.Empty(Query.FindMethods("QQuickUnknown", "forceLayout"));
             Assert.Empty(Query.GetAllMethods("QQuickUnknown"));
         }
+
+        [Fact]
+        public void GetAllSignals_preserves_signal_overloads_and_deduplicates_matching_signatures()
+        {
+            QmlRegistry registry = RegistryFixtures.CreateQueryFixture();
+            QmlType item = registry.TypesByQualifiedName["QQuickItem"];
+            QmlType rectangle = registry.TypesByQualifiedName["QQuickRectangle"];
+            QmlType overloadedItem = item with
+            {
+                Signals =
+                [
+                    .. item.Signals,
+                    RegistryFixtures.CreateSignal("colorChanged"),
+                    RegistryFixtures.CreateSignal("colorChanged", new QmlParameter("name", "string")),
+                ],
+            };
+            QmlType overloadedRectangle = rectangle with
+            {
+                Signals =
+                [
+                    .. rectangle.Signals,
+                    RegistryFixtures.CreateSignal("colorChanged", new QmlParameter("color", "color")),
+                ],
+            };
+            IRegistryQuery query = new RegistryQuery((registry with
+            {
+                TypesByQualifiedName = registry.TypesByQualifiedName
+                    .SetItem(overloadedItem.QualifiedName, overloadedItem)
+                    .SetItem(overloadedRectangle.QualifiedName, overloadedRectangle),
+            }).WithLookupIndexes());
+
+            IReadOnlyList<ResolvedSignal> colorChangedSignals = query.GetAllSignals("QQuickRectangle")
+                .Where(signal => signal.Signal.Name == "colorChanged")
+                .ToArray();
+
+            Assert.Collection(
+                colorChangedSignals,
+                first =>
+                {
+                    Assert.Equal("QQuickRectangle", first.DeclaringType.QualifiedName);
+                    Assert.Empty(first.Signal.Parameters);
+                },
+                second =>
+                {
+                    Assert.Equal("QQuickRectangle", second.DeclaringType.QualifiedName);
+                    Assert.Equal("color", Assert.Single(second.Signal.Parameters).TypeName);
+                },
+                third =>
+                {
+                    Assert.Equal("QQuickItem", third.DeclaringType.QualifiedName);
+                    Assert.Equal("string", Assert.Single(third.Signal.Parameters).TypeName);
+                    Assert.True(third.IsInherited);
+                });
+        }
+
+        [Fact]
+        public void FindSignal_returns_first_matching_overload_without_losing_other_overloads()
+        {
+            QmlRegistry registry = RegistryFixtures.CreateQueryFixture();
+            QmlType rectangle = registry.TypesByQualifiedName["QQuickRectangle"] with
+            {
+                Signals =
+                [
+                    RegistryFixtures.CreateSignal("overloaded"),
+                    RegistryFixtures.CreateSignal("overloaded", new QmlParameter("value", "double")),
+                ],
+            };
+            IRegistryQuery query = new RegistryQuery((registry with
+            {
+                TypesByQualifiedName = registry.TypesByQualifiedName.SetItem(rectangle.QualifiedName, rectangle),
+            }).WithLookupIndexes());
+
+            ResolvedSignal? signal = query.FindSignal("QQuickRectangle", "overloaded");
+            ResolvedSignal[] overloads = query.GetAllSignals("QQuickRectangle")
+                .Where(candidate => candidate.Signal.Name == "overloaded")
+                .ToArray();
+
+            Assert.NotNull(signal);
+            Assert.Empty(signal!.Signal.Parameters);
+            Assert.Equal(2, overloads.Length);
+        }
+
+        [Fact]
+        public void GetCreatableTypes_uses_explicit_IsCreatable_flag_not_exports_only()
+        {
+            QmlRegistry registry = RegistryFixtures.CreateQueryFixture();
+            QmlType exportedButNotCreatable = RegistryFixtures.CreateButtonType() with
+            {
+                QualifiedName = "QQuickHiddenButton",
+                QmlName = "HiddenButton",
+                IsCreatable = false,
+                Exports = [new QmlTypeExport("QtQuick.Controls", "HiddenButton", new QmlVersion(2, 15))],
+            };
+            IRegistryQuery query = new RegistryQuery((registry with
+            {
+                TypesByQualifiedName = registry.TypesByQualifiedName.Add(exportedButNotCreatable.QualifiedName, exportedButNotCreatable),
+            }).WithLookupIndexes());
+
+            Assert.DoesNotContain(query.GetCreatableTypes(), type => type.QualifiedName == "QQuickHiddenButton");
+        }
     }
 }

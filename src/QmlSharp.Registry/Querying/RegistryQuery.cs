@@ -142,8 +142,8 @@ namespace QmlSharp.Registry.Querying
                 return null;
             }
 
-            return registry.LookupIndexes.SignalsByQualifiedNameAndName.TryGetValue((qualifiedName, signalName), out ResolvedSignal? signal)
-                ? signal
+            return registry.LookupIndexes.SignalsByQualifiedNameAndName.TryGetValue((qualifiedName, signalName), out ImmutableArray<ResolvedSignal> signals)
+                ? signals.FirstOrDefault()
                 : null;
         }
 

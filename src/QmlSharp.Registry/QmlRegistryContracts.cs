@@ -134,7 +134,7 @@ namespace QmlSharp.Registry
         FrozenDictionary<string, ImmutableArray<ResolvedProperty>> PropertiesByQualifiedName,
         FrozenDictionary<(string QualifiedName, string PropertyName), ResolvedProperty> PropertiesByQualifiedNameAndName,
         FrozenDictionary<string, ImmutableArray<ResolvedSignal>> SignalsByQualifiedName,
-        FrozenDictionary<(string QualifiedName, string SignalName), ResolvedSignal> SignalsByQualifiedNameAndName,
+        FrozenDictionary<(string QualifiedName, string SignalName), ImmutableArray<ResolvedSignal>> SignalsByQualifiedNameAndName,
         FrozenDictionary<string, ImmutableArray<ResolvedMethod>> MethodsByQualifiedName,
         FrozenDictionary<(string QualifiedName, string MethodName), ImmutableArray<ResolvedMethod>> MethodsByQualifiedNameAndName,
         FrozenDictionary<string, QmlType> BuiltinsByQualifiedName,
@@ -162,7 +162,7 @@ namespace QmlSharp.Registry
             PropertiesByQualifiedNameAndName: new Dictionary<(string QualifiedName, string PropertyName), ResolvedProperty>(EqualityComparer<(string QualifiedName, string PropertyName)>.Default)
                 .ToFrozenDictionary(EqualityComparer<(string QualifiedName, string PropertyName)>.Default),
             SignalsByQualifiedName: new Dictionary<string, ImmutableArray<ResolvedSignal>>(StringComparer.Ordinal).ToFrozenDictionary(StringComparer.Ordinal),
-            SignalsByQualifiedNameAndName: new Dictionary<(string QualifiedName, string SignalName), ResolvedSignal>(EqualityComparer<(string QualifiedName, string SignalName)>.Default)
+            SignalsByQualifiedNameAndName: new Dictionary<(string QualifiedName, string SignalName), ImmutableArray<ResolvedSignal>>(EqualityComparer<(string QualifiedName, string SignalName)>.Default)
                 .ToFrozenDictionary(EqualityComparer<(string QualifiedName, string SignalName)>.Default),
             MethodsByQualifiedName: new Dictionary<string, ImmutableArray<ResolvedMethod>>(StringComparer.Ordinal).ToFrozenDictionary(StringComparer.Ordinal),
             MethodsByQualifiedNameAndName: new Dictionary<(string QualifiedName, string MethodName), ImmutableArray<ResolvedMethod>>(EqualityComparer<(string QualifiedName, string MethodName)>.Default)
@@ -216,7 +216,7 @@ namespace QmlSharp.Registry
             Dictionary<(string QualifiedName, string PropertyName), ResolvedProperty> propertiesByQualifiedNameAndName =
                 new(EqualityComparer<(string QualifiedName, string PropertyName)>.Default);
             Dictionary<string, ImmutableArray<ResolvedSignal>> signalsByQualifiedName = new(StringComparer.Ordinal);
-            Dictionary<(string QualifiedName, string SignalName), ResolvedSignal> signalsByQualifiedNameAndName =
+            Dictionary<(string QualifiedName, string SignalName), ImmutableArray<ResolvedSignal>> signalsByQualifiedNameAndName =
                 new(EqualityComparer<(string QualifiedName, string SignalName)>.Default);
             Dictionary<string, ImmutableArray<ResolvedMethod>> methodsByQualifiedName = new(StringComparer.Ordinal);
             Dictionary<(string QualifiedName, string MethodName), ImmutableArray<ResolvedMethod>> methodsByQualifiedNameAndName =
@@ -246,9 +246,9 @@ namespace QmlSharp.Registry
 
                 ImmutableArray<ResolvedSignal> resolvedSignals = BuildResolvedSignals(inheritanceTypeChain);
                 signalsByQualifiedName.Add(type.QualifiedName, resolvedSignals);
-                foreach (ResolvedSignal signal in resolvedSignals)
+                foreach (IGrouping<string, ResolvedSignal> signalGroup in resolvedSignals.GroupBy(signal => signal.Signal.Name, StringComparer.Ordinal))
                 {
-                    _ = signalsByQualifiedNameAndName.TryAdd((type.QualifiedName, signal.Signal.Name), signal);
+                    signalsByQualifiedNameAndName.Add((type.QualifiedName, signalGroup.Key), signalGroup.ToImmutableArray());
                 }
 
                 ImmutableArray<ResolvedMethod> resolvedMethods = BuildResolvedMethods(inheritanceTypeChain);
@@ -279,7 +279,7 @@ namespace QmlSharp.Registry
                 MethodsByQualifiedName: methodsByQualifiedName.ToFrozenDictionary(StringComparer.Ordinal),
                 MethodsByQualifiedNameAndName: methodsByQualifiedNameAndName.ToFrozenDictionary(EqualityComparer<(string QualifiedName, string MethodName)>.Default),
                 BuiltinsByQualifiedName: builtinsByQualifiedName,
-                CreatableTypes: SelectCategoryTypes(allTypes, type => type.AccessSemantics == AccessSemantics.Reference && type.Exports.Length > 0),
+                CreatableTypes: SelectCategoryTypes(allTypes, type => type.IsCreatable),
                 ValueTypes: SelectCategoryTypes(allTypes, type => type.AccessSemantics == AccessSemantics.Value),
                 SingletonTypes: SelectCategoryTypes(allTypes, type => type.IsSingleton),
                 AttachedTypes: SelectCategoryTypes(allTypes, type => type.AttachedType is not null),
@@ -313,12 +313,9 @@ namespace QmlSharp.Registry
             for (int index = 0; index < inheritanceTypeChain.Count; index++)
             {
                 QmlType type = inheritanceTypeChain[index];
-                foreach (QmlProperty property in type.Properties)
+                foreach (QmlProperty property in type.Properties.Where(property => seenProperties.Add(property.Name)))
                 {
-                    if (seenProperties.Add(property.Name))
-                    {
-                        results.Add(new ResolvedProperty(property, type, index > 0));
-                    }
+                    results.Add(new ResolvedProperty(property, type, index > 0));
                 }
             }
 
@@ -333,16 +330,18 @@ namespace QmlSharp.Registry
             for (int index = 0; index < inheritanceTypeChain.Count; index++)
             {
                 QmlType type = inheritanceTypeChain[index];
-                foreach (QmlSignal signal in type.Signals)
+                foreach (QmlSignal signal in type.Signals.Where(signal => seenSignals.Add(BuildSignalKey(signal))))
                 {
-                    if (seenSignals.Add(signal.Name))
-                    {
-                        results.Add(new ResolvedSignal(signal, type, index > 0));
-                    }
+                    results.Add(new ResolvedSignal(signal, type, index > 0));
                 }
             }
 
             return results.ToImmutable();
+        }
+
+        private static string BuildSignalKey(QmlSignal signal)
+        {
+            return $"{signal.Name}({string.Join(";", signal.Parameters.Select(parameter => $"{parameter.TypeName.Length}:{parameter.TypeName}"))})";
         }
 
         private static ImmutableArray<ResolvedMethod> BuildResolvedMethods(IReadOnlyList<QmlType> inheritanceTypeChain)
