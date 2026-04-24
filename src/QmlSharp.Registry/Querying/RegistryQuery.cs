@@ -8,15 +8,15 @@ namespace QmlSharp.Registry.Querying
         private static readonly ImmutableArray<ResolvedMethod> EmptyMethods = ImmutableArray<ResolvedMethod>.Empty;
 
         private readonly QmlRegistry registry;
+        private readonly QmlRegistryLookupIndexes lookupIndexes;
 
         public RegistryQuery(QmlRegistry registry)
         {
             ArgumentNullException.ThrowIfNull(registry);
 
             this.registry = registry;
+            lookupIndexes = registry.GetLookupIndexes();
         }
-
-        private QmlRegistryLookupIndexes LookupIndexes => registry.GetLookupIndexes();
 
         public QmlModule? FindModule(string moduleUri)
         {
@@ -25,7 +25,7 @@ namespace QmlSharp.Registry.Querying
                 return null;
             }
 
-            return LookupIndexes.ModulesByUri.TryGetValue(moduleUri, out QmlModule? module)
+            return lookupIndexes.ModulesByUri.TryGetValue(moduleUri, out QmlModule? module)
                 ? module
                 : null;
         }
@@ -42,7 +42,7 @@ namespace QmlSharp.Registry.Querying
                 return EmptyTypes;
             }
 
-            return LookupIndexes.TypesByModuleUri.TryGetValue(moduleUri, out ImmutableArray<QmlType> types)
+            return lookupIndexes.TypesByModuleUri.TryGetValue(moduleUri, out ImmutableArray<QmlType> types)
                 ? types
                 : EmptyTypes;
         }
@@ -54,12 +54,12 @@ namespace QmlSharp.Registry.Querying
                 return null;
             }
 
-            if (LookupIndexes.TypesByQualifiedName.TryGetValue(qualifiedName, out QmlType? type))
+            if (lookupIndexes.TypesByQualifiedName.TryGetValue(qualifiedName, out QmlType? type))
             {
                 return type;
             }
 
-            return LookupIndexes.BuiltinsByQualifiedName.TryGetValue(qualifiedName, out QmlType? builtin)
+            return lookupIndexes.BuiltinsByQualifiedName.TryGetValue(qualifiedName, out QmlType? builtin)
                 ? builtin
                 : null;
         }
@@ -71,7 +71,7 @@ namespace QmlSharp.Registry.Querying
                 return null;
             }
 
-            return LookupIndexes.TypesByModuleAndQmlName.TryGetValue((moduleUri, qmlName), out QmlType? type)
+            return lookupIndexes.TypesByModuleAndQmlName.TryGetValue((moduleUri, qmlName), out QmlType? type)
                 ? type
                 : null;
         }
@@ -80,7 +80,7 @@ namespace QmlSharp.Registry.Querying
         {
             ArgumentNullException.ThrowIfNull(predicate);
 
-            return LookupIndexes.AllTypes
+            return lookupIndexes.AllTypes
                 .Where(predicate)
                 .ToImmutableArray();
         }
@@ -92,7 +92,7 @@ namespace QmlSharp.Registry.Querying
                 return EmptyTypes;
             }
 
-            return LookupIndexes.InheritanceTypeChainsByQualifiedName.TryGetValue(qualifiedName, out ImmutableArray<QmlType> chain)
+            return lookupIndexes.InheritanceTypeChainsByQualifiedName.TryGetValue(qualifiedName, out ImmutableArray<QmlType> chain)
                 ? chain
                 : EmptyTypes;
         }
@@ -118,7 +118,7 @@ namespace QmlSharp.Registry.Querying
                 return null;
             }
 
-            return LookupIndexes.PropertiesByQualifiedNameAndName.TryGetValue((qualifiedName, propertyName), out ResolvedProperty? property)
+            return lookupIndexes.PropertiesByQualifiedNameAndName.TryGetValue((qualifiedName, propertyName), out ResolvedProperty? property)
                 ? property
                 : null;
         }
@@ -130,7 +130,7 @@ namespace QmlSharp.Registry.Querying
                 return EmptyProperties;
             }
 
-            return LookupIndexes.PropertiesByQualifiedName.TryGetValue(qualifiedName, out ImmutableArray<ResolvedProperty> properties)
+            return lookupIndexes.PropertiesByQualifiedName.TryGetValue(qualifiedName, out ImmutableArray<ResolvedProperty> properties)
                 ? properties
                 : EmptyProperties;
         }
@@ -142,7 +142,7 @@ namespace QmlSharp.Registry.Querying
                 return null;
             }
 
-            return LookupIndexes.SignalsByQualifiedNameAndName.TryGetValue((qualifiedName, signalName), out ImmutableArray<ResolvedSignal> signals)
+            return lookupIndexes.SignalsByQualifiedNameAndName.TryGetValue((qualifiedName, signalName), out ImmutableArray<ResolvedSignal> signals)
                 ? signals.FirstOrDefault()
                 : null;
         }
@@ -154,7 +154,7 @@ namespace QmlSharp.Registry.Querying
                 return EmptySignals;
             }
 
-            return LookupIndexes.SignalsByQualifiedName.TryGetValue(qualifiedName, out ImmutableArray<ResolvedSignal> signals)
+            return lookupIndexes.SignalsByQualifiedName.TryGetValue(qualifiedName, out ImmutableArray<ResolvedSignal> signals)
                 ? signals
                 : EmptySignals;
         }
@@ -166,7 +166,7 @@ namespace QmlSharp.Registry.Querying
                 return EmptyMethods;
             }
 
-            return LookupIndexes.MethodsByQualifiedNameAndName.TryGetValue((qualifiedName, methodName), out ImmutableArray<ResolvedMethod> methods)
+            return lookupIndexes.MethodsByQualifiedNameAndName.TryGetValue((qualifiedName, methodName), out ImmutableArray<ResolvedMethod> methods)
                 ? methods
                 : EmptyMethods;
         }
@@ -178,34 +178,34 @@ namespace QmlSharp.Registry.Querying
                 return EmptyMethods;
             }
 
-            return LookupIndexes.MethodsByQualifiedName.TryGetValue(qualifiedName, out ImmutableArray<ResolvedMethod> methods)
+            return lookupIndexes.MethodsByQualifiedName.TryGetValue(qualifiedName, out ImmutableArray<ResolvedMethod> methods)
                 ? methods
                 : EmptyMethods;
         }
 
         public IReadOnlyList<QmlType> GetCreatableTypes()
         {
-            return LookupIndexes.CreatableTypes;
+            return lookupIndexes.CreatableTypes;
         }
 
         public IReadOnlyList<QmlType> GetValueTypes()
         {
-            return LookupIndexes.ValueTypes;
+            return lookupIndexes.ValueTypes;
         }
 
         public IReadOnlyList<QmlType> GetSingletonTypes()
         {
-            return LookupIndexes.SingletonTypes;
+            return lookupIndexes.SingletonTypes;
         }
 
         public IReadOnlyList<QmlType> GetAttachedTypes()
         {
-            return LookupIndexes.AttachedTypes;
+            return lookupIndexes.AttachedTypes;
         }
 
         public IReadOnlyList<QmlType> GetSequenceTypes()
         {
-            return LookupIndexes.SequenceTypes;
+            return lookupIndexes.SequenceTypes;
         }
     }
 }

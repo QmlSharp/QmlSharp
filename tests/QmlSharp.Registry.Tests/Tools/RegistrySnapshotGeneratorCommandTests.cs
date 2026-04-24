@@ -118,7 +118,7 @@ namespace QmlSharp.Registry.Tests.Tools
             string? capturedQtDir = null;
             string? capturedOutputPath = null;
             ImmutableArray<string> capturedFilters = default;
-            string relativeOutputPath = Path.Combine(temporaryDirectory.Path, "artifacts", "registry.snapshot.bin");
+            string relativeOutputPath = Path.Join(temporaryDirectory.Path, "artifacts", "registry.snapshot.bin");
 
             int exitCode = RegistrySnapshotGeneratorCommand.Run(
                 [
@@ -164,7 +164,7 @@ namespace QmlSharp.Registry.Tests.Tools
             using StringWriter standardOutput = new();
             using StringWriter standardError = new();
 
-            string outputPath = Path.Combine(temporaryDirectory.Path, "registry.snapshot.bin");
+            string outputPath = Path.Join(temporaryDirectory.Path, "registry.snapshot.bin");
             File.WriteAllText(outputPath, "partial snapshot");
 
             ImmutableArray<RegistryDiagnostic> diagnostics =
@@ -203,7 +203,7 @@ namespace QmlSharp.Registry.Tests.Tools
             using StringWriter standardError = new();
 
             int exitCode = RegistrySnapshotGeneratorCommand.Run(
-                ["--qt-dir", @"C:\Qt", "--output", Path.Combine(temporaryDirectory.Path, "registry.snapshot.bin")],
+                ["--qt-dir", @"C:\Qt", "--output", Path.Join(temporaryDirectory.Path, "registry.snapshot.bin")],
                 standardOutput,
                 standardError,
                 (_, _, _) => throw CreateBuildException(exceptionType, message));

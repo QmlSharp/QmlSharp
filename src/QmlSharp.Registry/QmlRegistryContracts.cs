@@ -25,6 +25,11 @@ namespace QmlSharp.Registry
 
         internal QmlRegistryLookupIndexes GetLookupIndexes()
         {
+            if (LookupIndexes.IsPopulated)
+            {
+                return LookupIndexes;
+            }
+
             return LookupIndexCache.GetValue(this, static registry => QmlRegistryLookupIndexes.Create(registry));
         }
 
