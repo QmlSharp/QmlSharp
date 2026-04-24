@@ -257,7 +257,7 @@ namespace QmlSharp.Registry.Tests.Building
         [Trait("Category", "Integration")]
         [Trait("Category", "Performance")]
         [SkipUnlessEnvironmentVariableFact(RegistryTestEnvironment.QtDirVariableName, RegistryTestEnvironment.QtSdkUnavailableReason)]
-        public void BLD_09_Build_performance_full_build_is_below_3_seconds()
+        public void BLD_09_Build_performance_full_build_is_within_budget()
         {
             RegistryBuilder builder = new();
             string qtDir = GetQtDir();
@@ -278,9 +278,10 @@ namespace QmlSharp.Registry.Tests.Building
             }
 
             TimeSpan p99 = samples.Max();
+            TimeSpan budget = GetFullBuildPerformanceBudget();
             Assert.True(
-                p99 < TimeSpan.FromSeconds(3),
-                $"Warm full registry build P99 was {p99.TotalSeconds:F3} s; budget is 3.000 s.");
+                p99 < budget,
+                $"Warm full registry build P99 was {p99.TotalSeconds:F3} s; budget is {budget.TotalSeconds:F3} s.");
         }
 
         [Fact]
@@ -339,6 +340,14 @@ namespace QmlSharp.Registry.Tests.Building
                 ?? throw new InvalidOperationException("QT_DIR must be set for this test.");
         }
 
+        private static TimeSpan GetFullBuildPerformanceBudget()
+        {
+            return OperatingSystem.IsMacOS()
+                && string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase)
+                    ? TimeSpan.FromSeconds(4)
+                    : TimeSpan.FromSeconds(3);
+        }
+
         private sealed class TemporaryDirectory : IDisposable
         {
             public TemporaryDirectory()
@@ -388,11 +397,11 @@ namespace QmlSharp.Registry.Tests.Building
                 return registry;
             }
 
-            public void SaveToFile(QmlRegistry registry, string filePath)
+            public void SaveToFile(QmlRegistry snapshotRegistry, string filePath)
             {
             }
 
-            public byte[] Serialize(QmlRegistry registry)
+            public byte[] Serialize(QmlRegistry snapshotRegistry)
             {
                 return [0x01];
             }
