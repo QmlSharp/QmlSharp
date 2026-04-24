@@ -268,6 +268,7 @@ namespace QmlSharp.Registry.Tests.Normalization
             Assert.Equal("QRectF", mapper.ToCppName("rect"));
             Assert.Equal("QVariant", mapper.ToCppName("var"));
             Assert.Equal("double", mapper.ToCppName("double"));
+            Assert.Equal("QVariantList", mapper.ToCppName("list"));
         }
 
         [Fact]
@@ -281,6 +282,74 @@ namespace QmlSharp.Registry.Tests.Normalization
 
             Assert.Equal("JsonValue", mapper.ToCppName("var"));
             Assert.Equal("var", mapper.ToQmlName("JsonValue"));
+        }
+
+        [Fact]
+        public void Maps_real_qt_numeric_and_sequence_aliases()
+        {
+            TypeNameMapper mapper = CreateMapper();
+
+            Assert.Equal("double", mapper.ToQmlName("float"));
+            Assert.Equal("list<string>", mapper.ToQmlName("QStringList"));
+            Assert.Equal("list", mapper.ToQmlName("QList<QVariant>"));
+        }
+
+        [Fact]
+        public void Reverse_mapping_uses_canonical_cpp_names_for_sequence_collisions()
+        {
+            TypeNameMapper mapper = CreateMapper();
+
+            Assert.Equal("QVariantList", mapper.ToCppName("list"));
+            Assert.Equal("QStringList", mapper.ToCppName("list<string>"));
+        }
+
+        [Fact]
+        public void GetAllMappings_returns_merged_snapshot_for_custom_mapper()
+        {
+            TypeNameMapper original = CreateMapper();
+            ITypeNameMapper customized = original.WithCustomMappings(
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["QString"] = "textual",
+                    ["MyType"] = "myType",
+                });
+
+            IReadOnlyDictionary<string, string> originalMappings = original.GetAllMappings();
+            IReadOnlyDictionary<string, string> customizedMappings = customized.GetAllMappings();
+
+            Assert.Equal("string", originalMappings["QString"]);
+            Assert.False(originalMappings.ContainsKey("MyType"));
+            Assert.Equal("textual", customizedMappings["QString"]);
+            Assert.Equal("myType", customizedMappings["MyType"]);
+        }
+
+        [Fact]
+        public void Custom_reverse_mapping_with_duplicate_qml_names_is_deterministic()
+        {
+            ITypeNameMapper mapper = CreateMapper().WithCustomMappings(
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["SecondCppType"] = "sharedCustomType",
+                    ["FirstCppType"] = "sharedCustomType",
+                });
+
+            Assert.Equal("FirstCppType", mapper.ToCppName("sharedCustomType"));
+            Assert.Equal("sharedCustomType", mapper.ToQmlName("SecondCppType"));
+        }
+
+        [Theory]
+        [InlineData("", "qmlName")]
+        [InlineData(" ", "qmlName")]
+        [InlineData("CppName", "")]
+        [InlineData("CppName", " ")]
+        public void WithCustomMappings_rejects_blank_keys_and_values(string cppTypeName, string qmlTypeName)
+        {
+            IReadOnlyDictionary<string, string> mappings = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [cppTypeName] = qmlTypeName,
+            };
+
+            _ = Assert.Throws<ArgumentException>(() => CreateMapper().WithCustomMappings(mappings));
         }
 
         private static TypeNameMapper CreateMapper()
