@@ -171,12 +171,11 @@ namespace QmlSharp.Registry.Snapshots
             }
 
             ImmutableDictionary<string, QmlType>.Builder typesByQualifiedName = ImmutableDictionary.CreateBuilder<string, QmlType>(StringComparer.Ordinal);
-            foreach (QmlType type in typeModels.Select(static typeModel => typeModel.ToModel()))
+            foreach (QmlType duplicateType in typeModels
+                .Select(static typeModel => typeModel.ToModel())
+                .Where(type => !typesByQualifiedName.TryAdd(type.QualifiedName, type)))
             {
-                if (!typesByQualifiedName.TryAdd(type.QualifiedName, type))
-                {
-                    throw CreateCorruptException($"Duplicate qualified type '{type.QualifiedName}' found in snapshot payload.");
-                }
+                throw CreateCorruptException($"Duplicate qualified type '{duplicateType.QualifiedName}' found in snapshot payload.");
             }
 
             List<QmlType> builtins = [];
