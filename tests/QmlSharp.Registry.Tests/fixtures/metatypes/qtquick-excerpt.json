@@ -1,65 +1,179 @@
 [
   {
-    "inputFile": "qtquick_excerpt.h",
+    "inputFile": "qquickitem.h",
+    "outputRevision": 69,
     "classes": [
       {
-        "className": "QQuickItem",
-        "qualifiedClassName": "QQuickItem",
-        "object": true,
-        "gadget": false,
-        "namespace": false,
-        "superClasses": [
-          { "name": "QObject", "access": "public" }
-        ],
         "classInfos": [
           { "name": "QML.Element", "value": "Item" },
           { "name": "QML.Attached", "value": "QQuickKeysAttached" }
         ],
-        "properties": [
+        "className": "QQuickItem",
+        "enums": [
           {
-            "name": "width",
-            "type": "double",
-            "read": "width",
-            "write": "setWidth",
-            "notify": "widthChanged",
-            "bindableProperty": "bindableWidth",
-            "revision": 0,
-            "index": 1,
-            "isReadonly": false,
-            "isConstant": false,
-            "isFinal": false,
-            "isRequired": false
+            "isClass": false,
+            "isFlag": false,
+            "lineNumber": 174,
+            "name": "TransformOrigin",
+            "values": [
+              "TopLeft",
+              "Top",
+              "TopRight",
+              "Left",
+              "Center",
+              "Right",
+              "BottomLeft",
+              "Bottom",
+              "BottomRight"
+            ]
           }
         ],
+        "interfaces": [
+          [
+            {
+              "className": "QQmlParserStatus",
+              "id": "\"org.qt-project.Qt.QQmlParserStatus\""
+            }
+          ]
+        ],
+        "lineNumber": 63,
+        "methods": [
+          {
+            "access": "public",
+            "arguments": [
+              { "name": "callback", "type": "QJSValue" },
+              { "name": "targetSize", "type": "QSize" }
+            ],
+            "index": 33,
+            "lineNumber": 309,
+            "name": "grabToImage",
+            "returnType": "bool",
+            "revision": 516
+          },
+          {
+            "access": "public",
+            "arguments": [
+              { "name": "point", "type": "QPointF" }
+            ],
+            "index": 35,
+            "isConst": true,
+            "lineNumber": 312,
+            "name": "contains",
+            "returnType": "bool"
+          }
+        ],
+        "object": true,
+        "properties": [
+          {
+            "bindable": "bindableWidth",
+            "constant": false,
+            "designable": true,
+            "final": true,
+            "index": 7,
+            "lineNumber": 76,
+            "name": "width",
+            "notify": "widthChanged",
+            "override": false,
+            "read": "width",
+            "required": false,
+            "scriptable": true,
+            "stored": true,
+            "type": "double",
+            "user": false,
+            "virtual": false,
+            "write": "setWidth"
+          },
+          {
+            "bindable": "bindableHeight",
+            "constant": false,
+            "designable": true,
+            "final": true,
+            "index": 8,
+            "lineNumber": 77,
+            "name": "height",
+            "notify": "heightChanged",
+            "override": false,
+            "read": "height",
+            "required": false,
+            "scriptable": true,
+            "stored": true,
+            "type": "double",
+            "user": false,
+            "virtual": false,
+            "write": "setHeight"
+          }
+        ],
+        "qualifiedClassName": "QQuickItem",
         "signals": [
           {
+            "access": "public",
+            "arguments": [],
+            "index": 0,
+            "lineNumber": 279,
             "name": "widthChanged",
+            "revision": 0
+          },
+          {
+            "access": "public",
             "arguments": [
               { "name": "value", "type": "double" }
             ],
+            "index": 1,
+            "lineNumber": 280,
+            "name": "heightChanged",
             "revision": 0
           }
         ],
+        "superClasses": [
+          { "name": "QObject", "access": "public" }
+        ]
+      },
+      {
+        "classInfos": [
+          { "name": "QML.Element", "value": "Accessible" },
+          { "name": "QML.Attached", "value": "QQuickAccessibleAttached" },
+          { "name": "QML.Creatable", "value": "false" }
+        ],
+        "className": "QQuickAccessibleAttached",
+        "lineNumber": 52,
         "methods": [
           {
-            "name": "forceLayout",
-            "returnType": "void",
-            "arguments": [],
-            "revision": 0,
-            "isCloned": false
+            "access": "public",
+            "arguments": [
+              { "name": "html", "type": "QString" }
+            ],
+            "index": 35,
+            "lineNumber": 230,
+            "name": "stripHtml",
+            "returnType": "QString",
+            "revision": 1538
           }
         ],
-        "enums": [
+        "object": true,
+        "properties": [
           {
-            "name": "TransformOrigin",
-            "alias": null,
-            "isFlag": false,
-            "isClass": false,
-            "values": [
-              "TopLeft",
-              "Center"
-            ]
+            "constant": false,
+            "designable": true,
+            "final": true,
+            "index": 0,
+            "lineNumber": 55,
+            "name": "role",
+            "notify": "roleChanged",
+            "override": false,
+            "read": "role",
+            "required": false,
+            "scriptable": true,
+            "stored": true,
+            "type": "QAccessible::Role",
+            "user": false,
+            "virtual": false,
+            "write": "setRole"
           }
+        ],
+        "qualifiedClassName": "QQuickAccessibleAttached",
+        "signals": [],
+        "superClasses": [
+          { "name": "QObject", "access": "public" }
         ]
       }
     ]
