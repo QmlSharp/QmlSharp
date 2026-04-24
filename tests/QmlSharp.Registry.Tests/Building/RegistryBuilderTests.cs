@@ -11,6 +11,36 @@ namespace QmlSharp.Registry.Tests.Building
     [Collection(QtEnvironmentCollection.Name)]
     public sealed class RegistryBuilderTests
     {
+        public static TheoryData<string> ParserExceptionKinds =>
+        [
+            "io",
+            "unauthorized",
+            "notsupported",
+            "argument",
+            "format",
+            "invalidoperation",
+        ];
+
+        public static TheoryData<string> MetatypesParserExceptionKinds =>
+        [
+            "io",
+            "unauthorized",
+            "notsupported",
+            "argument",
+            "json",
+            "format",
+            "invalidoperation",
+        ];
+
+        public static TheoryData<string> SnapshotSaveExceptionKinds =>
+        [
+            "io",
+            "unauthorized",
+            "notsupported",
+            "argument",
+            "security",
+        ];
+
         [Trait("Category", "Integration")]
         [SkipUnlessEnvironmentVariableFact(RegistryTestEnvironment.QtDirVariableName, RegistryTestEnvironment.QtSdkUnavailableReason)]
         public void BLD_01_Full_build_from_qt_sdk_returns_registry_and_query()
@@ -334,6 +364,268 @@ namespace QmlSharp.Registry.Tests.Building
                 string.Equals(diagnostic.Code, DiagnosticCodes.SnapshotCorrupt, StringComparison.Ordinal));
         }
 
+        [Theory]
+        [MemberData(nameof(ParserExceptionKinds))]
+        public void Build_qmltypes_parser_exceptions_are_reported_as_REG010_errors(string exceptionKind)
+        {
+            RegistryBuilder builder = new(
+                new EmptyQtTypeScanner(),
+                new ThrowingQmltypesParser(CreateException(exceptionKind)),
+                new EmptyQmldirParser(),
+                new EmptyMetatypesParser(),
+                new TypeNameMapper(),
+                new PropagatingTypeNormalizer(),
+                new NoopSnapshot());
+
+            BuildResult result = builder.Build(
+                new BuildConfig(@"C:\Qt\6.11.0\msvc2022_64", SnapshotPath: null, ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
+
+            Assert.False(result.IsSuccess);
+            Assert.NotNull(result.TypeRegistry);
+            Assert.NotNull(result.Query);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Severity == DiagnosticSeverity.Error
+                && string.Equals(diagnostic.Code, DiagnosticCodes.QmltypesSyntaxError, StringComparison.Ordinal)
+                && diagnostic.Message.Contains("Failed to parse qmltypes file", StringComparison.Ordinal));
+        }
+
+        [Theory]
+        [MemberData(nameof(ParserExceptionKinds))]
+        public void Build_qmldir_parser_exceptions_are_reported_as_REG020_errors(string exceptionKind)
+        {
+            RegistryBuilder builder = new(
+                new EmptyQtTypeScanner(),
+                new EmptyQmltypesParser(),
+                new ThrowingQmldirParser(CreateException(exceptionKind)),
+                new EmptyMetatypesParser(),
+                new TypeNameMapper(),
+                new PropagatingTypeNormalizer(),
+                new NoopSnapshot());
+
+            BuildResult result = builder.Build(
+                new BuildConfig(@"C:\Qt\6.11.0\msvc2022_64", SnapshotPath: null, ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
+
+            Assert.False(result.IsSuccess);
+            Assert.NotNull(result.TypeRegistry);
+            Assert.NotNull(result.Query);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Severity == DiagnosticSeverity.Error
+                && string.Equals(diagnostic.Code, DiagnosticCodes.QmldirSyntaxError, StringComparison.Ordinal)
+                && diagnostic.Message.Contains("Failed to parse qmldir file", StringComparison.Ordinal));
+        }
+
+        [Theory]
+        [MemberData(nameof(MetatypesParserExceptionKinds))]
+        public void Build_metatypes_parser_exceptions_are_reported_as_REG030_errors(string exceptionKind)
+        {
+            RegistryBuilder builder = new(
+                new EmptyQtTypeScanner(),
+                new EmptyQmltypesParser(),
+                new EmptyQmldirParser(),
+                new ThrowingMetatypesParser(CreateException(exceptionKind, includeVersionMismatchCode: false)),
+                new TypeNameMapper(),
+                new PropagatingTypeNormalizer(),
+                new NoopSnapshot());
+
+            BuildResult result = builder.Build(
+                new BuildConfig(@"C:\Qt\6.11.0\msvc2022_64", SnapshotPath: null, ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
+
+            Assert.False(result.IsSuccess);
+            Assert.NotNull(result.TypeRegistry);
+            Assert.NotNull(result.Query);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Severity == DiagnosticSeverity.Error
+                && string.Equals(diagnostic.Code, DiagnosticCodes.MetatypesJsonError, StringComparison.Ordinal)
+                && diagnostic.Message.Contains("Failed to parse metatypes file", StringComparison.Ordinal));
+        }
+
+        [Theory]
+        [MemberData(nameof(SnapshotSaveExceptionKinds))]
+        public void Build_snapshot_save_exceptions_are_reported_as_snapshot_errors(string exceptionKind)
+        {
+            RegistryBuilder builder = new(
+                new EmptyQtTypeScanner(),
+                new EmptyQmltypesParser(),
+                new EmptyQmldirParser(),
+                new EmptyMetatypesParser(),
+                new TypeNameMapper(),
+                new PropagatingTypeNormalizer(),
+                new ThrowingSaveSnapshot(CreateException(exceptionKind)));
+            using TemporaryDirectory temporaryDirectory = new();
+
+            BuildResult result = builder.Build(
+                new BuildConfig(
+                    @"C:\Qt\6.11.0\msvc2022_64",
+                    Path.Join(temporaryDirectory.Path, "registry.snapshot.bin"),
+                    ForceRebuild: true,
+                    ModuleFilter: null,
+                    IncludeInternal: false));
+
+            Assert.False(result.IsSuccess);
+            Assert.NotNull(result.TypeRegistry);
+            Assert.NotNull(result.Query);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Severity == DiagnosticSeverity.Error
+                && string.Equals(diagnostic.Code, DiagnosticCodes.SnapshotCorrupt, StringComparison.Ordinal)
+                && diagnostic.Message.Contains("Failed to save registry snapshot", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void BuildOrLoad_when_snapshot_load_fails_but_validity_is_still_true_rebuilds_with_warning()
+        {
+            using TemporaryDirectory temporaryDirectory = new();
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "fixture.snapshot.bin");
+            File.WriteAllBytes(snapshotPath, [0x01, 0x02, 0x03]);
+            List<BuildProgress> progress = [];
+
+            RegistryBuilder builder = new(
+                new EmptyQtTypeScanner(),
+                new EmptyQmltypesParser(),
+                new EmptyQmldirParser(),
+                new EmptyMetatypesParser(),
+                new TypeNameMapper(),
+                new EmptyTypeNormalizer(),
+                new FallbackSnapshot(new IOException("snapshot file is busy")));
+
+            BuildResult result = builder.BuildOrLoad(
+                new BuildConfig(@"C:\Qt\6.11.0\msvc2022_64", snapshotPath, ForceRebuild: false, ModuleFilter: null, IncludeInternal: false),
+                progress.Add);
+
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.TypeRegistry);
+            Assert.NotNull(result.Query);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Severity == DiagnosticSeverity.Warning
+                && string.Equals(diagnostic.Code, DiagnosticCodes.SnapshotCorrupt, StringComparison.Ordinal)
+                && diagnostic.Message.Contains("Failed to load registry snapshot", StringComparison.Ordinal));
+            Assert.Equal(BuildPhase.LoadingSnapshot, progress[0].Phase);
+            Assert.Contains(progress.Select(item => item.Phase), phase => phase == BuildPhase.Scanning);
+            Assert.Equal(BuildPhase.Complete, progress[^1].Phase);
+        }
+
+        [Fact]
+        public void Build_returns_failure_when_normalizer_does_not_produce_a_registry()
+        {
+            RegistryBuilder builder = new(
+                new EmptyQtTypeScanner(),
+                new EmptyQmltypesParser(),
+                new EmptyQmldirParser(),
+                new EmptyMetatypesParser(),
+                new TypeNameMapper(),
+                new NullTypeNormalizer(),
+                new NoopSnapshot());
+
+            BuildResult result = builder.Build(
+                new BuildConfig(@"C:\Qt\6.11.0\msvc2022_64", SnapshotPath: null, ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
+
+            Assert.False(result.IsSuccess);
+            Assert.Null(result.TypeRegistry);
+            Assert.Null(result.Query);
+        }
+
+        [Theory]
+        [InlineData("unauthorized", DiagnosticCodes.SnapshotCorrupt)]
+        [InlineData("notsupported", DiagnosticCodes.SnapshotVersionMismatch)]
+        [InlineData("argument", DiagnosticCodes.SnapshotCorrupt)]
+        public void LoadFromSnapshot_wraps_expected_snapshot_load_exceptions(string exceptionKind, string expectedCode)
+        {
+            RegistryBuilder builder = new(
+                new EmptyQtTypeScanner(),
+                new EmptyQmltypesParser(),
+                new EmptyQmldirParser(),
+                new EmptyMetatypesParser(),
+                new TypeNameMapper(),
+                new EmptyTypeNormalizer(),
+                new ThrowingLoadSnapshot(CreateException(exceptionKind)));
+
+            BuildResult result = builder.LoadFromSnapshot(@"C:\snapshots\fixture.snapshot.bin");
+
+            Assert.False(result.IsSuccess);
+            Assert.Null(result.TypeRegistry);
+            Assert.Null(result.Query);
+            Assert.Contains(result.Diagnostics, diagnostic => string.Equals(diagnostic.Code, expectedCode, StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void Build_qmltypes_parser_null_results_are_converted_into_stage_diagnostics()
+        {
+            RegistryBuilder builder = new(
+                new EmptyQtTypeScanner(),
+                new NullQmltypesParser(),
+                new EmptyQmldirParser(),
+                new EmptyMetatypesParser(),
+                new TypeNameMapper(),
+                new PropagatingTypeNormalizer(),
+                new NoopSnapshot());
+
+            BuildResult result = builder.Build(
+                new BuildConfig(@"C:\Qt\6.11.0\msvc2022_64", SnapshotPath: null, ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
+
+            Assert.False(result.IsSuccess);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == DiagnosticCodes.QmltypesSyntaxError
+                && diagnostic.Message.Contains("returned no file content", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void Build_qmldir_parser_null_results_are_converted_into_stage_diagnostics()
+        {
+            RegistryBuilder builder = new(
+                new EmptyQtTypeScanner(),
+                new EmptyQmltypesParser(),
+                new NullQmldirParser(),
+                new EmptyMetatypesParser(),
+                new TypeNameMapper(),
+                new PropagatingTypeNormalizer(),
+                new NoopSnapshot());
+
+            BuildResult result = builder.Build(
+                new BuildConfig(@"C:\Qt\6.11.0\msvc2022_64", SnapshotPath: null, ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
+
+            Assert.False(result.IsSuccess);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == DiagnosticCodes.QmldirSyntaxError
+                && diagnostic.Message.Contains("returned no file content", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void Build_metatypes_parser_null_results_are_converted_into_stage_diagnostics()
+        {
+            RegistryBuilder builder = new(
+                new EmptyQtTypeScanner(),
+                new EmptyQmltypesParser(),
+                new EmptyQmldirParser(),
+                new NullMetatypesParser(),
+                new TypeNameMapper(),
+                new PropagatingTypeNormalizer(),
+                new NoopSnapshot());
+
+            BuildResult result = builder.Build(
+                new BuildConfig(@"C:\Qt\6.11.0\msvc2022_64", SnapshotPath: null, ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
+
+            Assert.False(result.IsSuccess);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == DiagnosticCodes.MetatypesJsonError
+                && diagnostic.Message.Contains("returned no file content", StringComparison.Ordinal));
+        }
+
+        private static Exception CreateException(string exceptionKind, bool includeVersionMismatchCode = true)
+        {
+            return exceptionKind switch
+            {
+                "io" => new IOException("disk failure"),
+                "unauthorized" => new UnauthorizedAccessException("access denied"),
+                "notsupported" when includeVersionMismatchCode => new NotSupportedException($"{DiagnosticCodes.SnapshotVersionMismatch}: unsupported snapshot format"),
+                "notsupported" => new NotSupportedException("operation is not supported"),
+                "argument" => new ArgumentException("bad argument"),
+                "format" => new FormatException("bad format"),
+                "invalidoperation" => new InvalidOperationException("invalid operation"),
+                "json" => new System.Text.Json.JsonException("invalid json"),
+                "security" => new System.Security.SecurityException("security failure"),
+                _ => throw new ArgumentOutOfRangeException(nameof(exceptionKind), exceptionKind, "Unknown exception kind."),
+            };
+        }
+
         private static string GetQtDir()
         {
             return Environment.GetEnvironmentVariable(RegistryTestEnvironment.QtDirVariableName)
@@ -454,6 +746,28 @@ namespace QmlSharp.Registry.Tests.Building
             }
         }
 
+        private sealed class EmptyQtTypeScanner : IQtTypeScanner
+        {
+            public ScanResult Scan(ScannerConfig config)
+            {
+                return new ScanResult(
+                    [@"C:\Qt\qml\QtQuick\plugins.qmltypes"],
+                    [@"C:\Qt\qml\QtQuick\qmldir"],
+                    [@"C:\Qt\metatypes\qt6quick_metatypes.json"],
+                    ImmutableArray<RegistryDiagnostic>.Empty);
+            }
+
+            public ScanValidation ValidateQtDir(string qtDir)
+            {
+                return new ScanValidation(IsValid: true, QtVersion: "6.11.0", ErrorMessage: null);
+            }
+
+            public string? InferModuleUri(string qmldirPath, string qmlRootDir)
+            {
+                return "QtQuick";
+            }
+        }
+
         private sealed class InlineQmltypesParser : IQmltypesParser
         {
             private readonly RegistryDiagnostic diagnostic;
@@ -468,6 +782,54 @@ namespace QmlSharp.Registry.Tests.Building
                 return new ParseResult<RawQmltypesFile>(
                     new RawQmltypesFile(filePath, ImmutableArray<RawQmltypesComponent>.Empty, [diagnostic]),
                     [diagnostic]);
+            }
+
+            public ParseResult<RawQmltypesFile> ParseContent(string content, string sourcePath)
+            {
+                return Parse(sourcePath);
+            }
+        }
+
+        private sealed class EmptyQmltypesParser : IQmltypesParser
+        {
+            public ParseResult<RawQmltypesFile> Parse(string filePath)
+            {
+                return new ParseResult<RawQmltypesFile>(
+                    new RawQmltypesFile(filePath, ImmutableArray<RawQmltypesComponent>.Empty, ImmutableArray<RegistryDiagnostic>.Empty),
+                    ImmutableArray<RegistryDiagnostic>.Empty);
+            }
+
+            public ParseResult<RawQmltypesFile> ParseContent(string content, string sourcePath)
+            {
+                return Parse(sourcePath);
+            }
+        }
+
+        private sealed class ThrowingQmltypesParser : IQmltypesParser
+        {
+            private readonly Exception exception;
+
+            public ThrowingQmltypesParser(Exception exception)
+            {
+                this.exception = exception;
+            }
+
+            public ParseResult<RawQmltypesFile> Parse(string filePath)
+            {
+                throw exception;
+            }
+
+            public ParseResult<RawQmltypesFile> ParseContent(string content, string sourcePath)
+            {
+                return Parse(sourcePath);
+            }
+        }
+
+        private sealed class NullQmltypesParser : IQmltypesParser
+        {
+            public ParseResult<RawQmltypesFile> Parse(string filePath)
+            {
+                return new ParseResult<RawQmltypesFile>(null, ImmutableArray<RegistryDiagnostic>.Empty);
             }
 
             public ParseResult<RawQmltypesFile> ParseContent(string content, string sourcePath)
@@ -508,6 +870,64 @@ namespace QmlSharp.Registry.Tests.Building
             }
         }
 
+        private sealed class EmptyQmldirParser : IQmldirParser
+        {
+            public ParseResult<RawQmldirFile> Parse(string filePath)
+            {
+                return new ParseResult<RawQmldirFile>(
+                    new RawQmldirFile(
+                        filePath,
+                        "QtQuick",
+                        ImmutableArray<RawQmldirPlugin>.Empty,
+                        null,
+                        ImmutableArray<RawQmldirImport>.Empty,
+                        ImmutableArray<RawQmldirImport>.Empty,
+                        ImmutableArray<RawQmldirTypeEntry>.Empty,
+                        ImmutableArray<string>.Empty,
+                        null,
+                        ImmutableArray<RegistryDiagnostic>.Empty),
+                    ImmutableArray<RegistryDiagnostic>.Empty);
+            }
+
+            public ParseResult<RawQmldirFile> ParseContent(string content, string sourcePath)
+            {
+                return Parse(sourcePath);
+            }
+        }
+
+        private sealed class ThrowingQmldirParser : IQmldirParser
+        {
+            private readonly Exception exception;
+
+            public ThrowingQmldirParser(Exception exception)
+            {
+                this.exception = exception;
+            }
+
+            public ParseResult<RawQmldirFile> Parse(string filePath)
+            {
+                throw exception;
+            }
+
+            public ParseResult<RawQmldirFile> ParseContent(string content, string sourcePath)
+            {
+                return Parse(sourcePath);
+            }
+        }
+
+        private sealed class NullQmldirParser : IQmldirParser
+        {
+            public ParseResult<RawQmldirFile> Parse(string filePath)
+            {
+                return new ParseResult<RawQmldirFile>(null, ImmutableArray<RegistryDiagnostic>.Empty);
+            }
+
+            public ParseResult<RawQmldirFile> ParseContent(string content, string sourcePath)
+            {
+                return Parse(sourcePath);
+            }
+        }
+
         private sealed class InlineMetatypesParser : IMetatypesParser
         {
             private readonly RegistryDiagnostic diagnostic;
@@ -522,6 +942,54 @@ namespace QmlSharp.Registry.Tests.Building
                 return new ParseResult<RawMetatypesFile>(
                     new RawMetatypesFile(filePath, ImmutableArray<RawMetatypesEntry>.Empty, [diagnostic]),
                     [diagnostic]);
+            }
+
+            public ParseResult<RawMetatypesFile> ParseContent(string content, string sourcePath)
+            {
+                return Parse(sourcePath);
+            }
+        }
+
+        private sealed class EmptyMetatypesParser : IMetatypesParser
+        {
+            public ParseResult<RawMetatypesFile> Parse(string filePath)
+            {
+                return new ParseResult<RawMetatypesFile>(
+                    new RawMetatypesFile(filePath, ImmutableArray<RawMetatypesEntry>.Empty, ImmutableArray<RegistryDiagnostic>.Empty),
+                    ImmutableArray<RegistryDiagnostic>.Empty);
+            }
+
+            public ParseResult<RawMetatypesFile> ParseContent(string content, string sourcePath)
+            {
+                return Parse(sourcePath);
+            }
+        }
+
+        private sealed class ThrowingMetatypesParser : IMetatypesParser
+        {
+            private readonly Exception exception;
+
+            public ThrowingMetatypesParser(Exception exception)
+            {
+                this.exception = exception;
+            }
+
+            public ParseResult<RawMetatypesFile> Parse(string filePath)
+            {
+                throw exception;
+            }
+
+            public ParseResult<RawMetatypesFile> ParseContent(string content, string sourcePath)
+            {
+                return Parse(sourcePath);
+            }
+        }
+
+        private sealed class NullMetatypesParser : IMetatypesParser
+        {
+            public ParseResult<RawMetatypesFile> Parse(string filePath)
+            {
+                return new ParseResult<RawMetatypesFile>(null, ImmutableArray<RegistryDiagnostic>.Empty);
             }
 
             public ParseResult<RawMetatypesFile> ParseContent(string content, string sourcePath)
@@ -556,6 +1024,48 @@ namespace QmlSharp.Registry.Tests.Building
             }
         }
 
+        private sealed class PropagatingTypeNormalizer : ITypeNormalizer
+        {
+            public NormalizeResult Normalize(
+                IReadOnlyList<RawQmltypesFile> qmltypesFiles,
+                IReadOnlyList<(string ModuleUri, RawQmldirFile File)> qmldirFiles,
+                IReadOnlyList<RawMetatypesFile> metatypesFiles,
+                ITypeNameMapper typeNameMapper)
+            {
+                ImmutableArray<RegistryDiagnostic> diagnostics = qmltypesFiles
+                    .SelectMany(file => file.Diagnostics)
+                    .Concat(qmldirFiles.SelectMany(tuple => tuple.File.Diagnostics))
+                    .Concat(metatypesFiles.SelectMany(file => file.Diagnostics))
+                    .ToImmutableArray();
+
+                return new NormalizeResult(RegistryFixtures.CreateMinimalInheritanceFixture(), diagnostics);
+            }
+        }
+
+        private sealed class EmptyTypeNormalizer : ITypeNormalizer
+        {
+            public NormalizeResult Normalize(
+                IReadOnlyList<RawQmltypesFile> qmltypesFiles,
+                IReadOnlyList<(string ModuleUri, RawQmldirFile File)> qmldirFiles,
+                IReadOnlyList<RawMetatypesFile> metatypesFiles,
+                ITypeNameMapper typeNameMapper)
+            {
+                return new NormalizeResult(RegistryFixtures.CreateMinimalInheritanceFixture(), ImmutableArray<RegistryDiagnostic>.Empty);
+            }
+        }
+
+        private sealed class NullTypeNormalizer : ITypeNormalizer
+        {
+            public NormalizeResult Normalize(
+                IReadOnlyList<RawQmltypesFile> qmltypesFiles,
+                IReadOnlyList<(string ModuleUri, RawQmldirFile File)> qmldirFiles,
+                IReadOnlyList<RawMetatypesFile> metatypesFiles,
+                ITypeNameMapper typeNameMapper)
+            {
+                return new NormalizeResult(null, ImmutableArray<RegistryDiagnostic>.Empty);
+            }
+        }
+
         private sealed class ThrowingSnapshot : IRegistrySnapshot
         {
             public SnapshotValidity CheckValidity(string filePath)
@@ -576,6 +1086,136 @@ namespace QmlSharp.Registry.Tests.Building
             public void SaveToFile(QmlRegistry registry, string filePath)
             {
                 throw new IOException("disk full");
+            }
+
+            public byte[] Serialize(QmlRegistry registry)
+            {
+                return [0x01];
+            }
+        }
+
+        private sealed class NoopSnapshot : IRegistrySnapshot
+        {
+            public SnapshotValidity CheckValidity(string filePath)
+            {
+                return new SnapshotValidity(true, 1, "6.11.0", DateTimeOffset.UtcNow, null);
+            }
+
+            public QmlRegistry Deserialize(byte[] data)
+            {
+                return RegistryFixtures.CreateMinimalInheritanceFixture();
+            }
+
+            public QmlRegistry LoadFromFile(string filePath)
+            {
+                return RegistryFixtures.CreateMinimalInheritanceFixture();
+            }
+
+            public void SaveToFile(QmlRegistry registry, string filePath)
+            {
+            }
+
+            public byte[] Serialize(QmlRegistry registry)
+            {
+                return [0x01];
+            }
+        }
+
+        private sealed class ThrowingSaveSnapshot : IRegistrySnapshot
+        {
+            private readonly Exception exception;
+
+            public ThrowingSaveSnapshot(Exception exception)
+            {
+                this.exception = exception;
+            }
+
+            public SnapshotValidity CheckValidity(string filePath)
+            {
+                return new SnapshotValidity(true, 1, "6.11.0", DateTimeOffset.UtcNow, null);
+            }
+
+            public QmlRegistry Deserialize(byte[] data)
+            {
+                return RegistryFixtures.CreateMinimalInheritanceFixture();
+            }
+
+            public QmlRegistry LoadFromFile(string filePath)
+            {
+                return RegistryFixtures.CreateMinimalInheritanceFixture();
+            }
+
+            public void SaveToFile(QmlRegistry registry, string filePath)
+            {
+                throw exception;
+            }
+
+            public byte[] Serialize(QmlRegistry registry)
+            {
+                return [0x01];
+            }
+        }
+
+        private sealed class FallbackSnapshot : IRegistrySnapshot
+        {
+            private readonly Exception exception;
+
+            public FallbackSnapshot(Exception exception)
+            {
+                this.exception = exception;
+            }
+
+            public SnapshotValidity CheckValidity(string filePath)
+            {
+                return new SnapshotValidity(true, 1, "6.11.0", DateTimeOffset.UtcNow, null);
+            }
+
+            public QmlRegistry Deserialize(byte[] data)
+            {
+                return RegistryFixtures.CreateMinimalInheritanceFixture();
+            }
+
+            public QmlRegistry LoadFromFile(string filePath)
+            {
+                throw exception;
+            }
+
+            public void SaveToFile(QmlRegistry registry, string filePath)
+            {
+            }
+
+            public byte[] Serialize(QmlRegistry registry)
+            {
+                return [0x01];
+            }
+        }
+
+        private sealed class ThrowingLoadSnapshot : IRegistrySnapshot
+        {
+            private readonly Exception exception;
+
+            public ThrowingLoadSnapshot(Exception exception)
+            {
+                this.exception = exception;
+            }
+
+            public SnapshotValidity CheckValidity(string filePath)
+            {
+                return new SnapshotValidity(true, 1, "6.11.0", DateTimeOffset.UtcNow, null);
+            }
+
+            public QmlRegistry Deserialize(byte[] data)
+            {
+                return RegistryFixtures.CreateMinimalInheritanceFixture();
+            }
+
+            public QmlRegistry LoadFromFile(string filePath)
+            {
+                throw exception;
+            }
+
+            public void SaveToFile(QmlRegistry registry, string filePath)
+            {
             }
 
             public byte[] Serialize(QmlRegistry registry)

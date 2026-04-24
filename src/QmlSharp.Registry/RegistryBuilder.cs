@@ -142,7 +142,7 @@ namespace QmlSharp.Registry
             ReportProgress(progress, BuildPhase.ParsingQmltypes, stepOffset + 2, totalSteps, BuildFileCountDetail(scanResult.QmltypesPaths.Length, ".qmltypes"));
             ImmutableArray<RawQmltypesFile> qmltypesFiles = scanResult.QmltypesPaths
                 .Select(ParseQmltypesFile)
-                .Select(result => result.Value ?? CreateEmptyQmltypesFile(result.Diagnostics))
+                .Select(result => result.Value!)
                 .ToImmutableArray();
 
             ReportProgress(progress, BuildPhase.ParsingQmldir, stepOffset + 3, totalSteps, BuildFileCountDetail(scanResult.QmldirPaths.Length, "qmldir"));
@@ -150,7 +150,7 @@ namespace QmlSharp.Registry
                 .Select(path =>
                 {
                     ParseResult<RawQmldirFile> result = ParseQmldirFile(path);
-                    RawQmldirFile file = result.Value ?? CreateEmptyQmldirFile(path, result.Diagnostics);
+                    RawQmldirFile file = result.Value!;
                     string moduleUri = !string.IsNullOrWhiteSpace(file.Module)
                         ? file.Module!
                         : qtTypeScanner.InferModuleUri(path, qmlRootDirectory) ?? string.Empty;
@@ -161,7 +161,7 @@ namespace QmlSharp.Registry
             ReportProgress(progress, BuildPhase.ParsingMetatypes, stepOffset + 4, totalSteps, BuildFileCountDetail(scanResult.MetatypesPaths.Length, "metatypes"));
             ImmutableArray<RawMetatypesFile> metatypesFiles = scanResult.MetatypesPaths
                 .Select(ParseMetatypesFile)
-                .Select(result => result.Value ?? CreateEmptyMetatypesFile(result.Diagnostics))
+                .Select(result => result.Value!)
                 .ToImmutableArray();
 
             ReportProgress(progress, BuildPhase.Normalizing, stepOffset + 5, totalSteps, "Merging registry sources.");
@@ -552,14 +552,6 @@ namespace QmlSharp.Registry
             return new RawQmltypesFile(sourcePath, ImmutableArray<RawQmltypesComponent>.Empty, diagnostics);
         }
 
-        private static RawQmltypesFile CreateEmptyQmltypesFile(ImmutableArray<RegistryDiagnostic> diagnostics)
-        {
-            string sourcePath = diagnostics.IsDefaultOrEmpty
-                ? string.Empty
-                : diagnostics[0].FilePath ?? string.Empty;
-            return CreateEmptyQmltypesFile(sourcePath, diagnostics);
-        }
-
         private static RawQmldirFile CreateEmptyQmldirFile(string sourcePath, ImmutableArray<RegistryDiagnostic> diagnostics)
         {
             return new RawQmldirFile(
@@ -580,14 +572,6 @@ namespace QmlSharp.Registry
             return new RawMetatypesFile(sourcePath, ImmutableArray<RawMetatypesEntry>.Empty, diagnostics);
         }
 
-        private static RawMetatypesFile CreateEmptyMetatypesFile(ImmutableArray<RegistryDiagnostic> diagnostics)
-        {
-            string sourcePath = diagnostics.IsDefaultOrEmpty
-                ? string.Empty
-                : diagnostics[0].FilePath ?? string.Empty;
-            return CreateEmptyMetatypesFile(sourcePath, diagnostics);
-        }
-
         private static void ReportProgress(
             Action<BuildProgress>? progress,
             BuildPhase phase,
@@ -604,9 +588,7 @@ namespace QmlSharp.Registry
 
             public TypeRegistryAdapter(QmlRegistry registry)
             {
-                this.registry = registry.LookupIndexes.IsPopulated
-                    ? registry
-                    : registry.WithLookupIndexes();
+                this.registry = registry;
             }
 
             public int FormatVersion => registry.FormatVersion;
@@ -617,11 +599,7 @@ namespace QmlSharp.Registry
 
             public string QtVersion => registry.QtVersion;
 
-            public IReadOnlyList<QmlType> Types => registry.LookupIndexes.IsPopulated
-                ? registry.LookupIndexes.AllTypes
-                : registry.TypesByQualifiedName.Values
-                    .OrderBy(type => type.QualifiedName, StringComparer.Ordinal)
-                    .ToImmutableArray();
+            public IReadOnlyList<QmlType> Types => registry.GetLookupIndexes().AllTypes;
         }
     }
 }

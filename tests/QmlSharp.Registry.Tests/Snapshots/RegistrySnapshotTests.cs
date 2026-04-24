@@ -1,4 +1,8 @@
 using System.Buffers.Binary;
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using QmlSharp.Registry.Diagnostics;
 using QmlSharp.Registry.Querying;
 using QmlSharp.Registry.Snapshots;
@@ -9,8 +13,53 @@ namespace QmlSharp.Registry.Tests.Snapshots
     public sealed class RegistrySnapshotTests
     {
         private static readonly RegistrySnapshot Snapshot = new();
+        private static readonly byte[] SnapshotMagic = "QRSNP1\0"u8.ToArray();
         private const int SnapshotMagicLength = 7;
         private const int HeaderLengthFieldSize = sizeof(int);
+
+        public static TheoryData<string, string> CorruptNestedPayloadCases => new()
+        {
+            { "module-missing-uri", "Snapshot module is missing its URI." },
+            { "module-missing-fields", "Snapshot module 'QtQuick' is missing one or more required fields." },
+            { "module-type-missing-fields", "Snapshot module type is missing one or more required fields." },
+            { "type-missing-qualified-name", "Snapshot type is missing its qualified name." },
+            { "type-invalid-access-semantics", "contains an invalid access semantics value." },
+            { "type-missing-collections", "is missing one or more required collections." },
+            { "type-export-missing-fields", "Snapshot type export is missing one or more required fields." },
+            { "property-missing-name", "Snapshot property is missing one or more required fields." },
+            { "property-missing-fields", "Snapshot property is missing one or more required fields." },
+            { "signal-missing-name", "Snapshot signal is missing one or more required fields." },
+            { "signal-missing-fields", "Snapshot signal is missing one or more required fields." },
+            { "method-missing-name", "Snapshot method is missing one or more required fields." },
+            { "method-missing-fields", "Snapshot method is missing one or more required fields." },
+            { "parameter-missing-name", "Snapshot parameter is missing one or more required fields." },
+            { "parameter-missing-fields", "Snapshot parameter is missing one or more required fields." },
+            { "enum-missing-name", "Snapshot enum is missing one or more required fields." },
+            { "enum-missing-fields", "Snapshot enum is missing one or more required fields." },
+            { "enum-value-missing-name", "Snapshot enum value is missing its name." },
+        };
+
+        public static TheoryData<string> MissingTopLevelPayloadCollections => new()
+        {
+            "modules",
+            "types",
+            "builtins",
+        };
+
+        public static TheoryData<string, string> InvalidMetadataCases => new()
+        {
+            { "missing-qt-version", "Qt version" },
+            { "invalid-build-timestamp", "build timestamp" },
+            { "negative-payload-length", "negative payload length" },
+            { "unsupported-payload-compression", "unsupported payload compression" },
+        };
+
+        public static TheoryData<string, string> DuplicatePayloadCases => new()
+        {
+            { "modules", "Duplicate module URI" },
+            { "types", "Duplicate qualified type" },
+            { "builtins", "Duplicate builtin type" },
+        };
 
         [Fact]
         public void SNP_01_Round_trip_serialize_then_deserialize_preserves_registry_value_graph()
@@ -224,6 +273,159 @@ namespace QmlSharp.Registry.Tests.Snapshots
             Assert.Equal(first, second);
         }
 
+        [Theory]
+        [MemberData(nameof(CorruptNestedPayloadCases))]
+        public void Deserialize_with_corrupt_nested_payload_fields_returns_snapshot_corrupt(string caseName, string expectedMessage)
+        {
+            byte[] bytes = CreateMutatedSnapshot(payload => ApplyNestedPayloadMutation(payload, caseName));
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.Deserialize(bytes));
+
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+            Assert.Contains(expectedMessage, exception.Message, StringComparison.Ordinal);
+        }
+
+        [Theory]
+        [MemberData(nameof(MissingTopLevelPayloadCollections))]
+        public void Deserialize_with_missing_top_level_payload_collections_returns_snapshot_corrupt(string propertyName)
+        {
+            byte[] bytes = CreateMutatedSnapshot(payload => payload[propertyName] = null);
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.Deserialize(bytes));
+
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("missing one or more required collections", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Theory]
+        [MemberData(nameof(DuplicatePayloadCases))]
+        public void Deserialize_with_duplicate_payload_entries_returns_snapshot_corrupt(string propertyName, string expectedMessage)
+        {
+            byte[] bytes = CreateMutatedSnapshot(payload =>
+            {
+                JsonArray items = payload[propertyName]!.AsArray();
+                items.Add(items[0]!.DeepClone());
+            });
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.Deserialize(bytes));
+
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+            Assert.Contains(expectedMessage, exception.Message, StringComparison.Ordinal);
+        }
+
+        [Theory]
+        [MemberData(nameof(InvalidMetadataCases))]
+        public void CheckValidity_with_invalid_metadata_fields_returns_snapshot_corrupt(string caseName, string expectedMessage)
+        {
+            using TemporaryDirectory temporaryDirectory = new();
+            string snapshotPath = Path.Join(temporaryDirectory.Path, $"{caseName}.snapshot.bin");
+            byte[] bytes = CreateMutatedSnapshot(
+                payloadMutation: null,
+                metadataMutation: metadata => ApplyMetadataMutation(metadata, caseName));
+            File.WriteAllBytes(snapshotPath, bytes);
+
+            SnapshotValidity validity = Snapshot.CheckValidity(snapshotPath);
+
+            Assert.False(validity.IsValid);
+            Assert.Equal(0, validity.FormatVersion);
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, validity.ErrorMessage, StringComparison.Ordinal);
+            Assert.Contains(expectedMessage, validity.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public void Deserialize_with_invalid_payload_json_returns_snapshot_corrupt()
+        {
+            byte[] bytes = CreateSnapshotWithRawPayload("{"u8.ToArray());
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.Deserialize(bytes));
+
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("Failed to parse snapshot payload JSON", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_with_empty_payload_json_returns_snapshot_corrupt()
+        {
+            byte[] bytes = CreateSnapshotWithRawPayload("null"u8.ToArray());
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.Deserialize(bytes));
+
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("Snapshot payload JSON was empty", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_with_invalid_metadata_json_returns_snapshot_corrupt()
+        {
+            byte[] bytes = CreateSnapshotWithRawMetadata("{"u8.ToArray());
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.Deserialize(bytes));
+
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("Failed to parse snapshot metadata JSON", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_with_empty_metadata_json_returns_snapshot_corrupt()
+        {
+            byte[] bytes = CreateSnapshotWithRawMetadata("null"u8.ToArray());
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.Deserialize(bytes));
+
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("Snapshot metadata JSON was empty", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_with_invalid_magic_header_returns_snapshot_corrupt()
+        {
+            byte[] bytes = Snapshot.Serialize(RegistryFixtures.CreateQueryFixture());
+            bytes[0] ^= 0x5A;
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.Deserialize(bytes));
+
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("expected magic header", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_with_zero_metadata_length_returns_snapshot_corrupt()
+        {
+            byte[] bytes = Snapshot.Serialize(RegistryFixtures.CreateQueryFixture());
+            BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(SnapshotMagicLength, HeaderLengthFieldSize), 0);
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.Deserialize(bytes));
+
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("metadata length must be greater than zero", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_with_payload_length_mismatch_returns_snapshot_corrupt()
+        {
+            byte[] bytes = CreateMutatedSnapshot(
+                payloadMutation: null,
+                metadataMutation: metadata => metadata["payloadLength"] = metadata["payloadLength"]!.GetValue<int>() + 1);
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.Deserialize(bytes));
+
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("payload length does not match the file size", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void File_based_APIs_reject_null_or_whitespace_paths(string? filePath)
+        {
+            QmlRegistry registry = RegistryFixtures.CreateQueryFixture();
+
+            _ = Assert.Throws<ArgumentException>(() => Snapshot.SaveToFile(registry, filePath!));
+            _ = Assert.Throws<ArgumentException>(() => Snapshot.LoadFromFile(filePath!));
+            _ = Assert.Throws<ArgumentException>(() => Snapshot.CheckValidity(filePath!));
+        }
+
         private static void AssertRegistriesEquivalent(QmlRegistry expected, QmlRegistry actual)
         {
             Assert.Equal(expected.FormatVersion, actual.FormatVersion);
@@ -364,6 +566,235 @@ namespace QmlSharp.Registry.Tests.Snapshots
 
             char replacement = value[^1] == '0' ? '1' : '0';
             return value[..^1] + replacement;
+        }
+
+        private static byte[] CreateMutatedSnapshot(Action<JsonObject>? payloadMutation = null, Action<JsonObject>? metadataMutation = null)
+        {
+            byte[] bytes = Snapshot.Serialize(RegistryFixtures.CreateQueryFixture());
+            (JsonObject metadata, JsonObject payload) = ReadSnapshot(bytes);
+
+            payloadMutation?.Invoke(payload);
+
+            byte[] payloadBytes = CompressPayload(JsonSerializer.SerializeToUtf8Bytes(payload));
+            metadata["payloadLength"] = payloadBytes.Length;
+            metadata["payloadSha256"] = ComputeSha256(payloadBytes);
+            metadataMutation?.Invoke(metadata);
+            metadata["envelopeSha256"] = string.Empty;
+            metadata["envelopeSha256"] = ComputeEnvelopeSha256(metadata, payloadBytes);
+
+            return WriteSnapshot(metadata, payloadBytes);
+        }
+
+        private static (JsonObject Metadata, JsonObject Payload) ReadSnapshot(byte[] bytes)
+        {
+            int metadataLength = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(SnapshotMagicLength, HeaderLengthFieldSize));
+            int metadataOffset = SnapshotMagicLength + HeaderLengthFieldSize;
+            byte[] metadataBytes = bytes[metadataOffset..(metadataOffset + metadataLength)];
+            byte[] payloadBytes = bytes[(metadataOffset + metadataLength)..];
+
+            JsonObject metadata = JsonNode.Parse(metadataBytes)!.AsObject();
+            JsonObject payload = JsonNode.Parse(DecompressPayload(payloadBytes))!.AsObject();
+
+            return (metadata, payload);
+        }
+
+        private static byte[] WriteSnapshot(JsonObject metadata, byte[] payloadBytes)
+        {
+            byte[] metadataBytes = JsonSerializer.SerializeToUtf8Bytes(metadata);
+            return WriteRawSnapshot(metadataBytes, payloadBytes);
+        }
+
+        private static byte[] WriteRawSnapshot(byte[] metadataBytes, byte[] payloadBytes)
+        {
+            byte[] bytes = new byte[SnapshotMagic.Length + HeaderLengthFieldSize + metadataBytes.Length + payloadBytes.Length];
+
+            Buffer.BlockCopy(SnapshotMagic, 0, bytes, 0, SnapshotMagic.Length);
+            BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(SnapshotMagic.Length, HeaderLengthFieldSize), metadataBytes.Length);
+            Buffer.BlockCopy(metadataBytes, 0, bytes, SnapshotMagic.Length + HeaderLengthFieldSize, metadataBytes.Length);
+            Buffer.BlockCopy(payloadBytes, 0, bytes, SnapshotMagic.Length + HeaderLengthFieldSize + metadataBytes.Length, payloadBytes.Length);
+
+            return bytes;
+        }
+
+        private static byte[] CreateSnapshotWithRawPayload(byte[] rawPayloadJsonBytes)
+        {
+            byte[] bytes = Snapshot.Serialize(RegistryFixtures.CreateQueryFixture());
+            (JsonObject metadata, _) = ReadSnapshot(bytes);
+            byte[] payloadBytes = CompressPayload(rawPayloadJsonBytes);
+
+            metadata["payloadLength"] = payloadBytes.Length;
+            metadata["payloadSha256"] = ComputeSha256(payloadBytes);
+            metadata["envelopeSha256"] = string.Empty;
+            metadata["envelopeSha256"] = ComputeEnvelopeSha256(metadata, payloadBytes);
+
+            return WriteSnapshot(metadata, payloadBytes);
+        }
+
+        private static byte[] CreateSnapshotWithRawMetadata(byte[] rawMetadataJsonBytes)
+        {
+            byte[] bytes = Snapshot.Serialize(RegistryFixtures.CreateQueryFixture());
+            int metadataLength = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(SnapshotMagicLength, HeaderLengthFieldSize));
+            int payloadOffset = SnapshotMagicLength + HeaderLengthFieldSize + metadataLength;
+            byte[] payloadBytes = bytes[payloadOffset..];
+
+            return WriteRawSnapshot(rawMetadataJsonBytes, payloadBytes);
+        }
+
+        private static void ApplyNestedPayloadMutation(JsonObject payload, string caseName)
+        {
+            JsonArray modules = payload["modules"]!.AsArray();
+            JsonArray types = payload["types"]!.AsArray();
+            JsonArray builtins = payload["builtins"]!.AsArray();
+            JsonObject firstModule = modules[0]!.AsObject();
+            JsonObject firstType = types[0]!.AsObject();
+            JsonObject richType = types
+                .Select(node => node!.AsObject())
+                .First(type =>
+                    type["exports"]!.AsArray().Count > 0
+                    && type["properties"]!.AsArray().Count > 0
+                    && type["signals"]!.AsArray().Count > 0
+                    && type["methods"]!.AsArray().Count > 0
+                    && type["enums"]!.AsArray().Count > 0);
+            JsonObject typeWithSignalParameters = types
+                .Select(node => node!.AsObject())
+                .First(type => type["signals"]!.AsArray().Any(signal => signal!["parameters"]!.AsArray().Count > 0));
+            JsonObject typeWithEnums = types
+                .Select(node => node!.AsObject())
+                .First(type => type["enums"]!.AsArray().Any(@enum => @enum!["values"]!.AsArray().Count > 0));
+
+            switch (caseName)
+            {
+                case "module-missing-uri":
+                    firstModule["uri"] = null;
+                    break;
+                case "module-missing-fields":
+                    firstModule["version"] = null;
+                    break;
+                case "module-type-missing-fields":
+                    firstModule["types"]!.AsArray()[0]!.AsObject()["qmlName"] = null;
+                    break;
+                case "type-missing-qualified-name":
+                    firstType["qualifiedName"] = null;
+                    break;
+                case "type-invalid-access-semantics":
+                    firstType["accessSemantics"] = 999;
+                    break;
+                case "type-missing-collections":
+                    firstType["exports"] = null;
+                    break;
+                case "type-export-missing-fields":
+                    richType["exports"]!.AsArray()[0]!.AsObject()["module"] = null;
+                    break;
+                case "property-missing-name":
+                    richType["properties"]!.AsArray()[0]!.AsObject()["name"] = null;
+                    break;
+                case "property-missing-fields":
+                    richType["properties"]!.AsArray()[0]!.AsObject()["typeName"] = null;
+                    break;
+                case "signal-missing-name":
+                    richType["signals"]!.AsArray()[0]!.AsObject()["name"] = null;
+                    break;
+                case "signal-missing-fields":
+                    richType["signals"]!.AsArray()[0]!.AsObject()["parameters"] = null;
+                    break;
+                case "method-missing-name":
+                    richType["methods"]!.AsArray()[0]!.AsObject()["name"] = null;
+                    break;
+                case "method-missing-fields":
+                    richType["methods"]!.AsArray()[0]!.AsObject()["parameters"] = null;
+                    break;
+                case "parameter-missing-name":
+                    typeWithSignalParameters["signals"]!.AsArray()
+                        .First(signal => signal!["parameters"]!.AsArray().Count > 0)!
+                        .AsObject()["parameters"]!
+                        .AsArray()[0]!
+                        .AsObject()["name"] = null;
+                    break;
+                case "parameter-missing-fields":
+                    typeWithSignalParameters["signals"]!.AsArray()
+                        .First(signal => signal!["parameters"]!.AsArray().Count > 0)!
+                        .AsObject()["parameters"]!
+                        .AsArray()[0]!
+                        .AsObject()["typeName"] = null;
+                    break;
+                case "enum-missing-name":
+                    richType["enums"]!.AsArray()[0]!.AsObject()["name"] = null;
+                    break;
+                case "enum-missing-fields":
+                    richType["enums"]!.AsArray()[0]!.AsObject()["values"] = null;
+                    break;
+                case "enum-value-missing-name":
+                    typeWithEnums["enums"]!.AsArray()
+                        .First(@enum => @enum!["values"]!.AsArray().Count > 0)!
+                        .AsObject()["values"]!
+                        .AsArray()[0]!
+                        .AsObject()["name"] = null;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(caseName), caseName, "Unknown corruption case.");
+            }
+
+            payload["modules"] = modules;
+            payload["types"] = types;
+            payload["builtins"] = builtins;
+        }
+
+        private static void ApplyMetadataMutation(JsonObject metadata, string caseName)
+        {
+            switch (caseName)
+            {
+                case "missing-qt-version":
+                    metadata["qtVersion"] = null;
+                    break;
+                case "invalid-build-timestamp":
+                    metadata["buildTimestamp"] = "not-a-timestamp";
+                    break;
+                case "negative-payload-length":
+                    metadata["payloadLength"] = -1;
+                    break;
+                case "unsupported-payload-compression":
+                    metadata["payloadCompression"] = "zip";
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(caseName), caseName, "Unknown metadata corruption case.");
+            }
+        }
+
+        private static byte[] CompressPayload(byte[] payloadBytes)
+        {
+            using MemoryStream output = new();
+            using (BrotliStream compressor = new(output, CompressionLevel.SmallestSize, leaveOpen: true))
+            {
+                compressor.Write(payloadBytes, 0, payloadBytes.Length);
+            }
+
+            return output.ToArray();
+        }
+
+        private static byte[] DecompressPayload(byte[] payloadBytes)
+        {
+            using MemoryStream input = new(payloadBytes);
+            using BrotliStream decompressor = new(input, CompressionMode.Decompress);
+            using MemoryStream output = new();
+            decompressor.CopyTo(output);
+            return output.ToArray();
+        }
+
+        private static string ComputeSha256(byte[] bytes)
+        {
+            return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        }
+
+        private static string ComputeEnvelopeSha256(JsonObject metadata, byte[] payloadBytes)
+        {
+            JsonObject metadataForHash = (JsonObject)metadata.DeepClone();
+            metadataForHash["envelopeSha256"] = string.Empty;
+            byte[] metadataBytes = JsonSerializer.SerializeToUtf8Bytes(metadataForHash);
+
+            using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            hash.AppendData(metadataBytes);
+            hash.AppendData(payloadBytes);
+            return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
         }
 
         private sealed class TemporaryDirectory : IDisposable

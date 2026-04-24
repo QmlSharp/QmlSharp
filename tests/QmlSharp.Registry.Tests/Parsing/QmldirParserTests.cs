@@ -295,6 +295,46 @@ namespace QmlSharp.Registry.Tests.Parsing
             Assert.Equal(3, diagnostic.Column);
         }
 
+        [Fact]
+        public void Parse_internal_type_entry_without_version_uses_empty_version()
+        {
+            RawQmldirFile file = ParseContent(
+                """
+                module QtQuick.Controls
+                internal Impl impl/Impl.qml
+                """);
+
+            RawQmldirTypeEntry entry = Assert.Single(file.TypeEntries);
+            Assert.Equal("Impl", entry.Name);
+            Assert.Equal(string.Empty, entry.Version);
+            Assert.Equal("impl/Impl.qml", entry.FilePath);
+            Assert.True(entry.IsInternal);
+        }
+
+        [Theory]
+        [InlineData("module", DiagnosticCodes.QmldirSyntaxError)]
+        [InlineData("plugin", DiagnosticCodes.QmldirSyntaxError)]
+        [InlineData("classname QtQuickControls2Plugin Extra", DiagnosticCodes.QmldirSyntaxError)]
+        [InlineData("import QtQuick 2.15 Extra", DiagnosticCodes.QmldirSyntaxError)]
+        [InlineData("depends QtQuick 2.15 Extra", DiagnosticCodes.QmldirSyntaxError)]
+        [InlineData("singleton Palette 2.15", DiagnosticCodes.QmldirSyntaxError)]
+        [InlineData("designersupported false", DiagnosticCodes.QmldirSyntaxError)]
+        [InlineData("typeinfo plugins.qmltypes extra", DiagnosticCodes.QmldirSyntaxError)]
+        [InlineData("Button 2.15", DiagnosticCodes.QmldirSyntaxError)]
+        [InlineData("button 2.15 Button.qml", DiagnosticCodes.QmldirUnknownDirective)]
+        public void Parse_malformed_directives_report_expected_diagnostics(string line, string expectedCode)
+        {
+            ParseResult<RawQmldirFile> result = CreateParser().ParseContent(
+                string.Create(System.Globalization.CultureInfo.InvariantCulture, $"module QtQuick.Controls\n{line}\n"),
+                @"fixtures\qmldir\malformed-qmldir");
+
+            RegistryDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(expectedCode, diagnostic.Code);
+            Assert.Equal(@"fixtures\qmldir\malformed-qmldir", diagnostic.FilePath);
+            Assert.Equal(2, diagnostic.Line);
+            Assert.Equal(1, diagnostic.Column);
+        }
+
         private static IQmldirParser CreateParser()
         {
             return new QmldirParser();

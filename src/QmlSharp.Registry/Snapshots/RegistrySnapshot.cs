@@ -200,8 +200,7 @@ namespace QmlSharp.Registry.Snapshots
                 Builtins: builtins.ToImmutableArray(),
                 FormatVersion: metadata.FormatVersion,
                 QtVersion: metadata.QtVersion,
-                BuildTimestamp: metadata.BuildTimestamp)
-                .WithLookupIndexes();
+                BuildTimestamp: metadata.BuildTimestamp);
         }
 
         private static SnapshotPayload DeserializePayload(ReadOnlyMemory<byte> payloadBytes)

@@ -18,8 +18,10 @@ namespace QmlSharp.Registry.Tests.Normalization
             Assert.Empty(result.Registry.TypesByQualifiedName);
             Assert.NotEmpty(result.Registry.Builtins);
             Assert.Empty(result.Diagnostics);
-            Assert.Empty(result.Registry.LookupIndexes.ModulesByUri);
-            Assert.Empty(result.Registry.LookupIndexes.TypesByModuleAndQmlName);
+
+            QmlRegistryLookupIndexes lookupIndexes = result.Registry.GetLookupIndexes();
+            Assert.Empty(lookupIndexes.ModulesByUri);
+            Assert.Empty(lookupIndexes.TypesByModuleAndQmlName);
         }
 
         [Fact]
@@ -69,7 +71,7 @@ namespace QmlSharp.Registry.Tests.Normalization
             Assert.Equal("QtQuick", module.Uri);
             Assert.Equal(new QmlVersion(2, 15), module.Version);
             Assert.Empty(module.Types);
-            Assert.Equal("QtQuick", result.Registry.LookupIndexes.ModulesByUri[module.Uri].Uri);
+            Assert.Equal("QtQuick", result.Registry.GetLookupIndexes().ModulesByUri[module.Uri].Uri);
         }
 
         [Fact]
@@ -220,7 +222,7 @@ namespace QmlSharp.Registry.Tests.Normalization
 
             NormalizeResult result = CreateNormalizer().Normalize([qmltypesFile], [], [], CreateMapper());
 
-            ImmutableArray<string> chain = result.Registry!.LookupIndexes.InheritanceChainsByQualifiedName["QQuickRectangle"];
+            ImmutableArray<string> chain = result.Registry!.GetLookupIndexes().InheritanceChainsByQualifiedName["QQuickRectangle"];
             Assert.Equal(["QQuickRectangle", "QQuickItem", "QObject"], chain.ToArray());
             Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == DiagnosticCodes.UnresolvedPrototype);
         }
@@ -236,7 +238,7 @@ namespace QmlSharp.Registry.Tests.Normalization
 
             Assert.False(result.IsSuccess);
             Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == DiagnosticCodes.CircularInheritance);
-            Assert.Equal(["QQuickA", "QQuickB"], result.Registry!.LookupIndexes.InheritanceChainsByQualifiedName["QQuickA"].ToArray());
+            Assert.Equal(["QQuickA", "QQuickB"], result.Registry!.GetLookupIndexes().InheritanceChainsByQualifiedName["QQuickA"].ToArray());
         }
 
         [Fact]
@@ -304,7 +306,7 @@ namespace QmlSharp.Registry.Tests.Normalization
             Assert.Equal("QtQuick", module.Uri);
             Assert.Contains(module.Types, moduleType => moduleType.QmlName == "Item");
             Assert.Contains(module.Types, moduleType => moduleType.QmlName == "Rectangle");
-            Assert.Equal("QQuickItem", result.Registry.LookupIndexes.TypesByModuleAndQmlName[("QtQuick", "Item")].QualifiedName);
+            Assert.Equal("QQuickItem", result.Registry.GetLookupIndexes().TypesByModuleAndQmlName[("QtQuick", "Item")].QualifiedName);
         }
 
         [Fact]
@@ -341,7 +343,7 @@ namespace QmlSharp.Registry.Tests.Normalization
             Assert.Equal(["QtQml", "QtQuick.Window"], module.Imports.ToArray());
             Assert.Contains(module.Types, moduleType => moduleType.QualifiedName == "QQuickItem");
             Assert.Contains(module.Types, moduleType => moduleType.QualifiedName == "QQuickRectangle");
-            Assert.Equal(module, result.Registry.LookupIndexes.ModulesByUri["QtQuick"]);
+            Assert.Equal(module, result.Registry.GetLookupIndexes().ModulesByUri["QtQuick"]);
         }
 
         [Fact]

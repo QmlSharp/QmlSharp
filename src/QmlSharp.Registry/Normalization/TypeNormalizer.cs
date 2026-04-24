@@ -84,7 +84,7 @@ namespace QmlSharp.Registry.Normalization
                 QtVersion: BaselineQtVersion,
                 BuildTimestamp: DateTimeOffset.UtcNow);
 
-            return new NormalizeResult(registry.WithLookupIndexes(), diagnostics.ToImmutableArray());
+            return new NormalizeResult(registry, diagnostics.ToImmutableArray());
         }
 
         private static void ApplyQmldirAttribution(

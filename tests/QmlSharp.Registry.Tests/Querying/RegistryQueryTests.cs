@@ -389,5 +389,53 @@ namespace QmlSharp.Registry.Tests.Querying
 
             Assert.DoesNotContain(query.GetCreatableTypes(), type => type.QualifiedName == "QQuickHiddenButton");
         }
+
+        [Fact]
+        public void Query_methods_return_null_or_empty_for_null_and_empty_inputs()
+        {
+            Assert.Null(Query.FindModule(null!));
+            Assert.Null(Query.FindModule(string.Empty));
+            Assert.Empty(Query.GetModuleTypes(null!));
+            Assert.Empty(Query.GetModuleTypes(string.Empty));
+            Assert.Null(Query.FindTypeByQualifiedName(null!));
+            Assert.Null(Query.FindTypeByQualifiedName(string.Empty));
+            Assert.Null(Query.FindTypeByQmlName(null!, "Item"));
+            Assert.Null(Query.FindTypeByQmlName("QtQuick", null!));
+            Assert.Null(Query.FindTypeByQmlName(string.Empty, "Item"));
+            Assert.Null(Query.FindTypeByQmlName("QtQuick", string.Empty));
+            Assert.Empty(Query.GetInheritanceChain(null!));
+            Assert.Empty(Query.GetInheritanceChain(string.Empty));
+            Assert.False(Query.InheritsFrom(null!, "QObject"));
+            Assert.False(Query.InheritsFrom("QQuickItem", null!));
+            Assert.False(Query.InheritsFrom(string.Empty, "QObject"));
+            Assert.False(Query.InheritsFrom("QQuickItem", string.Empty));
+            Assert.Null(Query.FindProperty(null!, "width"));
+            Assert.Null(Query.FindProperty("QQuickItem", null!));
+            Assert.Null(Query.FindProperty(string.Empty, "width"));
+            Assert.Null(Query.FindProperty("QQuickItem", string.Empty));
+            Assert.Empty(Query.GetAllProperties(null!));
+            Assert.Empty(Query.GetAllProperties(string.Empty));
+            Assert.Null(Query.FindSignal(null!, "visibleChanged"));
+            Assert.Null(Query.FindSignal("QQuickItem", null!));
+            Assert.Null(Query.FindSignal(string.Empty, "visibleChanged"));
+            Assert.Null(Query.FindSignal("QQuickItem", string.Empty));
+            Assert.Empty(Query.GetAllSignals(null!));
+            Assert.Empty(Query.GetAllSignals(string.Empty));
+            Assert.Empty(Query.FindMethods(null!, "contains"));
+            Assert.Empty(Query.FindMethods("QQuickItem", null!));
+            Assert.Empty(Query.FindMethods(string.Empty, "contains"));
+            Assert.Empty(Query.FindMethods("QQuickItem", string.Empty));
+            Assert.Empty(Query.GetAllMethods(null!));
+            Assert.Empty(Query.GetAllMethods(string.Empty));
+        }
+
+        [Fact]
+        public void FindTypes_with_null_predicate_throws_argument_null_exception()
+        {
+            _ = Assert.Throws<ArgumentNullException>(() =>
+            {
+                _ = Query.FindTypes(null!);
+            });
+        }
     }
 }
