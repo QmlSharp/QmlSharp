@@ -95,26 +95,26 @@ namespace QmlSharp.Registry
             int rebuildTotalSteps = 1 + GetBuildStepCount(config);
             ReportProgress(progress, BuildPhase.LoadingSnapshot, 1, rebuildTotalSteps, snapshotPath);
 
-            SnapshotValidity validity = registrySnapshot.CheckValidity(snapshotPath);
-            if (validity.IsValid)
+            if (TryLoadSnapshot(snapshotPath, out QmlRegistry? registry, out RegistryDiagnostic? diagnostic))
             {
-                if (TryLoadSnapshot(snapshotPath, out QmlRegistry? registry, out RegistryDiagnostic? diagnostic))
-                {
-                    return CreateSuccessResult(registry!, ImmutableArray<RegistryDiagnostic>.Empty, progress, 2, rebuildTotalSteps, "Loaded registry snapshot.");
-                }
-
-                ImmutableArray<RegistryDiagnostic> fallbackDiagnostics = diagnostic is null
-                    ? ImmutableArray<RegistryDiagnostic>.Empty
-                    : [PromoteToWarning(diagnostic)];
-                return BuildCore(config, progress, stepOffset: 1, rebuildTotalSteps, fallbackDiagnostics);
+                return CreateSuccessResult(registry!, ImmutableArray<RegistryDiagnostic>.Empty, progress, rebuildTotalSteps, rebuildTotalSteps, "Loaded registry snapshot.");
             }
 
-            return BuildCore(
-                config,
-                progress,
-                stepOffset: 1,
-                rebuildTotalSteps,
-                [CreateSnapshotDiagnostic(validity, DiagnosticSeverity.Warning, snapshotPath)]);
+            SnapshotValidity validity = registrySnapshot.CheckValidity(snapshotPath);
+            if (!validity.IsValid)
+            {
+                return BuildCore(
+                    config,
+                    progress,
+                    stepOffset: 1,
+                    rebuildTotalSteps,
+                    [CreateSnapshotDiagnostic(validity, DiagnosticSeverity.Warning, snapshotPath)]);
+            }
+
+            ImmutableArray<RegistryDiagnostic> fallbackDiagnostics = diagnostic is null
+                ? ImmutableArray<RegistryDiagnostic>.Empty
+                : [PromoteToWarning(diagnostic)];
+            return BuildCore(config, progress, stepOffset: 1, rebuildTotalSteps, fallbackDiagnostics);
         }
 
         [SuppressMessage("Maintainability", "MA0051:Method is too long", Justification = "The build orchestrator intentionally keeps the pipeline phases and progress reporting in one deterministic method.")]
@@ -137,7 +137,7 @@ namespace QmlSharp.Registry
                 return CreateFailureResult(diagnostics.ToImmutableArray(), progress, totalSteps, totalSteps, "Registry build failed during scanning.");
             }
 
-            string qmlRootDirectory = Path.Combine(Path.GetFullPath(config.QtDir), "qml");
+            string qmlRootDirectory = Path.Join(Path.GetFullPath(config.QtDir), "qml");
 
             ReportProgress(progress, BuildPhase.ParsingQmltypes, stepOffset + 2, totalSteps, BuildFileCountDetail(scanResult.QmltypesPaths.Length, ".qmltypes"));
             ImmutableArray<RawQmltypesFile> qmltypesFiles = scanResult.QmltypesPaths
@@ -181,14 +181,25 @@ namespace QmlSharp.Registry
                 {
                     registrySnapshot.SaveToFile(registry, config.SnapshotPath!);
                 }
-                catch (Exception exception)
+                catch (IOException exception)
                 {
-                    diagnostics.Add(CreateExceptionDiagnostic(
-                        DiagnosticSeverity.Error,
-                        DiagnosticCodes.SnapshotCorrupt,
-                        $"Failed to save registry snapshot to '{config.SnapshotPath}'.",
-                        config.SnapshotPath,
-                        exception));
+                    diagnostics.Add(CreateSnapshotSaveFailureDiagnostic(config.SnapshotPath, exception));
+                }
+                catch (UnauthorizedAccessException exception)
+                {
+                    diagnostics.Add(CreateSnapshotSaveFailureDiagnostic(config.SnapshotPath, exception));
+                }
+                catch (NotSupportedException exception)
+                {
+                    diagnostics.Add(CreateSnapshotSaveFailureDiagnostic(config.SnapshotPath, exception));
+                }
+                catch (ArgumentException exception)
+                {
+                    diagnostics.Add(CreateSnapshotSaveFailureDiagnostic(config.SnapshotPath, exception));
+                }
+                catch (System.Security.SecurityException exception)
+                {
+                    diagnostics.Add(CreateSnapshotSaveFailureDiagnostic(config.SnapshotPath, exception));
                 }
             }
 
@@ -220,15 +231,29 @@ namespace QmlSharp.Registry
                     filePath);
                 return new ParseResult<RawQmltypesFile>(CreateEmptyQmltypesFile(filePath, [diagnostic]), [diagnostic]);
             }
-            catch (Exception exception)
+            catch (IOException exception)
             {
-                RegistryDiagnostic diagnostic = CreateExceptionDiagnostic(
-                    DiagnosticSeverity.Error,
-                    DiagnosticCodes.QmltypesSyntaxError,
-                    $"Failed to parse qmltypes file '{filePath}'.",
-                    filePath,
-                    exception);
-                return new ParseResult<RawQmltypesFile>(CreateEmptyQmltypesFile(filePath, [diagnostic]), [diagnostic]);
+                return CreateQmltypesParseFailure(filePath, exception);
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return CreateQmltypesParseFailure(filePath, exception);
+            }
+            catch (NotSupportedException exception)
+            {
+                return CreateQmltypesParseFailure(filePath, exception);
+            }
+            catch (ArgumentException exception)
+            {
+                return CreateQmltypesParseFailure(filePath, exception);
+            }
+            catch (FormatException exception)
+            {
+                return CreateQmltypesParseFailure(filePath, exception);
+            }
+            catch (InvalidOperationException exception)
+            {
+                return CreateQmltypesParseFailure(filePath, exception);
             }
         }
 
@@ -248,15 +273,29 @@ namespace QmlSharp.Registry
                     filePath);
                 return new ParseResult<RawQmldirFile>(CreateEmptyQmldirFile(filePath, [diagnostic]), [diagnostic]);
             }
-            catch (Exception exception)
+            catch (IOException exception)
             {
-                RegistryDiagnostic diagnostic = CreateExceptionDiagnostic(
-                    DiagnosticSeverity.Error,
-                    DiagnosticCodes.QmldirSyntaxError,
-                    $"Failed to parse qmldir file '{filePath}'.",
-                    filePath,
-                    exception);
-                return new ParseResult<RawQmldirFile>(CreateEmptyQmldirFile(filePath, [diagnostic]), [diagnostic]);
+                return CreateQmldirParseFailure(filePath, exception);
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return CreateQmldirParseFailure(filePath, exception);
+            }
+            catch (NotSupportedException exception)
+            {
+                return CreateQmldirParseFailure(filePath, exception);
+            }
+            catch (ArgumentException exception)
+            {
+                return CreateQmldirParseFailure(filePath, exception);
+            }
+            catch (FormatException exception)
+            {
+                return CreateQmldirParseFailure(filePath, exception);
+            }
+            catch (InvalidOperationException exception)
+            {
+                return CreateQmldirParseFailure(filePath, exception);
             }
         }
 
@@ -276,15 +315,33 @@ namespace QmlSharp.Registry
                     filePath);
                 return new ParseResult<RawMetatypesFile>(CreateEmptyMetatypesFile(filePath, [diagnostic]), [diagnostic]);
             }
-            catch (Exception exception)
+            catch (IOException exception)
             {
-                RegistryDiagnostic diagnostic = CreateExceptionDiagnostic(
-                    DiagnosticSeverity.Error,
-                    DiagnosticCodes.MetatypesJsonError,
-                    $"Failed to parse metatypes file '{filePath}'.",
-                    filePath,
-                    exception);
-                return new ParseResult<RawMetatypesFile>(CreateEmptyMetatypesFile(filePath, [diagnostic]), [diagnostic]);
+                return CreateMetatypesParseFailure(filePath, exception);
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return CreateMetatypesParseFailure(filePath, exception);
+            }
+            catch (NotSupportedException exception)
+            {
+                return CreateMetatypesParseFailure(filePath, exception);
+            }
+            catch (ArgumentException exception)
+            {
+                return CreateMetatypesParseFailure(filePath, exception);
+            }
+            catch (System.Text.Json.JsonException exception)
+            {
+                return CreateMetatypesParseFailure(filePath, exception);
+            }
+            catch (FormatException exception)
+            {
+                return CreateMetatypesParseFailure(filePath, exception);
+            }
+            catch (InvalidOperationException exception)
+            {
+                return CreateMetatypesParseFailure(filePath, exception);
             }
         }
 
@@ -293,26 +350,34 @@ namespace QmlSharp.Registry
             registry = null;
             diagnostic = null;
 
-            SnapshotValidity validity = registrySnapshot.CheckValidity(snapshotPath);
-            if (!validity.IsValid)
-            {
-                diagnostic = CreateSnapshotDiagnostic(validity, DiagnosticSeverity.Error, snapshotPath);
-                return false;
-            }
-
             try
             {
                 registry = registrySnapshot.LoadFromFile(snapshotPath);
                 return true;
             }
-            catch (Exception exception)
+            catch (InvalidDataException exception)
             {
-                diagnostic = CreateExceptionDiagnostic(
-                    DiagnosticSeverity.Error,
-                    DiagnosticCodes.SnapshotCorrupt,
-                    $"Failed to load registry snapshot from '{snapshotPath}'.",
-                    snapshotPath,
-                    exception);
+                diagnostic = CreateSnapshotLoadFailureDiagnostic(snapshotPath, exception);
+                return false;
+            }
+            catch (IOException exception)
+            {
+                diagnostic = CreateSnapshotLoadFailureDiagnostic(snapshotPath, exception);
+                return false;
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                diagnostic = CreateSnapshotLoadFailureDiagnostic(snapshotPath, exception);
+                return false;
+            }
+            catch (NotSupportedException exception)
+            {
+                diagnostic = CreateSnapshotLoadFailureDiagnostic(snapshotPath, exception);
+                return false;
+            }
+            catch (ArgumentException exception)
+            {
+                diagnostic = CreateSnapshotLoadFailureDiagnostic(snapshotPath, exception);
                 return false;
             }
         }
@@ -362,6 +427,64 @@ namespace QmlSharp.Registry
                 filePath,
                 null,
                 null);
+        }
+
+        private static RegistryDiagnostic CreateSnapshotSaveFailureDiagnostic(string? snapshotPath, Exception exception)
+        {
+            return CreateExceptionDiagnostic(
+                DiagnosticSeverity.Error,
+                DiagnosticCodes.SnapshotCorrupt,
+                $"Failed to save registry snapshot to '{snapshotPath}'.",
+                snapshotPath,
+                exception);
+        }
+
+        private static RegistryDiagnostic CreateSnapshotLoadFailureDiagnostic(string snapshotPath, Exception exception)
+        {
+            string code = exception is NotSupportedException
+                && exception.Message.Contains(DiagnosticCodes.SnapshotVersionMismatch, StringComparison.Ordinal)
+                    ? DiagnosticCodes.SnapshotVersionMismatch
+                    : DiagnosticCodes.SnapshotCorrupt;
+
+            return CreateExceptionDiagnostic(
+                DiagnosticSeverity.Error,
+                code,
+                $"Failed to load registry snapshot from '{snapshotPath}'.",
+                snapshotPath,
+                exception);
+        }
+
+        private static ParseResult<RawQmltypesFile> CreateQmltypesParseFailure(string filePath, Exception exception)
+        {
+            RegistryDiagnostic diagnostic = CreateExceptionDiagnostic(
+                DiagnosticSeverity.Error,
+                DiagnosticCodes.QmltypesSyntaxError,
+                $"Failed to parse qmltypes file '{filePath}'.",
+                filePath,
+                exception);
+            return new ParseResult<RawQmltypesFile>(CreateEmptyQmltypesFile(filePath, [diagnostic]), [diagnostic]);
+        }
+
+        private static ParseResult<RawQmldirFile> CreateQmldirParseFailure(string filePath, Exception exception)
+        {
+            RegistryDiagnostic diagnostic = CreateExceptionDiagnostic(
+                DiagnosticSeverity.Error,
+                DiagnosticCodes.QmldirSyntaxError,
+                $"Failed to parse qmldir file '{filePath}'.",
+                filePath,
+                exception);
+            return new ParseResult<RawQmldirFile>(CreateEmptyQmldirFile(filePath, [diagnostic]), [diagnostic]);
+        }
+
+        private static ParseResult<RawMetatypesFile> CreateMetatypesParseFailure(string filePath, Exception exception)
+        {
+            RegistryDiagnostic diagnostic = CreateExceptionDiagnostic(
+                DiagnosticSeverity.Error,
+                DiagnosticCodes.MetatypesJsonError,
+                $"Failed to parse metatypes file '{filePath}'.",
+                filePath,
+                exception);
+            return new ParseResult<RawMetatypesFile>(CreateEmptyMetatypesFile(filePath, [diagnostic]), [diagnostic]);
         }
 
         private static RegistryDiagnostic CreateSnapshotDiagnostic(

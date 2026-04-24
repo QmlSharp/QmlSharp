@@ -37,7 +37,7 @@ namespace QmlSharp.Registry.Tests.Building
             RegistryBuilder builder = new();
             string qtDir = GetQtDir();
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "registry.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "registry.snapshot.bin");
             List<BuildProgress> progress = [];
 
             BuildResult result = builder.Build(
@@ -67,7 +67,7 @@ namespace QmlSharp.Registry.Tests.Building
             RegistryBuilder builder = new();
             string qtDir = GetQtDir();
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "registry.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "registry.snapshot.bin");
 
             BuildResult buildResult = builder.Build(
                 new BuildConfig(qtDir, snapshotPath, ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
@@ -88,7 +88,7 @@ namespace QmlSharp.Registry.Tests.Building
             RegistrySnapshot snapshot = new();
             QmlRegistry registry = RegistryFixtures.CreateQueryFixture();
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "fixture.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "fixture.snapshot.bin");
 
             snapshot.SaveToFile(registry, snapshotPath);
 
@@ -108,14 +108,14 @@ namespace QmlSharp.Registry.Tests.Building
             RegistrySnapshot snapshot = new();
             QmlRegistry registry = RegistryFixtures.CreateQueryFixture();
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "fixture.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "fixture.snapshot.bin");
             List<BuildProgress> progress = [];
 
             snapshot.SaveToFile(registry, snapshotPath);
 
             BuildResult result = builder.BuildOrLoad(
                 new BuildConfig(
-                    QtDir: Path.Combine(temporaryDirectory.Path, "missing-qt"),
+                    QtDir: Path.Join(temporaryDirectory.Path, "missing-qt"),
                     SnapshotPath: snapshotPath,
                     ForceRebuild: false,
                     ModuleFilter: null,
@@ -128,7 +128,41 @@ namespace QmlSharp.Registry.Tests.Building
             Assert.Equal(
                 [BuildPhase.LoadingSnapshot, BuildPhase.Complete],
                 progress.Select(item => item.Phase).ToArray());
+            Assert.Equal(progress[^1].TotalSteps, progress[^1].CurrentStep);
             Assert.NotNull(result.Query!.FindTypeByQmlName("QtQuick.Controls", "Button"));
+        }
+
+        [Fact]
+        public void BuildOrLoad_with_existing_valid_snapshot_loads_once_and_reports_complete_progress()
+        {
+            CountingSnapshot snapshot = new(RegistryFixtures.CreateQueryFixture());
+            RegistryBuilder builder = new(
+                new ThrowingQtTypeScanner(),
+                new InlineQmltypesParser(new RegistryDiagnostic(DiagnosticSeverity.Warning, "TEST-QTP", "unused", null, null, null)),
+                new InlineQmldirParser(new RegistryDiagnostic(DiagnosticSeverity.Warning, "TEST-QDP", "unused", null, null, null)),
+                new InlineMetatypesParser(new RegistryDiagnostic(DiagnosticSeverity.Warning, "TEST-MTP", "unused", null, null, null)),
+                new TypeNameMapper(),
+                new InlineTypeNormalizer(new RegistryDiagnostic(DiagnosticSeverity.Warning, "TEST-NRM", "unused", null, null, null)),
+                snapshot);
+            using TemporaryDirectory temporaryDirectory = new();
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "fixture.snapshot.bin");
+            File.WriteAllBytes(snapshotPath, [0x01]);
+            List<BuildProgress> progress = [];
+
+            BuildResult result = builder.BuildOrLoad(
+                new BuildConfig(
+                    QtDir: Path.Join(temporaryDirectory.Path, "missing-qt"),
+                    SnapshotPath: snapshotPath,
+                    ForceRebuild: false,
+                    ModuleFilter: null,
+                    IncludeInternal: false),
+                progress.Add);
+
+            Assert.True(result.IsSuccess);
+            Assert.Equal(1, snapshot.LoadFromFileCallCount);
+            Assert.Equal(0, snapshot.CheckValidityCallCount);
+            Assert.Equal(BuildPhase.Complete, progress[^1].Phase);
+            Assert.Equal(progress[^1].TotalSteps, progress[^1].CurrentStep);
         }
 
         [Trait("Category", "Integration")]
@@ -138,7 +172,7 @@ namespace QmlSharp.Registry.Tests.Building
             RegistryBuilder builder = new();
             string qtDir = GetQtDir();
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "missing.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "missing.snapshot.bin");
 
             BuildResult result = builder.BuildOrLoad(
                 new BuildConfig(qtDir, snapshotPath, ForceRebuild: false, ModuleFilter: null, IncludeInternal: false));
@@ -157,7 +191,7 @@ namespace QmlSharp.Registry.Tests.Building
             RegistryBuilder builder = new();
             string qtDir = GetQtDir();
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "invalid.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "invalid.snapshot.bin");
             List<BuildProgress> progress = [];
 
             File.WriteAllBytes(snapshotPath, [0x01, 0x02, 0x03, 0x04]);
@@ -188,7 +222,7 @@ namespace QmlSharp.Registry.Tests.Building
             RegistrySnapshot snapshot = new();
             string qtDir = GetQtDir();
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "valid.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "valid.snapshot.bin");
             byte[] originalBytes = snapshot.Serialize(RegistryFixtures.CreateQueryFixture());
             List<BuildProgress> progress = [];
 
@@ -209,7 +243,7 @@ namespace QmlSharp.Registry.Tests.Building
         {
             RegistryBuilder builder = new();
             using TemporaryDirectory temporaryDirectory = new();
-            string invalidQtDir = Path.Combine(temporaryDirectory.Path, "missing-qt");
+            string invalidQtDir = Path.Join(temporaryDirectory.Path, "missing-qt");
 
             BuildResult result = builder.Build(
                 new BuildConfig(invalidQtDir, SnapshotPath: null, ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
@@ -269,7 +303,7 @@ namespace QmlSharp.Registry.Tests.Building
             using TemporaryDirectory temporaryDirectory = new();
 
             BuildResult result = builder.Build(
-                new BuildConfig(@"C:\Qt\6.11.0\msvc2022_64", Path.Combine(temporaryDirectory.Path, "registry.snapshot.bin"), ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
+                new BuildConfig(@"C:\Qt\6.11.0\msvc2022_64", Path.Join(temporaryDirectory.Path, "registry.snapshot.bin"), ForceRebuild: true, ModuleFilter: null, IncludeInternal: false));
 
             Assert.False(result.IsSuccess);
             Assert.NotNull(result.TypeRegistry);
@@ -287,7 +321,7 @@ namespace QmlSharp.Registry.Tests.Building
         {
             RegistryBuilder builder = new();
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "invalid.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "invalid.snapshot.bin");
             File.WriteAllBytes(snapshotPath, [0x00, 0x10, 0x20, 0x30]);
 
             BuildResult result = builder.LoadFromSnapshot(snapshotPath);
@@ -309,7 +343,7 @@ namespace QmlSharp.Registry.Tests.Building
         {
             public TemporaryDirectory()
             {
-                Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"qmlsharp-registry-builder-{Guid.NewGuid():N}");
+                Path = System.IO.Path.Join(System.IO.Path.GetTempPath(), $"qmlsharp-registry-builder-{Guid.NewGuid():N}");
                 _ = Directory.CreateDirectory(Path);
             }
 
@@ -321,6 +355,64 @@ namespace QmlSharp.Registry.Tests.Building
                 {
                     Directory.Delete(Path, recursive: true);
                 }
+            }
+        }
+
+        private sealed class CountingSnapshot : IRegistrySnapshot
+        {
+            private readonly QmlRegistry registry;
+
+            public CountingSnapshot(QmlRegistry registry)
+            {
+                this.registry = registry;
+            }
+
+            public int CheckValidityCallCount { get; private set; }
+
+            public int LoadFromFileCallCount { get; private set; }
+
+            public SnapshotValidity CheckValidity(string filePath)
+            {
+                CheckValidityCallCount++;
+                return new SnapshotValidity(true, registry.FormatVersion, registry.QtVersion, registry.BuildTimestamp, null);
+            }
+
+            public QmlRegistry Deserialize(byte[] data)
+            {
+                return registry;
+            }
+
+            public QmlRegistry LoadFromFile(string filePath)
+            {
+                LoadFromFileCallCount++;
+                return registry;
+            }
+
+            public void SaveToFile(QmlRegistry registry, string filePath)
+            {
+            }
+
+            public byte[] Serialize(QmlRegistry registry)
+            {
+                return [0x01];
+            }
+        }
+
+        private sealed class ThrowingQtTypeScanner : IQtTypeScanner
+        {
+            public ScanResult Scan(ScannerConfig config)
+            {
+                throw new InvalidOperationException("Snapshot load path must not scan Qt metadata.");
+            }
+
+            public ScanValidation ValidateQtDir(string qtDir)
+            {
+                throw new InvalidOperationException("Snapshot load path must not validate Qt metadata.");
+            }
+
+            public string? InferModuleUri(string qmldirPath, string qmlRootDir)
+            {
+                throw new InvalidOperationException("Snapshot load path must not infer Qt module URIs.");
             }
         }
 
