@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using QmlSharp.Registry.Diagnostics;
 using QmlSharp.Registry.Querying;
 using QmlSharp.Registry.Snapshots;
@@ -8,6 +9,8 @@ namespace QmlSharp.Registry.Tests.Snapshots
     public sealed class RegistrySnapshotTests
     {
         private static readonly RegistrySnapshot Snapshot = new();
+        private const int SnapshotMagicLength = 7;
+        private const int HeaderLengthFieldSize = sizeof(int);
 
         [Fact]
         public void SNP_01_Round_trip_serialize_then_deserialize_preserves_registry_value_graph()
@@ -73,7 +76,7 @@ namespace QmlSharp.Registry.Tests.Snapshots
         {
             QmlRegistry registry = RegistryFixtures.CreateQueryFixture();
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "registry.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "registry.snapshot.bin");
 
             Snapshot.SaveToFile(registry, snapshotPath);
             QmlRegistry loaded = Snapshot.LoadFromFile(snapshotPath);
@@ -87,7 +90,7 @@ namespace QmlSharp.Registry.Tests.Snapshots
         {
             QmlRegistry registry = RegistryFixtures.CreateQueryFixture();
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "registry.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "registry.snapshot.bin");
 
             Snapshot.SaveToFile(registry, snapshotPath);
 
@@ -105,7 +108,7 @@ namespace QmlSharp.Registry.Tests.Snapshots
         {
             QmlRegistry registry = RegistryFixtures.CreateQueryFixture() with { FormatVersion = 99 };
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "registry.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "registry.snapshot.bin");
 
             Snapshot.SaveToFile(registry, snapshotPath);
 
@@ -128,7 +131,7 @@ namespace QmlSharp.Registry.Tests.Snapshots
             bytes[^1] ^= 0x5A;
 
             using TemporaryDirectory temporaryDirectory = new();
-            string snapshotPath = Path.Combine(temporaryDirectory.Path, "registry.snapshot.bin");
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "registry.snapshot.bin");
             File.WriteAllBytes(snapshotPath, bytes);
 
             SnapshotValidity validity = Snapshot.CheckValidity(snapshotPath);
@@ -136,9 +139,55 @@ namespace QmlSharp.Registry.Tests.Snapshots
             Assert.False(validity.IsValid);
             Assert.Equal(0, validity.FormatVersion);
             Assert.Contains(DiagnosticCodes.SnapshotCorrupt, validity.ErrorMessage, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                $"{DiagnosticCodes.SnapshotCorrupt}: {DiagnosticCodes.SnapshotCorrupt}:",
+                validity.ErrorMessage,
+                StringComparison.Ordinal);
 
             InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.LoadFromFile(snapshotPath));
             Assert.Contains(DiagnosticCodes.SnapshotCorrupt, exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void CheckValidity_on_header_metadata_corruption_returns_SnapshotCorrupt()
+        {
+            QmlRegistry registry = RegistryFixtures.CreateQueryFixture();
+            byte[] bytes = Snapshot.Serialize(registry);
+            ReplaceFirstUtf8(bytes, registry.QtVersion, CreateSameLengthDifferentText(registry.QtVersion));
+
+            using TemporaryDirectory temporaryDirectory = new();
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "registry.snapshot.bin");
+            File.WriteAllBytes(snapshotPath, bytes);
+
+            SnapshotValidity validity = Snapshot.CheckValidity(snapshotPath);
+
+            Assert.False(validity.IsValid);
+            Assert.Equal(0, validity.FormatVersion);
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, validity.ErrorMessage, StringComparison.Ordinal);
+            Assert.Contains("envelope checksum", validity.ErrorMessage, StringComparison.Ordinal);
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() => Snapshot.LoadFromFile(snapshotPath));
+            Assert.Contains("envelope checksum", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void CheckValidity_on_oversized_metadata_length_returns_SnapshotCorrupt()
+        {
+            byte[] bytes = Snapshot.Serialize(RegistryFixtures.CreateQueryFixture());
+            BinaryPrimitives.WriteInt32LittleEndian(
+                bytes.AsSpan(SnapshotMagicLength, HeaderLengthFieldSize),
+                int.MaxValue);
+
+            using TemporaryDirectory temporaryDirectory = new();
+            string snapshotPath = Path.Join(temporaryDirectory.Path, "registry.snapshot.bin");
+            File.WriteAllBytes(snapshotPath, bytes);
+
+            SnapshotValidity validity = Snapshot.CheckValidity(snapshotPath);
+
+            Assert.False(validity.IsValid);
+            Assert.Equal(0, validity.FormatVersion);
+            Assert.Contains(DiagnosticCodes.SnapshotCorrupt, validity.ErrorMessage, StringComparison.Ordinal);
+            Assert.Contains("metadata extends beyond", validity.ErrorMessage, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -243,37 +292,78 @@ namespace QmlSharp.Registry.Tests.Snapshots
             Assert.Equal(expected.Enums.Length, actual.Enums.Length);
             Assert.Equal(expected.Interfaces.ToArray(), actual.Interfaces.ToArray());
 
+            AssertExportsEquivalent(expected, actual);
+            AssertPropertiesEquivalent(expected, actual);
+            AssertSignalsEquivalent(expected, actual);
+            AssertMethodsEquivalent(expected, actual);
+            AssertEnumsEquivalent(expected, actual);
+        }
+
+        private static void AssertExportsEquivalent(QmlType expected, QmlType actual)
+        {
             for (int index = 0; index < expected.Exports.Length; index++)
             {
                 Assert.Equal(expected.Exports[index].Module, actual.Exports[index].Module);
                 Assert.Equal(expected.Exports[index].Name, actual.Exports[index].Name);
                 Assert.Equal(expected.Exports[index].Version, actual.Exports[index].Version);
             }
+        }
 
+        private static void AssertPropertiesEquivalent(QmlType expected, QmlType actual)
+        {
             for (int index = 0; index < expected.Properties.Length; index++)
             {
                 Assert.Equal(expected.Properties[index], actual.Properties[index]);
             }
+        }
 
+        private static void AssertSignalsEquivalent(QmlType expected, QmlType actual)
+        {
             for (int index = 0; index < expected.Signals.Length; index++)
             {
                 Assert.Equal(expected.Signals[index].Name, actual.Signals[index].Name);
                 Assert.Equal(expected.Signals[index].Parameters.ToArray(), actual.Signals[index].Parameters.ToArray());
             }
+        }
 
+        private static void AssertMethodsEquivalent(QmlType expected, QmlType actual)
+        {
             for (int index = 0; index < expected.Methods.Length; index++)
             {
                 Assert.Equal(expected.Methods[index].Name, actual.Methods[index].Name);
                 Assert.Equal(expected.Methods[index].ReturnType, actual.Methods[index].ReturnType);
                 Assert.Equal(expected.Methods[index].Parameters.ToArray(), actual.Methods[index].Parameters.ToArray());
             }
+        }
 
+        private static void AssertEnumsEquivalent(QmlType expected, QmlType actual)
+        {
             for (int index = 0; index < expected.Enums.Length; index++)
             {
                 Assert.Equal(expected.Enums[index].Name, actual.Enums[index].Name);
                 Assert.Equal(expected.Enums[index].IsFlag, actual.Enums[index].IsFlag);
                 Assert.Equal(expected.Enums[index].Values.ToArray(), actual.Enums[index].Values.ToArray());
             }
+        }
+
+        private static void ReplaceFirstUtf8(byte[] bytes, string oldValue, string newValue)
+        {
+            byte[] oldBytes = System.Text.Encoding.UTF8.GetBytes(oldValue);
+            byte[] newBytes = System.Text.Encoding.UTF8.GetBytes(newValue);
+            Assert.Equal(oldBytes.Length, newBytes.Length);
+
+            int index = bytes.AsSpan().IndexOf(oldBytes);
+            Assert.True(index >= 0);
+
+            newBytes.CopyTo(bytes.AsSpan(index, newBytes.Length));
+        }
+
+        private static string CreateSameLengthDifferentText(string value)
+        {
+            Assert.False(string.IsNullOrEmpty(value));
+
+            char replacement = value[^1] == '0' ? '1' : '0';
+            return value[..^1] + replacement;
         }
 
         private sealed class TemporaryDirectory : IDisposable

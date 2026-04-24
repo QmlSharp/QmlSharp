@@ -26,15 +26,17 @@ namespace QmlSharp.Registry.Snapshots
                 SnapshotPayload.FromRegistry(registry),
                 JsonOptions);
 
-            byte[] hashBytes = SHA256.HashData(payloadBytes);
+            string payloadSha256 = ComputeSha256(payloadBytes);
             SnapshotMetadata metadata = new()
             {
                 FormatVersion = registry.FormatVersion,
                 QtVersion = registry.QtVersion,
                 BuildTimestamp = registry.BuildTimestamp.ToString("O", CultureInfo.InvariantCulture),
                 PayloadLength = payloadBytes.Length,
-                PayloadSha256 = Convert.ToHexString(hashBytes).ToLowerInvariant(),
+                PayloadSha256 = payloadSha256,
+                EnvelopeSha256 = string.Empty,
             };
+            metadata = metadata with { EnvelopeSha256 = ComputeEnvelopeSha256(metadata, payloadBytes) };
 
             byte[] metadataBytes = JsonSerializer.SerializeToUtf8Bytes(metadata, JsonOptions);
             byte[] lengthBytes = new byte[HeaderLengthFieldSize];
@@ -108,21 +110,41 @@ namespace QmlSharp.Registry.Snapshots
                     BuildTimestamp: envelope.Metadata.BuildTimestamp,
                     ErrorMessage: null);
             }
-            catch (NotSupportedException exception)
-            {
-                return CreateInvalidValidity(DiagnosticCodes.SnapshotVersionMismatch, exception.Message, SupportedFormatVersion, null, null);
-            }
             catch (InvalidDataException exception)
             {
-                return CreateInvalidValidity(DiagnosticCodes.SnapshotCorrupt, exception.Message, 0, null, null);
+                return CreateInvalidValidity(
+                    DiagnosticCodes.SnapshotCorrupt,
+                    NormalizeDiagnosticMessage(DiagnosticCodes.SnapshotCorrupt, exception.Message),
+                    0,
+                    null,
+                    null);
             }
             catch (IOException exception)
             {
-                return CreateInvalidValidity(DiagnosticCodes.SnapshotCorrupt, BuildMessage(DiagnosticCodes.SnapshotCorrupt, exception.Message), 0, null, null);
+                return CreateInvalidValidity(
+                    DiagnosticCodes.SnapshotCorrupt,
+                    NormalizeDiagnosticMessage(DiagnosticCodes.SnapshotCorrupt, exception.Message),
+                    0,
+                    null,
+                    null);
+            }
+            catch (NotSupportedException exception)
+            {
+                return CreateInvalidValidity(
+                    DiagnosticCodes.SnapshotCorrupt,
+                    NormalizeDiagnosticMessage(DiagnosticCodes.SnapshotCorrupt, exception.Message),
+                    0,
+                    null,
+                    null);
             }
             catch (UnauthorizedAccessException exception)
             {
-                return CreateInvalidValidity(DiagnosticCodes.SnapshotCorrupt, BuildMessage(DiagnosticCodes.SnapshotCorrupt, exception.Message), 0, null, null);
+                return CreateInvalidValidity(
+                    DiagnosticCodes.SnapshotCorrupt,
+                    NormalizeDiagnosticMessage(DiagnosticCodes.SnapshotCorrupt, exception.Message),
+                    0,
+                    null,
+                    null);
             }
         }
 
@@ -138,9 +160,8 @@ namespace QmlSharp.Registry.Snapshots
             List<QmlModule> modules = [];
             HashSet<string> seenModules = new(StringComparer.Ordinal);
 
-            foreach (SnapshotModule moduleModel in moduleModels)
+            foreach (QmlModule module in moduleModels.Select(static moduleModel => moduleModel.ToModel()))
             {
-                QmlModule module = moduleModel.ToModel();
                 if (!seenModules.Add(module.Uri))
                 {
                     throw CreateCorruptException($"Duplicate module URI '{module.Uri}' found in snapshot payload.");
@@ -150,9 +171,8 @@ namespace QmlSharp.Registry.Snapshots
             }
 
             ImmutableDictionary<string, QmlType>.Builder typesByQualifiedName = ImmutableDictionary.CreateBuilder<string, QmlType>(StringComparer.Ordinal);
-            foreach (SnapshotType typeModel in typeModels)
+            foreach (QmlType type in typeModels.Select(static typeModel => typeModel.ToModel()))
             {
-                QmlType type = typeModel.ToModel();
                 if (!typesByQualifiedName.TryAdd(type.QualifiedName, type))
                 {
                     throw CreateCorruptException($"Duplicate qualified type '{type.QualifiedName}' found in snapshot payload.");
@@ -161,9 +181,8 @@ namespace QmlSharp.Registry.Snapshots
 
             List<QmlType> builtins = [];
             HashSet<string> seenBuiltins = new(StringComparer.Ordinal);
-            foreach (SnapshotType builtinModel in builtinModels)
+            foreach (QmlType builtin in builtinModels.Select(static builtinModel => builtinModel.ToModel()))
             {
-                QmlType builtin = builtinModel.ToModel();
                 if (!seenBuiltins.Add(builtin.QualifiedName))
                 {
                     throw CreateCorruptException($"Duplicate builtin type '{builtin.QualifiedName}' found in snapshot payload.");
@@ -232,7 +251,7 @@ namespace QmlSharp.Registry.Snapshots
             }
 
             int metadataOffset = Magic.Length + HeaderLengthFieldSize;
-            if (metadataOffset + metadataLength > data.Length)
+            if (metadataLength > data.Length - metadataOffset)
             {
                 throw CreateCorruptException("Snapshot header metadata extends beyond the end of the file.");
             }
@@ -244,7 +263,8 @@ namespace QmlSharp.Registry.Snapshots
             }
 
             int payloadOffset = metadataOffset + metadataLength;
-            if (payloadOffset + metadata.PayloadLength != data.Length)
+            int availablePayloadLength = data.Length - payloadOffset;
+            if (metadata.PayloadLength != availablePayloadLength)
             {
                 throw CreateCorruptException("Snapshot payload length does not match the file size.");
             }
@@ -252,10 +272,16 @@ namespace QmlSharp.Registry.Snapshots
             ReadOnlyMemory<byte> payload = data.AsMemory(payloadOffset, metadata.PayloadLength);
             if (validatePayloadHash)
             {
-                string actualHash = Convert.ToHexString(SHA256.HashData(payload.Span)).ToLowerInvariant();
+                string actualHash = ComputeSha256(payload.Span);
                 if (!StringComparer.Ordinal.Equals(actualHash, metadata.PayloadSha256))
                 {
                     throw CreateCorruptException("Snapshot payload checksum does not match the recorded metadata.");
+                }
+
+                string actualEnvelopeHash = ComputeEnvelopeSha256(metadata, payload.Span);
+                if (!StringComparer.Ordinal.Equals(actualEnvelopeHash, metadata.EnvelopeSha256))
+                {
+                    throw CreateCorruptException("Snapshot envelope checksum does not match the recorded metadata.");
                 }
             }
 
@@ -284,18 +310,25 @@ namespace QmlSharp.Registry.Snapshots
                 throw CreateCorruptException("Snapshot metadata JSON was empty.");
             }
 
-            if (string.IsNullOrWhiteSpace(metadata.QtVersion))
-            {
-                throw CreateCorruptException("Snapshot metadata is missing the Qt version.");
-            }
+            (string qtVersion, DateTimeOffset buildTimestamp, string payloadSha256, string envelopeSha256) =
+                ReadRequiredMetadataFields(metadata);
 
-            if (string.IsNullOrWhiteSpace(metadata.BuildTimestamp))
-            {
-                throw CreateCorruptException("Snapshot metadata is missing the build timestamp.");
-            }
+            return new ParsedMetadata(
+                metadata.FormatVersion,
+                qtVersion,
+                buildTimestamp,
+                metadata.PayloadLength,
+                payloadSha256,
+                envelopeSha256);
+        }
 
+        private static (string QtVersion, DateTimeOffset BuildTimestamp, string PayloadSha256, string EnvelopeSha256)
+            ReadRequiredMetadataFields(SnapshotMetadata metadata)
+        {
+            string qtVersion = ReadRequiredText(metadata.QtVersion, "Snapshot metadata is missing the Qt version.");
+            string buildTimestampText = ReadRequiredText(metadata.BuildTimestamp, "Snapshot metadata is missing the build timestamp.");
             if (!DateTimeOffset.TryParseExact(
-                metadata.BuildTimestamp,
+                buildTimestampText,
                 "O",
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.RoundtripKind,
@@ -309,17 +342,29 @@ namespace QmlSharp.Registry.Snapshots
                 throw CreateCorruptException("Snapshot metadata contains a negative payload length.");
             }
 
-            if (string.IsNullOrWhiteSpace(metadata.PayloadSha256) || metadata.PayloadSha256.Length != 64)
+            string payloadSha256 = ReadSha256(metadata.PayloadSha256, "Snapshot metadata contains an invalid payload checksum.");
+            string envelopeSha256 = ReadSha256(metadata.EnvelopeSha256, "Snapshot metadata contains an invalid envelope checksum.");
+            return (qtVersion, buildTimestamp, payloadSha256, envelopeSha256);
+        }
+
+        private static string ReadRequiredText(string? value, string errorMessage)
+        {
+            if (string.IsNullOrWhiteSpace(value))
             {
-                throw CreateCorruptException("Snapshot metadata contains an invalid payload checksum.");
+                throw CreateCorruptException(errorMessage);
             }
 
-            return new ParsedMetadata(
-                metadata.FormatVersion,
-                metadata.QtVersion,
-                buildTimestamp,
-                metadata.PayloadLength,
-                metadata.PayloadSha256);
+            return value!;
+        }
+
+        private static string ReadSha256(string? value, string errorMessage)
+        {
+            if (!IsSha256Hex(value))
+            {
+                throw CreateCorruptException(errorMessage);
+            }
+
+            return value!;
         }
 
         private static SnapshotValidity CreateInvalidValidity(
@@ -354,6 +399,54 @@ namespace QmlSharp.Registry.Snapshots
             return string.Create(CultureInfo.InvariantCulture, $"{code}: {message}");
         }
 
+        private static string NormalizeDiagnosticMessage(string diagnosticCode, string message)
+        {
+            string prefix = diagnosticCode + ": ";
+            return message.StartsWith(prefix, StringComparison.Ordinal)
+                ? message[prefix.Length..]
+                : message;
+        }
+
+        private static string ComputeSha256(ReadOnlySpan<byte> bytes)
+        {
+            return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        }
+
+        private static string ComputeEnvelopeSha256(ParsedMetadata metadata, ReadOnlySpan<byte> payloadBytes)
+        {
+            SnapshotMetadata metadataForHash = new()
+            {
+                FormatVersion = metadata.FormatVersion,
+                QtVersion = metadata.QtVersion,
+                BuildTimestamp = metadata.BuildTimestamp.ToString("O", CultureInfo.InvariantCulture),
+                PayloadLength = metadata.PayloadLength,
+                PayloadSha256 = metadata.PayloadSha256,
+                EnvelopeSha256 = string.Empty,
+            };
+
+            return ComputeEnvelopeSha256(metadataForHash, payloadBytes);
+        }
+
+        private static string ComputeEnvelopeSha256(SnapshotMetadata metadata, ReadOnlySpan<byte> payloadBytes)
+        {
+            SnapshotMetadata metadataForHash = metadata with { EnvelopeSha256 = string.Empty };
+            byte[] metadataBytes = JsonSerializer.SerializeToUtf8Bytes(metadataForHash, JsonOptions);
+
+            using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            hash.AppendData(metadataBytes);
+            hash.AppendData(payloadBytes);
+            return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        }
+
+        private static bool IsSha256Hex(string? value)
+        {
+            return value is { Length: 64 }
+                && value.All(static character =>
+                    character is >= '0' and <= '9'
+                    || character is >= 'a' and <= 'f'
+                    || character is >= 'A' and <= 'F');
+        }
+
         private static void EnsureFilePath(string filePath)
         {
             if (string.IsNullOrWhiteSpace(filePath))
@@ -369,9 +462,10 @@ namespace QmlSharp.Registry.Snapshots
             string QtVersion,
             DateTimeOffset BuildTimestamp,
             int PayloadLength,
-            string PayloadSha256);
+            string PayloadSha256,
+            string EnvelopeSha256);
 
-        private sealed class SnapshotMetadata
+        private sealed record SnapshotMetadata
         {
             public int FormatVersion { get; init; }
 
@@ -382,6 +476,8 @@ namespace QmlSharp.Registry.Snapshots
             public int PayloadLength { get; init; }
 
             public string? PayloadSha256 { get; init; }
+
+            public string? EnvelopeSha256 { get; init; }
         }
 
         private sealed class SnapshotPayload
