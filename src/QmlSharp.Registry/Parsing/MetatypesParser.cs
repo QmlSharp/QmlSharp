@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using QmlSharp.Registry.Diagnostics;
 
@@ -96,7 +97,7 @@ namespace QmlSharp.Registry.Parsing
                     entryElement,
                     context,
                     propertyName: "classes",
-                    required: true,
+                    required: false,
                     ParseClass);
 
                 return new RawMetatypesEntry(
@@ -164,7 +165,7 @@ namespace QmlSharp.Registry.Parsing
                 }
 
                 string? name = GetRequiredString(classInfoElement, context, "name");
-                string? value = GetRequiredString(classInfoElement, context, "value");
+                string? value = GetRequiredString(classInfoElement, context, allowEmpty: true, "value");
                 if (name is null || value is null)
                 {
                     return null;
@@ -183,7 +184,7 @@ namespace QmlSharp.Registry.Parsing
                     return null;
                 }
 
-                string? name = GetRequiredString(propertyElement, context, "name");
+                string? name = GetRequiredString(propertyElement, context, allowEmpty: true, "name");
                 string? type = GetRequiredString(propertyElement, context, "type");
                 if (name is null || type is null)
                 {
@@ -419,6 +420,11 @@ namespace QmlSharp.Registry.Parsing
 
             private string? GetRequiredString(JsonElement objectElement, string context, params string[] propertyNames)
             {
+                return GetRequiredString(objectElement, context, allowEmpty: false, propertyNames);
+            }
+
+            private string? GetRequiredString(JsonElement objectElement, string context, bool allowEmpty, params string[] propertyNames)
+            {
                 if (!TryGetProperty(objectElement, out JsonElement propertyElement, out string propertyName, propertyNames))
                 {
                     ReportShapeError($"{context} is missing required string property '{propertyNames[0]}'.");
@@ -427,12 +433,12 @@ namespace QmlSharp.Registry.Parsing
 
                 if (propertyElement.ValueKind != JsonValueKind.String)
                 {
-                    ReportShapeError($"{context} property '{propertyName}' must be a non-empty string.");
+                    ReportShapeError($"{context} property '{propertyName}' must be a string.");
                     return null;
                 }
 
                 string? value = propertyElement.GetString();
-                if (string.IsNullOrWhiteSpace(value))
+                if (!allowEmpty && string.IsNullOrWhiteSpace(value))
                 {
                     ReportShapeError($"{context} property '{propertyName}' must be a non-empty string.");
                     return null;
@@ -509,13 +515,19 @@ namespace QmlSharp.Registry.Parsing
 
             private static bool TryGetProperty(JsonElement objectElement, out JsonElement propertyElement, out string propertyName, params string[] propertyNames)
             {
-                foreach (string candidateName in propertyNames)
+                (bool found, string name, JsonElement element) = propertyNames
+                    .Select(candidateName => (
+                        found: objectElement.TryGetProperty(candidateName, out JsonElement candidateElement),
+                        name: candidateName,
+                        element: candidateElement))
+                    .Where(candidate => candidate.found)
+                    .FirstOrDefault();
+
+                if (found)
                 {
-                    if (objectElement.TryGetProperty(candidateName, out propertyElement))
-                    {
-                        propertyName = candidateName;
-                        return true;
-                    }
+                    propertyElement = element;
+                    propertyName = name;
+                    return true;
                 }
 
                 propertyElement = default;
@@ -556,12 +568,8 @@ namespace QmlSharp.Registry.Parsing
 
             private void ReportJsonError(JsonException exception)
             {
-                int? line = exception.LineNumber is long lineNumber
-                    ? checked((int)lineNumber) + 1
-                    : null;
-                int? column = exception.BytePositionInLine is long bytePositionInLine
-                    ? checked((int)bytePositionInLine) + 1
-                    : null;
+                int? line = ToClampedOneBasedPosition(exception.LineNumber);
+                int? column = GetJsonErrorColumn(exception);
 
                 diagnostics.Add(new RegistryDiagnostic(
                     DiagnosticSeverity.Error,
@@ -570,6 +578,107 @@ namespace QmlSharp.Registry.Parsing
                     sourcePath,
                     line,
                     column));
+            }
+
+            private int? GetJsonErrorColumn(JsonException exception)
+            {
+                if (exception.BytePositionInLine is not long bytePositionInLine)
+                {
+                    return null;
+                }
+
+                if (bytePositionInLine >= int.MaxValue)
+                {
+                    return int.MaxValue;
+                }
+
+                if (exception.LineNumber is long lineNumber and >= 0 and < int.MaxValue)
+                {
+                    return GetOneBasedCharacterColumn(lineNumber, bytePositionInLine);
+                }
+
+                return ToClampedOneBasedPosition(bytePositionInLine);
+            }
+
+            private int GetOneBasedCharacterColumn(long zeroBasedLineNumber, long bytePositionInLine)
+            {
+                ReadOnlySpan<char> line = GetLine(zeroBasedLineNumber);
+                if (line.IsEmpty)
+                {
+                    return ToClampedOneBasedPosition(bytePositionInLine)!.Value;
+                }
+
+                long utf8BytesSeen = 0;
+                int charIndex = 0;
+                int characterIndex = 0;
+
+                while (charIndex < line.Length && utf8BytesSeen < bytePositionInLine)
+                {
+                    int charsInCharacter = char.IsHighSurrogate(line[charIndex])
+                        && charIndex + 1 < line.Length
+                        && char.IsLowSurrogate(line[charIndex + 1])
+                            ? 2
+                            : 1;
+
+                    utf8BytesSeen += Encoding.UTF8.GetByteCount(line.Slice(charIndex, charsInCharacter));
+                    charIndex += charsInCharacter;
+                    characterIndex++;
+                }
+
+                return characterIndex == int.MaxValue
+                    ? int.MaxValue
+                    : characterIndex + 1;
+            }
+
+            private ReadOnlySpan<char> GetLine(long zeroBasedLineNumber)
+            {
+                int lineStart = 0;
+                long currentLineNumber = 0;
+
+                for (int index = 0; index < content.Length; index++)
+                {
+                    if (content[index] != '\r' && content[index] != '\n')
+                    {
+                        continue;
+                    }
+
+                    if (currentLineNumber == zeroBasedLineNumber)
+                    {
+                        return content.AsSpan(lineStart, index - lineStart);
+                    }
+
+                    if (content[index] == '\r' && index + 1 < content.Length && content[index + 1] == '\n')
+                    {
+                        index++;
+                    }
+
+                    lineStart = index + 1;
+                    currentLineNumber++;
+                }
+
+                return currentLineNumber == zeroBasedLineNumber
+                    ? content.AsSpan(lineStart)
+                    : [];
+            }
+
+            private static int? ToClampedOneBasedPosition(long? position)
+            {
+                if (position is not long value)
+                {
+                    return null;
+                }
+
+                if (value < 0)
+                {
+                    return null;
+                }
+
+                if (value >= int.MaxValue)
+                {
+                    return int.MaxValue;
+                }
+
+                return (int)value + 1;
             }
 
             private void ReportShapeError(string message)

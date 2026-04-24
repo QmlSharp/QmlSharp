@@ -220,6 +220,63 @@ namespace QmlSharp.Registry.Tests.Parsing
         }
 
         [Fact]
+        public void Invalid_JSON_location_reports_character_column_for_non_ascii_input()
+        {
+            ParseResult<RawMetatypesFile> result = CreateParser().ParseContent(
+                "[\r\n  { \"π\": true, invalid json\r\n]",
+                @"fixtures\metatypes\non-ascii-invalid.json");
+
+            RegistryDiagnostic diagnostic = Assert.Single(result.Diagnostics.Where(diagnostic => diagnostic.Code == DiagnosticCodes.MetatypesJsonError));
+
+            Assert.Equal(2, diagnostic.Line);
+            Assert.Equal(16, diagnostic.Column);
+        }
+
+        [Fact]
+        public void Parse_real_qt_shapes_with_empty_metadata_values_without_diagnostics()
+        {
+            const string content = """
+[
+  {
+    "inputFile": "metadata-only.h",
+    "outputRevision": 69
+  },
+  {
+    "inputFile": "real-shapes.h",
+    "classes": [
+      {
+        "className": "RealShape",
+        "qualifiedClassName": "RealShape",
+        "object": true,
+        "classInfos": [
+          { "name": "QML.UncreatableReason", "value": "" }
+        ],
+        "properties": [
+          {
+            "name": "",
+            "type": "QVariant",
+            "read": "modelData",
+            "notify": "modelDataChanged"
+          }
+        ]
+      }
+    ]
+  }
+]
+""";
+
+            ParseResult<RawMetatypesFile> result = CreateParser().ParseContent(content, @"fixtures\metatypes\real-shapes.json");
+
+            Assert.True(result.IsSuccess);
+            Assert.Empty(result.Diagnostics);
+            Assert.Empty(result.Value!.Entries[0].Classes);
+
+            RawMetatypesClass parsedClass = Assert.Single(result.Value.Entries[1].Classes);
+            Assert.Equal(string.Empty, Assert.Single(parsedClass.ClassInfos).Value);
+            Assert.Equal(string.Empty, Assert.Single(parsedClass.Properties).Name);
+        }
+
+        [Fact]
         public void Parse_missing_required_fields_produces_REG031_and_continues_with_partial_results()
         {
             const string content = """
