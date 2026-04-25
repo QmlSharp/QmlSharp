@@ -40,7 +40,7 @@ namespace QmlSharp.Qml.Ast.Traversal
         /// <summary>
         /// Gets ancestors from root to the current node's parent.
         /// </summary>
-        public IReadOnlyList<AstNode> Path { get; }
+        public ImmutableArray<AstNode> Path { get; }
 
         /// <summary>
         /// Gets the immediate parent node, or null at root.

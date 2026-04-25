@@ -32,8 +32,8 @@ namespace QmlSharp.Qml.Ast.Tests.Contracts
         private static void AssertEnumValuesAreUnique<TEnum>()
             where TEnum : struct, Enum
         {
-            int[] numericValues = Enum.GetValues<TEnum>()
-                .Select(value => Convert.ToInt32(value))
+            long[] numericValues = Enum.GetValues<TEnum>()
+                .Select(value => Convert.ToInt64(value))
                 .ToArray();
 
             Assert.Equal(numericValues.Length, numericValues.Distinct().Count());
