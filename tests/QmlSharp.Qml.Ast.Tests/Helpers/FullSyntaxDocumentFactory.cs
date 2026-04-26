@@ -4,7 +4,13 @@ namespace QmlSharp.Qml.Ast.Tests.Helpers
     {
         public static QmlDocument Create()
         {
-            return new QmlDocument();
+            return new QmlDocument
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Item",
+                },
+            };
         }
 
         public static ImmutableArray<PragmaName> AllPragmas()

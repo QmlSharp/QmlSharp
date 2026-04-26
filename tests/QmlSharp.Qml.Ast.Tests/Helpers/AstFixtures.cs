@@ -4,8 +4,13 @@ namespace QmlSharp.Qml.Ast.Tests.Helpers
     {
         public static QmlDocument MinimalDocument(string rootTypeName = "Item")
         {
-            _ = rootTypeName;
-            return new QmlDocument();
+            return new QmlDocument
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = rootTypeName,
+                },
+            };
         }
 
         public static QmlDocument FullSyntaxDocument()
