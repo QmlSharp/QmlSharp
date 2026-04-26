@@ -14,3 +14,6 @@ CMakeUserPresets.json
 Testing/
 **/bin/
 **/obj/
+
+# Local AI assistant workspace (Claude Code)
+.claude/
