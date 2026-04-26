@@ -235,6 +235,7 @@ namespace QmlSharp.Qml.Ast.Tests.Contracts
 
             Assert.Equal(BindingValueKind.NullLiteral, value.Kind);
             Assert.Same(NullLiteral.Instance, value);
+            Assert.Empty(typeof(NullLiteral).GetConstructors());
         }
 
         [Fact]

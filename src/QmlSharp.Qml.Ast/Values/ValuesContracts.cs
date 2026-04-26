@@ -40,6 +40,10 @@ namespace QmlSharp.Qml.Ast.Values
     /// </summary>
     public sealed record NullLiteral : BindingValue
     {
+        private NullLiteral()
+        {
+        }
+
         /// <inheritdoc/>
         public override BindingValueKind Kind => BindingValueKind.NullLiteral;
 
