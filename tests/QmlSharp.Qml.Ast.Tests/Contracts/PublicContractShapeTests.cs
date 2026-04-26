@@ -25,7 +25,7 @@ namespace QmlSharp.Qml.Ast.Tests.Contracts
         [Fact]
         public void ASTC_09_Walker_context_exposes_immutable_path_without_interface_boxing()
         {
-            QmlDocument document = new();
+            QmlDocument document = AstFixtures.MinimalDocument();
             ImmutableArray<AstNode> path = [document];
             WalkerContext context = new(path, document, depth: 1);
 
@@ -39,7 +39,7 @@ namespace QmlSharp.Qml.Ast.Tests.Contracts
         public void ASTC_10_Ast_diagnostic_preserves_optional_span_and_node_contracts()
         {
             SourceSpan span = new(new SourcePosition(2, 3, 10), new SourcePosition(2, 8, 15));
-            QmlDocument document = new();
+            QmlDocument document = AstFixtures.MinimalDocument();
 
             AstDiagnostic diagnostic = new()
             {
