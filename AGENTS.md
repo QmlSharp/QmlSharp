@@ -1,9 +1,10 @@
 # AGENTS.md — Reviewer Instructions for QmlSharp
 
 These rules tell Codex / AI reviewers how to review pull requests in **QmlSharp**.
-Follow them in addition to (not instead of) the design documents under
-the approved `ApiDesign` repository. When this file and an `ApiDesign` document
-conflict, **`ApiDesign` wins** — flag the conflict in the review.
+Review the code, tests, PR description, CI results, and any design excerpts that
+the PR author includes. Do not assume access to private design repositories; if
+essential context is missing, ask the author to include the relevant excerpt in
+the PR.
 
 Be specific. Cite file paths and line numbers. Prefer fewer, higher-signal comments
 over many style nits.
@@ -26,9 +27,9 @@ final stack is **C# and C++ only** — no TypeScript, Rust, napi-rs, or cxx-qt.
   All downstream generators (C++ QObject `.h`/`.cpp`, `qmldir`, `.qmltypes`)
   read from schema, never from C# source directly.
 
-The repository is organized into **9 modules** that mirror the design DAG. Not all
-modules are implemented yet — the codebase is being built in step order against
-the plans in `ApiDesign/implementation-plan/`.
+The repository is organized into **9 modules** that mirror the project DAG. Not
+all modules are implemented yet — the codebase is being built in small, scoped
+PRs that should explain the step or feature they implement.
 
 | # | Module | Purpose | Language |
 |---|--------|---------|----------|
@@ -61,54 +62,54 @@ examples/                   Example apps (currently empty)
 .github/workflows/          windows-ci, linux-ci, macos-ci, codeql
 ```
 
-### Reference Documents (read these before reviewing significant changes)
+### Review Context
 
-Read these files from the approved `ApiDesign` repository:
+Use the context available in this repository and in the pull request:
 
-- `README.md` — module map and architecture summary.
-- `architecture.md` — interop, memory, threading, error model.
-- `implementation-constraints.md` — the **hard rules**.
-- `decision-log.md` — ADRs explaining *why*.
-- `{NN-name}/API-Design.md` — per-module API contract.
-- `{NN-name}/test-spec.md` — required test cases per module.
-- `implementation-plan/` — step-by-step execution order.
+- the PR description, linked issue, and any quoted design excerpts
+- the changed code and nearby module code
+- existing tests and fixtures
+- CI workflow definitions and check results
+- repository configuration (`Directory.Build.props`, `.editorconfig`,
+  `.clang-format`, `.clang-tidy`, CMake presets)
+
+If the PR depends on private or out-of-repo design context that is not visible
+to reviewers, ask for the relevant excerpt to be included in the PR before
+blocking on that point.
 
 ---
 
 ## 2. Architecture Principles
 
 These are non-negotiable. A PR that violates any of them should be flagged P1.
-Each rule maps to a section in `implementation-constraints.md`.
 
 1. **Static MOC-processed `QObject` types only.** No `QMetaObjectBuilder`, no
    runtime `QObject` construction. Every QML-visible type is a generated, statically
-   compiled C++ subclass. *(constraints §1.1, ADR-004)*
+   compiled C++ subclass.
 2. **No numeric dispatch in QML-visible APIs.** Properties and commands are
    addressed by name at the QML boundary. Internal numeric IDs are allowed for
-   the native bridge but must not leak into QML. *(constraints §1.2)*
+   the native bridge but must not leak into QML.
 3. **C# contracts are native-implementation-neutral.** No `QObject`, no `Qt*`
-   type names, no MOC concepts in C# public APIs. *(constraints §1.3)*
+   type names, no MOC concepts in C# public APIs.
 4. **Fire-and-forget commands.** QML → command is one-way. No synchronous return
    values from QML to managed code. State flows back through property bindings.
-   *(constraints §1.4)*
 5. **QML engine owns `QObject` instances.** C# registry holds **non-owning**
    references. Treat native pointers as borrowed and potentially invalidated.
-   *(constraints §1.5)*
 6. **Process-global Qt type registration.** Design assumes one QML type
-   namespace per process. Do not attempt per-engine scoping. *(constraints §1.6)*
+   namespace per process. Do not attempt per-engine scoping.
 7. **C# owns all business logic; C++ owns only Qt integration.** Litmus test:
    if a C++ function does more than delegate to a Qt API or call through the C
-   ABI, it is in the wrong place. *(constraints §2)*
+   ABI, it is in the wrong place.
 8. **Generation over handwriting.** Per-ViewModel `QObject` `.h`/`.cpp` are
    generated from `.schema.json`. Handwritten C++ target is **< 500 lines** for
    the entire native host (excluding generated code). New handwritten C++ must
-   justify why it cannot be generated. *(constraints §7, ADR-009)*
+   justify why it cannot be generated.
 9. **Schema is the single source of truth.** Compiler emits `.schema.json`; all
    downstream generators (C++, qmldir, qmltypes) read from schema, not from C#
-   source. *(ADR-005)*
+   source.
 10. **V2 runtime model only.** No V1 compatibility, no singleton ViewModels.
     ViewModels are registered QML types with `instanceId` routing and
-    `compilerSlotKey` for hot-reload matching. *(ADR-006)*
+    `compilerSlotKey` for hot-reload matching.
 11. **Compiler output is deterministic and is part of the public toolchain
     contract.** `.qml`, `.schema.json`, `event-bindings.json`, and `.qml.map`
     must be byte-stable for the same input. `<Deterministic>true</Deterministic>`
@@ -117,7 +118,7 @@ Each rule maps to a section in `implementation-constraints.md`.
 ### P/Invoke Boundary Rules
 
 - Flat C ABI only — no C++ classes, templates, RTTI, or exceptions across the
-  boundary. Calling convention is `cdecl`. *(constraints §3)*
+  boundary. Calling convention is `cdecl`.
 - Strings are **UTF-8, null-terminated**. Binary buffers always carry an explicit
   length parameter.
 - Complex data uses **JSON** (`System.Text.Json` on the C# side, Qt JSON or
@@ -248,8 +249,7 @@ encode but reviewers commonly forget.
   `std::shared_ptr`, Qt parent ownership). No raw `new`/`delete` for ownership.
 - Document thread affinity in every class header (Qt is strict about this).
 - `extern "C"` ABI surface lives in `native/include/qmlsharp/` and
-  `native/src/`. Keep it minimal and stable — see §7 of
-  `implementation-constraints.md`.
+  `native/src/`. Keep it minimal and stable.
 - New handwritten `.cpp` files must be justified ("why not generated?") in the
   PR description.
 
@@ -274,15 +274,15 @@ encode but reviewers commonly forget.
 
 ## 5. Review Guidelines
 
-Read the **diff** and the relevant `ApiDesign` section. Don't speculate from
-file names alone. Be terse and specific.
+Read the **diff**, nearby code, tests, CI output, and PR-provided context. Don't
+speculate from file names alone. Be terse and specific.
 
 ### P1 — block the PR until resolved
 
 Treat every item below as a P1 issue. Comment with file:line and a concrete fix.
 
-- **Correctness regressions** — behavior change vs. tests, vs. ApiDesign, vs.
-  prior commits.
+- **Correctness regressions** — behavior change vs. tests, PR-stated contracts,
+  or prior commits.
 - **Missing tests for behavior changes** — every new public method, every
   diagnostic code, every code path with a branch needs a test. New diagnostics
   (`QMLSHARP-*`) need at least one positive and one negative case.
@@ -325,9 +325,9 @@ Treat every item below as a P1 issue. Comment with file:line and a concrete fix.
   `IncrementalCompile()`, registry queries, P/Invoke marshaling per state
   update, JSON serialization on per-frame paths. Flag any allocation in a
   `for`/`foreach` over QML nodes, schema members, or registry entries.
-- **Deviations from the approved ApiDesign plan** — silent scope expansion,
-  module boundary violations, dependency back-edges in the DAG, "MVP" stubs
-  that skip required behavior listed in the relevant `test-spec.md`.
+- **Deviations from the stated PR scope or established architecture** — silent
+  scope expansion, module boundary violations, dependency back-edges in the DAG,
+  or "MVP" stubs that skip behavior the PR says it implements.
 
 ### P2 — request changes; not a hard block
 
@@ -355,15 +355,15 @@ Treat every item below as a P1 issue. Comment with file:line and a concrete fix.
 
 Each PR should be reviewable in one sitting. Reject scope creep.
 
-1. **One step per PR.** The implementation plans in `ApiDesign/implementation-plan/`
-   are organized into discrete steps. A PR implements **one** step end-to-end —
-   code + tests + docs + (if needed) generator updates. Do not bundle steps.
+1. **One scoped change per PR.** A PR implements **one** step or feature
+   end-to-end — code + tests + docs + (if needed) generator updates. Do not
+   bundle unrelated steps.
 2. **Branch from latest `main`.** `main` is protected; never push to it directly.
    Branch names follow existing conventions (e.g. `codex/stepNN-NN-…`,
    `chore/…`, `feat/…`).
 3. **Title and body explain the *why*.** Title: imperative, ≤ 70 chars. Body:
-   summary, links to the relevant `ApiDesign` doc(s), test plan, and any
-   deviation called out explicitly.
+   summary, relevant design or issue context available to reviewers, test plan,
+   and any deviation called out explicitly.
 4. **Tests in the same PR.** Behavior changes without tests are P1. Tests live
    next to the code (`tests/<Project>.Tests/`). Use xUnit; assert on observable
    behavior, not on private internals.
@@ -387,7 +387,7 @@ Each PR should be reviewable in one sitting. Reject scope creep.
 
 ### Reviewer Checklist (paste into review when applicable)
 
-- [ ] Change matches the relevant `ApiDesign/{NN-name}/{API-Design,test-spec}.md` step.
+- [ ] Change matches the stated PR scope and any design excerpt included in the PR.
 - [ ] No DAG back-edges introduced.
 - [ ] Tests added/updated for every behavior change; `dotnet test` passes locally or in CI.
 - [ ] `dotnet format --verify-no-changes` passes.
