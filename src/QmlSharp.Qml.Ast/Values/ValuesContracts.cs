@@ -3,7 +3,7 @@ using System.Collections.Immutable;
 #pragma warning disable MA0048
 #pragma warning disable MA0049
 
-namespace QmlSharp.Qml.Ast.Values
+namespace QmlSharp.Qml.Ast
 {
     /// <summary>
     /// Numeric literal binding value.
@@ -105,10 +105,38 @@ namespace QmlSharp.Qml.Ast.Values
     }
 
     /// <summary>
-    /// Contract placeholder for value factory API introduced in later steps.
+    /// Static factory methods for creating <see cref="BindingValue"/> instances.
     /// </summary>
     public static class Values
     {
+        public static NumberLiteral Number(double value) => new(value);
+
+        public static NumberLiteral Number(int value) => new(value);
+
+        public static StringLiteral String(string value) => new(value);
+
+        public static BooleanLiteral Boolean(bool value) => new(value);
+
+        public static NullLiteral Null() => NullLiteral.Instance;
+
+        public static EnumReference Enum(string typeName, string memberName) => new(typeName, memberName);
+
+        public static ScriptExpression Expression(string code) => new(code);
+
+        public static ScriptBlock Block(string code) => new(code);
+
+        public static ObjectValue Object(ObjectDefinitionNode obj) => new(obj);
+
+        public static ObjectValue Object(string typeName, Action<Builders.QmlObjectBuilder> configure)
+        {
+            Builders.QmlObjectBuilder builder = new(typeName);
+            configure(builder);
+            return new ObjectValue(builder.Build());
+        }
+
+        public static ArrayValue Array(params BindingValue[] elements) => new([.. elements]);
+
+        public static ArrayValue Array(ImmutableArray<BindingValue> elements) => new(elements);
     }
 }
 
