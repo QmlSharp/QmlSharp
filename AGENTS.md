@@ -2,8 +2,8 @@
 
 These rules tell Codex / AI reviewers how to review pull requests in **QmlSharp**.
 Follow them in addition to (not instead of) the design documents under
-`C:\MyFile\DevAll\ApiDesign`. When this file and an `ApiDesign` document conflict,
-**`ApiDesign` wins** — flag the conflict in the review.
+the approved `ApiDesign` repository. When this file and an `ApiDesign` document
+conflict, **`ApiDesign` wins** — flag the conflict in the review.
 
 Be specific. Cite file paths and line numbers. Prefer fewer, higher-signal comments
 over many style nits.
@@ -63,13 +63,15 @@ examples/                   Example apps (currently empty)
 
 ### Reference Documents (read these before reviewing significant changes)
 
-- `C:\MyFile\DevAll\ApiDesign\README.md` — module map and architecture summary.
-- `C:\MyFile\DevAll\ApiDesign\architecture.md` — interop, memory, threading, error model.
-- `C:\MyFile\DevAll\ApiDesign\implementation-constraints.md` — the **hard rules**.
-- `C:\MyFile\DevAll\ApiDesign\decision-log.md` — ADRs explaining *why*.
-- `C:\MyFile\DevAll\ApiDesign\{NN-name}\API-Design.md` — per-module API contract.
-- `C:\MyFile\DevAll\ApiDesign\{NN-name}\test-spec.md` — required test cases per module.
-- `C:\MyFile\DevAll\ApiDesign\implementation-plan\` — step-by-step execution order.
+Read these files from the approved `ApiDesign` repository:
+
+- `README.md` — module map and architecture summary.
+- `architecture.md` — interop, memory, threading, error model.
+- `implementation-constraints.md` — the **hard rules**.
+- `decision-log.md` — ADRs explaining *why*.
+- `{NN-name}/API-Design.md` — per-module API contract.
+- `{NN-name}/test-spec.md` — required test cases per module.
+- `implementation-plan/` — step-by-step execution order.
 
 ---
 
