@@ -52,6 +52,7 @@ namespace QmlSharp.Qml.Ast.Tests.Helpers
                 ["Text"] = new HashSet<string>(StringComparer.Ordinal) { "width", "height", "visible", "opacity", "x", "y", "text", "font", "color" },
                 ["Image"] = new HashSet<string>(StringComparer.Ordinal) { "width", "height", "visible", "opacity", "x", "y", "fillMode", "source", "sourceSize" },
                 ["Button"] = new HashSet<string>(StringComparer.Ordinal) { "width", "height", "visible", "opacity", "x", "y", "text" },
+                ["QtQuick.Controls.Button"] = new HashSet<string>(StringComparer.Ordinal) { "width", "height", "visible", "opacity", "x", "y", "text" },
                 ["Layout"] = new HashSet<string>(StringComparer.Ordinal) { "fillWidth", "fillHeight", "alignment" },
                 ["Keys"] = new HashSet<string>(StringComparer.Ordinal) { "enabled" },
             };

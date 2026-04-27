@@ -213,15 +213,12 @@ namespace QmlSharp.Qml.Ast.Validation
         private static void ValidateSemanticObject(ObjectDefinitionNode objectNode, SemanticValidationContext context)
         {
             context.MarkTypeUsed(objectNode.TypeName);
-            bool typeExists = context.ValidateObjectType(objectNode);
+            bool typeExists = context.ValidateObjectType(objectNode, out string ownerTypeName);
             ObjectSemanticScope scope = ObjectSemanticScope.Create(objectNode);
 
-            if (typeExists)
+            foreach (AstNode member in objectNode.Members)
             {
-                foreach (AstNode member in objectNode.Members)
-                {
-                    ValidateSemanticObjectMember(objectNode, member, scope, context);
-                }
+                ValidateSemanticObjectMember(ownerTypeName, member, scope, context, typeExists);
             }
 
             foreach (AstNode member in objectNode.Members)
@@ -231,16 +228,16 @@ namespace QmlSharp.Qml.Ast.Validation
         }
 
         private static void ValidateSemanticObjectMember(
-            ObjectDefinitionNode objectNode,
+            string ownerTypeName,
             AstNode member,
             ObjectSemanticScope scope,
-            SemanticValidationContext context)
+            SemanticValidationContext context,
+            bool ownerTypeExists)
         {
             switch (member)
             {
                 case PropertyDeclarationNode propertyDeclarationNode:
                     context.ValidatePropertyType(propertyDeclarationNode);
-                    context.ValidateRequiredPropertyDeclaration(objectNode.TypeName, propertyDeclarationNode);
                     if (propertyDeclarationNode.InitialValue is not null)
                     {
                         context.ValidateBindingValue(propertyDeclarationNode.InitialValue);
@@ -248,28 +245,8 @@ namespace QmlSharp.Qml.Ast.Validation
 
                     break;
 
-                case BindingNode bindingNode:
-                    context.ValidatePropertyBinding(objectNode.TypeName, bindingNode);
-                    break;
-
-                case GroupedBindingNode groupedBindingNode:
-                    context.ValidateGroupedBinding(objectNode.TypeName, groupedBindingNode);
-                    break;
-
                 case AttachedBindingNode attachedBindingNode:
                     context.ValidateAttachedBinding(attachedBindingNode);
-                    break;
-
-                case ArrayBindingNode arrayBindingNode:
-                    context.ValidateArrayBinding(objectNode.TypeName, arrayBindingNode);
-                    break;
-
-                case BehaviorOnNode behaviorOnNode:
-                    context.ValidateBehaviorOn(objectNode.TypeName, behaviorOnNode);
-                    break;
-
-                case SignalHandlerNode signalHandlerNode:
-                    context.ValidateSignalHandler(objectNode.TypeName, signalHandlerNode, scope);
                     break;
 
                 case FunctionDeclarationNode functionDeclarationNode:
@@ -278,6 +255,45 @@ namespace QmlSharp.Qml.Ast.Validation
 
                 case SignalDeclarationNode signalDeclarationNode:
                     context.ValidateSignalDeclaration(signalDeclarationNode);
+                    break;
+            }
+
+            if (ownerTypeExists)
+            {
+                ValidateSemanticOwnerTypeMember(ownerTypeName, member, scope, context);
+            }
+        }
+
+        private static void ValidateSemanticOwnerTypeMember(
+            string ownerTypeName,
+            AstNode member,
+            ObjectSemanticScope scope,
+            SemanticValidationContext context)
+        {
+            switch (member)
+            {
+                case PropertyDeclarationNode propertyDeclarationNode:
+                    context.ValidateRequiredPropertyDeclaration(ownerTypeName, propertyDeclarationNode);
+                    break;
+
+                case BindingNode bindingNode:
+                    context.ValidatePropertyBinding(ownerTypeName, bindingNode);
+                    break;
+
+                case GroupedBindingNode groupedBindingNode:
+                    context.ValidateGroupedBinding(ownerTypeName, groupedBindingNode);
+                    break;
+
+                case ArrayBindingNode arrayBindingNode:
+                    context.ValidateArrayBinding(ownerTypeName, arrayBindingNode);
+                    break;
+
+                case BehaviorOnNode behaviorOnNode:
+                    context.ValidateBehaviorOn(ownerTypeName, behaviorOnNode);
+                    break;
+
+                case SignalHandlerNode signalHandlerNode:
+                    context.ValidateSignalHandler(ownerTypeName, signalHandlerNode, scope);
                     break;
             }
         }
@@ -567,6 +583,7 @@ namespace QmlSharp.Qml.Ast.Validation
         {
             private readonly ImmutableArray<AstDiagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<AstDiagnostic>();
             private readonly ITypeChecker _typeChecker;
+            private readonly Dictionary<string, string> _moduleByQualifier = new(StringComparer.Ordinal);
             private readonly HashSet<string> _usedTypes = new(StringComparer.Ordinal);
 
             public SemanticValidationContext(ITypeChecker typeChecker)
@@ -581,7 +598,16 @@ namespace QmlSharp.Qml.Ast.Validation
                     string? moduleUri = importNode.ModuleUri;
                     if (importNode.ImportKind == ImportKind.Module
                         && !string.IsNullOrWhiteSpace(moduleUri)
-                        && !_typeChecker.HasModule(moduleUri))
+                        && _typeChecker.HasModule(moduleUri))
+                    {
+                        string? qualifier = importNode.Qualifier;
+                        if (!string.IsNullOrWhiteSpace(qualifier))
+                        {
+                            _moduleByQualifier[qualifier] = moduleUri;
+                        }
+                    }
+                    else if (importNode.ImportKind == ImportKind.Module
+                        && !string.IsNullOrWhiteSpace(moduleUri))
                     {
                         AddError(
                             DiagnosticCode.E107_UnknownModule,
@@ -591,13 +617,14 @@ namespace QmlSharp.Qml.Ast.Validation
                 }
             }
 
-            public bool ValidateObjectType(ObjectDefinitionNode objectNode)
+            public bool ValidateObjectType(ObjectDefinitionNode objectNode, out string resolvedTypeName)
             {
-                if (_typeChecker.HasType(objectNode.TypeName))
+                if (TryResolveTypeName(objectNode.TypeName, out resolvedTypeName))
                 {
                     return true;
                 }
 
+                resolvedTypeName = objectNode.TypeName;
                 AddError(
                     DiagnosticCode.E100_UnknownType,
                     $"Unknown type '{objectNode.TypeName}'.",
@@ -608,7 +635,7 @@ namespace QmlSharp.Qml.Ast.Validation
             public void ValidatePropertyType(PropertyDeclarationNode node)
             {
                 MarkTypeUsed(node.TypeName);
-                if (!_typeChecker.HasType(node.TypeName))
+                if (!HasType(node.TypeName))
                 {
                     AddError(
                         DiagnosticCode.E100_UnknownType,
@@ -759,7 +786,7 @@ namespace QmlSharp.Qml.Ast.Validation
                 {
                     case EnumReference enumReference:
                         MarkTypeUsed(enumReference.TypeName);
-                        if (!_typeChecker.HasEnumMember(enumReference.TypeName, enumReference.MemberName))
+                        if (!HasEnumMember(enumReference.TypeName, enumReference.MemberName))
                         {
                             AddError(
                                 DiagnosticCode.E106_InvalidEnumReference,
@@ -800,7 +827,7 @@ namespace QmlSharp.Qml.Ast.Validation
                         continue;
                     }
 
-                    if (IsImportUsed(moduleUri, imports))
+                    if (IsImportUsed(importNode, imports))
                     {
                         continue;
                     }
@@ -820,7 +847,7 @@ namespace QmlSharp.Qml.Ast.Validation
             private void ValidateParameterType(string typeName, AstNode node)
             {
                 MarkTypeUsed(typeName);
-                if (!_typeChecker.HasType(typeName))
+                if (!HasType(typeName))
                 {
                     AddError(
                         DiagnosticCode.E100_UnknownType,
@@ -829,19 +856,87 @@ namespace QmlSharp.Qml.Ast.Validation
                 }
             }
 
-            private bool IsImportUsed(string moduleUri, ImmutableArray<ImportNode> imports)
+            private bool IsImportUsed(ImportNode importNode, ImmutableArray<ImportNode> imports)
             {
-                foreach (string usedType in _usedTypes)
+                string moduleUri = importNode.ModuleUri!;
+                string? qualifier = importNode.Qualifier;
+
+                if (!string.IsNullOrWhiteSpace(qualifier))
                 {
-                    if (IsQualifiedTypeInModule(moduleUri, usedType)
-                        || _typeChecker.HasType(moduleUri + "." + usedType))
-                    {
-                        return true;
-                    }
+                    string qualifierPrefix = qualifier + ".";
+                    return _usedTypes.Any(usedType =>
+                        usedType.StartsWith(qualifierPrefix, StringComparison.Ordinal)
+                        && _typeChecker.HasType(moduleUri + usedType[qualifier.Length..]));
                 }
 
-                return imports.Count(static imported => imported.ImportKind == ImportKind.Module && IsNonEmpty(imported.ModuleUri)) == 1
-                    && _usedTypes.Any(typeName => _typeChecker.HasType(typeName));
+                if (_usedTypes.Any(usedType =>
+                    IsQualifiedTypeInModule(moduleUri, usedType)
+                    || (!IsQualifiedTypeName(usedType) && _typeChecker.HasType(moduleUri + "." + usedType))))
+                {
+                    return true;
+                }
+
+                return imports.Count(IsUnqualifiedModuleImport) == 1
+                    && _usedTypes.Any(typeName => !IsQualifiedTypeName(typeName) && _typeChecker.HasType(typeName));
+            }
+
+            private bool HasType(string typeName)
+            {
+                return TryResolveTypeName(typeName, out _);
+            }
+
+            private bool HasEnumMember(string typeName, string memberName)
+            {
+                if (_typeChecker.HasEnumMember(typeName, memberName))
+                {
+                    return true;
+                }
+
+                return TryResolveQualifiedImportType(typeName, out string resolvedTypeName)
+                    && _typeChecker.HasEnumMember(resolvedTypeName, memberName);
+            }
+
+            private bool TryResolveTypeName(string typeName, out string resolvedTypeName)
+            {
+                if (_typeChecker.HasType(typeName))
+                {
+                    resolvedTypeName = typeName;
+                    return true;
+                }
+
+                return TryResolveQualifiedImportType(typeName, out resolvedTypeName)
+                    && _typeChecker.HasType(resolvedTypeName);
+            }
+
+            private bool TryResolveQualifiedImportType(string typeName, out string resolvedTypeName)
+            {
+                resolvedTypeName = string.Empty;
+                int qualifierEnd = typeName.IndexOf('.');
+                if (qualifierEnd <= 0)
+                {
+                    return false;
+                }
+
+                string qualifier = typeName[..qualifierEnd];
+                if (!_moduleByQualifier.TryGetValue(qualifier, out string? moduleUri))
+                {
+                    return false;
+                }
+
+                resolvedTypeName = moduleUri + typeName[qualifierEnd..];
+                return true;
+            }
+
+            private static bool IsUnqualifiedModuleImport(ImportNode imported)
+            {
+                return imported.ImportKind == ImportKind.Module
+                    && IsNonEmpty(imported.ModuleUri)
+                    && string.IsNullOrWhiteSpace(imported.Qualifier);
+            }
+
+            private static bool IsQualifiedTypeName(string typeName)
+            {
+                return typeName.Contains('.', StringComparison.Ordinal);
             }
 
             private static bool IsQualifiedTypeInModule(string moduleUri, string typeName)

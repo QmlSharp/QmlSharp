@@ -235,9 +235,92 @@ namespace QmlSharp.Qml.Ast.Tests.Validation
         }
 
         [Fact]
+        public void SM_12_Unknown_owner_type_still_validates_independent_member_semantics()
+        {
+            QmlDocument document = new()
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "MissingWidget",
+                    Members =
+                    [
+                        new PropertyDeclarationNode
+                        {
+                            Name = "missingValue",
+                            TypeName = "MissingValueType",
+                        },
+                        new AttachedBindingNode
+                        {
+                            AttachedTypeName = "MissingAttached",
+                            Bindings = [new BindingNode { PropertyName = "enabled", Value = Values.Boolean(true) }],
+                        },
+                        new FunctionDeclarationNode
+                        {
+                            Name = "make",
+                            Parameters = [new ParameterDeclaration("value", "MissingParameterType")],
+                            Body = "return value;",
+                        },
+                    ],
+                },
+            };
+
+            ImmutableArray<AstDiagnostic> diagnostics = Validate(document);
+
+            Assert.Contains(diagnostics, diagnostic => diagnostic.Code == DiagnosticCode.E100_UnknownType
+                && diagnostic.Message.Contains("MissingWidget", StringComparison.Ordinal));
+            Assert.Contains(diagnostics, diagnostic => diagnostic.Code == DiagnosticCode.E100_UnknownType
+                && diagnostic.Message.Contains("MissingValueType", StringComparison.Ordinal));
+            Assert.Contains(diagnostics, diagnostic => diagnostic.Code == DiagnosticCode.E100_UnknownType
+                && diagnostic.Message.Contains("MissingParameterType", StringComparison.Ordinal));
+            Assert.Contains(diagnostics, diagnostic => diagnostic.Code == DiagnosticCode.E103_UnknownAttachedType
+                && diagnostic.Message.Contains("MissingAttached", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void SM_13_Qualified_import_usage_is_attributed_to_its_alias_only()
+        {
+            ImportNode qtQuickImport = new()
+            {
+                ImportKind = ImportKind.Module,
+                ModuleUri = "QtQuick",
+                Version = "6.11",
+            };
+            ImportNode controlsImport = new()
+            {
+                ImportKind = ImportKind.Module,
+                ModuleUri = "QtQuick.Controls",
+                Version = "6.11",
+                Qualifier = "Controls",
+            };
+            QmlDocument document = new()
+            {
+                Imports = [qtQuickImport, controlsImport],
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Controls.Button",
+                    Members =
+                    [
+                        new BindingNode
+                        {
+                            PropertyName = "text",
+                            Value = Values.String("Run"),
+                        },
+                    ],
+                },
+            };
+
+            ImmutableArray<AstDiagnostic> diagnostics = Validate(document);
+
+            AstDiagnostic diagnostic = Assert.Single(diagnostics);
+            Assert.Equal(DiagnosticCode.W001_UnusedImport, diagnostic.Code);
+            Assert.Same(qtQuickImport, diagnostic.Node);
+            Assert.DoesNotContain(diagnostics, static item => item.Severity == DiagnosticSeverity.Error);
+        }
+
+        [Fact]
         public void SMD_01_QmlAst_project_has_no_registry_project_reference()
         {
-            string projectPath = Path.Combine(FindRepositoryRoot(), "src", "QmlSharp.Qml.Ast", "QmlSharp.Qml.Ast.csproj");
+            string projectPath = Path.Join(FindRepositoryRoot(), "src", "QmlSharp.Qml.Ast", "QmlSharp.Qml.Ast.csproj");
             XDocument project = XDocument.Load(projectPath);
 
             IEnumerable<XElement> projectReferences = project
@@ -279,7 +362,7 @@ namespace QmlSharp.Qml.Ast.Tests.Validation
             DirectoryInfo? directory = new(AppContext.BaseDirectory);
             while (directory is not null)
             {
-                if (File.Exists(Path.Combine(directory.FullName, "QmlSharp.slnx")))
+                if (File.Exists(Path.Join(directory.FullName, "QmlSharp.slnx")))
                 {
                     return directory.FullName;
                 }
