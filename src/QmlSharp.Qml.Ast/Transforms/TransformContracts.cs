@@ -110,9 +110,9 @@ namespace QmlSharp.Qml.Ast.Transforms
 
         private static AstNode TransformNodeChildren(AstNode node, IQmlAstTransform transform)
         {
-            AstNode nodeWithComments = TransformNodeComments(node, transform);
+            AstNode nodeWithLeadingComments = TransformLeadingComments(node, transform);
 
-            return nodeWithComments switch
+            AstNode nodeWithChildren = nodeWithLeadingComments switch
             {
                 QmlDocument document => TransformDocumentChildren(document, transform),
                 ObjectDefinitionNode objectDefinitionNode => TransformObjectDefinitionChildren(objectDefinitionNode, transform),
@@ -123,15 +123,16 @@ namespace QmlSharp.Qml.Ast.Transforms
                 AttachedBindingNode attachedBindingNode => TransformAttachedBindingChildren(attachedBindingNode, transform),
                 ArrayBindingNode arrayBindingNode => TransformArrayBindingChildren(arrayBindingNode, transform),
                 BehaviorOnNode behaviorOnNode => TransformBehaviorOnChildren(behaviorOnNode, transform),
-                _ => nodeWithComments,
+                _ => nodeWithLeadingComments,
             };
+
+            return TransformTrailingComment(nodeWithChildren, transform);
         }
 
-        private static AstNode TransformNodeComments(AstNode node, IQmlAstTransform transform)
+        private static AstNode TransformLeadingComments(AstNode node, IQmlAstTransform transform)
         {
             ImmutableArray<CommentNode> leadingComments = TransformNodeList(node.LeadingComments, transform, out bool leadingChanged);
-            CommentNode? trailingComment = TransformOptionalNode(node.TrailingComment, transform, out bool trailingChanged);
-            if (!leadingChanged && !trailingChanged)
+            if (!leadingChanged)
             {
                 return node;
             }
@@ -139,6 +140,19 @@ namespace QmlSharp.Qml.Ast.Transforms
             return node with
             {
                 LeadingComments = leadingComments,
+            };
+        }
+
+        private static AstNode TransformTrailingComment(AstNode node, IQmlAstTransform transform)
+        {
+            CommentNode? trailingComment = TransformOptionalNode(node.TrailingComment, transform, out bool trailingChanged);
+            if (!trailingChanged)
+            {
+                return node;
+            }
+
+            return node with
+            {
                 TrailingComment = trailingComment,
             };
         }

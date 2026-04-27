@@ -310,6 +310,55 @@ namespace QmlSharp.Qml.Ast.Tests.Transforms
             Assert.Equal("NestedEntry", nestedEntry.Object.TypeName);
         }
 
+        [Fact]
+        public void Transform_processes_trailing_comments_after_structural_children()
+        {
+            QmlDocument document = new()
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Item",
+                    LeadingComments = [new CommentNode { Text = "// leading", IsBlock = false }],
+                    Members =
+                    [
+                        new BindingNode
+                        {
+                            PropertyName = "width",
+                            Value = Values.Number(100),
+                        },
+                    ],
+                    TrailingComment = new CommentNode { Text = "// trailing", IsBlock = false },
+                },
+            };
+            List<string> visited = [];
+            QmlAstTransformer transformer = new(
+                new DelegateTransform(nodeTransform: node =>
+                {
+                    switch (node)
+                    {
+                        case CommentNode commentNode:
+                            visited.Add(commentNode.Text);
+                            break;
+
+                        case BindingNode bindingNode:
+                            visited.Add($"binding:{bindingNode.PropertyName}");
+                            break;
+
+                        case ObjectDefinitionNode objectDefinitionNode:
+                            visited.Add($"object:{objectDefinitionNode.TypeName}");
+                            break;
+                    }
+
+                    return node;
+                }));
+
+            _ = transformer.Transform(document);
+
+            Assert.Equal(
+                ["// leading", "binding:width", "// trailing", "object:Item"],
+                visited);
+        }
+
         private static QmlDocument CreateTransformDocument()
         {
             return new QmlDocumentBuilder()
@@ -385,15 +434,13 @@ namespace QmlSharp.Qml.Ast.Tests.Transforms
 
         private static BindingNode GetRootBinding(QmlDocument document, string propertyName)
         {
-            foreach (AstNode member in document.RootObject.Members)
-            {
-                if (member is BindingNode bindingNode && bindingNode.PropertyName == propertyName)
-                {
-                    return bindingNode;
-                }
-            }
+            BindingNode? bindingNode = document.RootObject.Members
+                .OfType<BindingNode>()
+                .Where(member => member.PropertyName == propertyName)
+                .FirstOrDefault();
 
-            throw new InvalidOperationException($"Binding '{propertyName}' not found on root object.");
+            return bindingNode
+                ?? throw new InvalidOperationException($"Binding '{propertyName}' not found on root object.");
         }
 
         private sealed class DelegateTransform : IQmlAstTransform
