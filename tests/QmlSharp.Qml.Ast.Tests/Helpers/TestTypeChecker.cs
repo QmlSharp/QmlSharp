@@ -20,6 +20,17 @@ namespace QmlSharp.Qml.Ast.Tests.Helpers
                 "Text",
                 "Image",
                 "Layout",
+                "Button",
+                "string",
+                "int",
+                "bool",
+                "real",
+                "QtQuick.Item",
+                "QtQuick.Rectangle",
+                "QtQuick.Text",
+                "QtQuick.Image",
+                "QtQuick.Layout",
+                "QtQuick.Controls.Button",
             };
 
             _attachedTypes = new HashSet<string>(StringComparer.Ordinal)
@@ -37,14 +48,19 @@ namespace QmlSharp.Qml.Ast.Tests.Helpers
             _propertiesByType = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
             {
                 ["Item"] = new HashSet<string>(StringComparer.Ordinal) { "width", "height", "visible", "opacity", "x", "y" },
-                ["Rectangle"] = new HashSet<string>(StringComparer.Ordinal) { "color", "radius", "border" },
-                ["Text"] = new HashSet<string>(StringComparer.Ordinal) { "text", "font", "color" },
-                ["Image"] = new HashSet<string>(StringComparer.Ordinal) { "fillMode", "source" },
+                ["Rectangle"] = new HashSet<string>(StringComparer.Ordinal) { "width", "height", "visible", "opacity", "x", "y", "color", "radius", "border" },
+                ["Text"] = new HashSet<string>(StringComparer.Ordinal) { "width", "height", "visible", "opacity", "x", "y", "text", "font", "color" },
+                ["Image"] = new HashSet<string>(StringComparer.Ordinal) { "width", "height", "visible", "opacity", "x", "y", "fillMode", "source", "sourceSize" },
+                ["Button"] = new HashSet<string>(StringComparer.Ordinal) { "width", "height", "visible", "opacity", "x", "y", "text" },
+                ["QtQuick.Controls.Button"] = new HashSet<string>(StringComparer.Ordinal) { "width", "height", "visible", "opacity", "x", "y", "text" },
+                ["Layout"] = new HashSet<string>(StringComparer.Ordinal) { "fillWidth", "fillHeight", "alignment" },
+                ["Keys"] = new HashSet<string>(StringComparer.Ordinal) { "enabled" },
             };
 
             _signalsByType = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
             {
                 ["Item"] = new HashSet<string>(StringComparer.Ordinal) { "clicked", "pressed", "released" },
+                ["Rectangle"] = new HashSet<string>(StringComparer.Ordinal) { "clicked" },
                 ["Text"] = new HashSet<string>(StringComparer.Ordinal) { "linkActivated" },
             };
 
