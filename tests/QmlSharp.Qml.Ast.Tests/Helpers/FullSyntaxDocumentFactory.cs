@@ -23,7 +23,8 @@ namespace QmlSharp.Qml.Ast.Tests.Helpers
                     _ = root.Id("myRect")
                         .PropertyDeclaration("count", "int", Values.Number(0))
                         .PropertyDeclaration("label", "string", isRequired: true)
-                        .PropertyDeclaration("data", "var", isDefault: true)
+                        .PropertyDeclaration("data", "var", Values.String("seed"), isDefault: true)
+                        .PropertyDeclaration("payload", "var", Values.String("ready"), isDefault: true, isRequired: true)
                         .PropertyDeclaration("sourceSize", "size", isReadonly: true)
                         .PropertyAlias("text", "label.text")
                         .Binding("width", Values.Number(100))
@@ -34,6 +35,17 @@ namespace QmlSharp.Qml.Ast.Tests.Helpers
                         .Binding("fillMode", Values.Enum("Image", "Stretch"))
                         .Binding("opacity", Values.Expression("parent.opacity * 0.5"))
                         .Binding("onCompleted", Values.Block("{ console.log(\"ready\"); }"))
+                        .Binding("fontSpec", Values.Object("Font", font =>
+                        {
+                            _ = font.Binding("pixelSize", Values.Number(12));
+                        }))
+                        .Binding("palette", Values.Array(
+                            Values.String("primary"),
+                            Values.Object("PaletteItem", item =>
+                            {
+                                _ = item.Binding("role", Values.Enum("Qt", "AlignCenter"));
+                            }),
+                            Values.Array(Values.Boolean(false), Values.Number(0.5))))
                         .GroupedBinding("font", font =>
                         {
                             _ = font.Binding("pixelSize", Values.Number(14));
@@ -77,11 +89,26 @@ namespace QmlSharp.Qml.Ast.Tests.Helpers
                             _ = text.Child("Item", inner =>
                             {
                                 _ = inner.Binding("visible", Values.Boolean(false));
+                                _ = inner.Child("Rectangle", leaf =>
+                                {
+                                    _ = leaf.Binding("width", Values.Number(12));
+                                });
                             });
                         })
+                        .Comment("/* full syntax block comment */", isBlock: true)
                         .Comment("// end of root object");
                 })
                 .Build();
+        }
+
+        public static ImmutableArray<NodeKind> AllNodeKinds()
+        {
+            return [.. Enum.GetValues<NodeKind>()];
+        }
+
+        public static ImmutableArray<BindingValueKind> AllBindingValueKinds()
+        {
+            return [.. Enum.GetValues<BindingValueKind>()];
         }
 
         public static ImmutableArray<PragmaName> AllPragmas()
