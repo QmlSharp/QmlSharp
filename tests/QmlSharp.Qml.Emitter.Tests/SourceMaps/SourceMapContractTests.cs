@@ -80,7 +80,7 @@ namespace QmlSharp.Qml.Emitter.Tests.SourceMaps
             {
                 return _entries
                     .Where(entry => ReferenceEquals(entry.Node, node))
-                    .Select(entry => (OutputSpan?)entry.OutputSpan)
+                    .Select(entry => entry.OutputSpan)
                     .FirstOrDefault();
             }
 
