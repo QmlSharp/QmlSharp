@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Runtime.InteropServices;
 
 #pragma warning disable MA0048
 
@@ -87,16 +86,14 @@ namespace QmlSharp.Qml.Ast
     /// <param name="Line">1-based line index.</param>
     /// <param name="Column">1-based column index.</param>
     /// <param name="Offset">0-based offset in source text.</param>
-    [StructLayout(LayoutKind.Auto)]
-    public readonly record struct SourcePosition(int Line, int Column, int Offset);
+    public sealed record SourcePosition(int Line, int Column, int Offset);
 
     /// <summary>
     /// Source span for a range in source text.
     /// </summary>
     /// <param name="Start">Start position.</param>
     /// <param name="End">End position.</param>
-    [StructLayout(LayoutKind.Auto)]
-    public readonly record struct SourceSpan(SourcePosition Start, SourcePosition End);
+    public sealed record SourceSpan(SourcePosition Start, SourcePosition End);
 
     /// <summary>
     /// Abstract base for all AST nodes.

@@ -4,7 +4,4 @@
     <RootNamespace>QmlSharp.Qml.Ast</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\QmlSharp.Core\QmlSharp.Core.csproj" />
-  </ItemGroup>
 </Project>

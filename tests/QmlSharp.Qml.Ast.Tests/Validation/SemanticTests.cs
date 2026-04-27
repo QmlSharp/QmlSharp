@@ -318,18 +318,19 @@ namespace QmlSharp.Qml.Ast.Tests.Validation
         }
 
         [Fact]
-        public void SMD_01_QmlAst_project_has_no_registry_project_reference()
+        public void SMD_01_QmlAst_project_has_no_project_references()
         {
             string projectPath = Path.Join(FindRepositoryRoot(), "src", "QmlSharp.Qml.Ast", "QmlSharp.Qml.Ast.csproj");
             XDocument project = XDocument.Load(projectPath);
 
-            IEnumerable<XElement> projectReferences = project
+            XElement[] projectReferences =
+            [
+                .. project
                 .Descendants()
-                .Where(static element => element.Name.LocalName == "ProjectReference");
+                .Where(static element => element.Name.LocalName == "ProjectReference"),
+            ];
 
-            Assert.DoesNotContain(
-                projectReferences,
-                static reference => ((string?)reference.Attribute("Include"))?.Contains("QmlSharp.Registry", StringComparison.OrdinalIgnoreCase) == true);
+            Assert.Empty(projectReferences);
         }
 
         private static ImmutableArray<AstDiagnostic> Validate(QmlDocument document)
