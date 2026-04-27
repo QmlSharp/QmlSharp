@@ -212,6 +212,33 @@ namespace QmlSharp.Qml.Ast.Tests.Transforms
         }
 
         [Fact]
+        public void Transform_full_syntax_fixture_can_be_rewritten_and_revalidated()
+        {
+            QmlDocument document = AstFixtures.FullSyntaxDocument();
+            QmlAstTransformer transformer = new(new DelegateTransform(nodeTransform: node =>
+            {
+                if (node is BindingNode bindingNode
+                    && bindingNode.PropertyName == "width"
+                    && bindingNode.Value is NumberLiteral width)
+                {
+                    return bindingNode with
+                    {
+                        Value = new NumberLiteral(width.Value + 24),
+                    };
+                }
+
+                return node;
+            }));
+
+            QmlDocument transformed = transformer.Transform(document);
+            QmlAstValidator validator = new();
+
+            Assert.Empty(validator.ValidateStructure(transformed));
+            Assert.Equal(100, Assert.IsType<NumberLiteral>(GetRootBinding(document, "width").Value).Value);
+            Assert.Equal(124, Assert.IsType<NumberLiteral>(GetRootBinding(transformed, "width").Value).Value);
+        }
+
+        [Fact]
         public void Transform_can_delete_import_nodes_by_returning_null()
         {
             QmlDocument document = CreateTransformDocument();

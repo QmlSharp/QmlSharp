@@ -262,6 +262,24 @@ namespace QmlSharp.Qml.Ast.Tests.Utilities
         }
 
         [Fact]
+        public void Utils_full_syntax_fixture_exposes_expected_utility_invariants()
+        {
+            QmlDocument document = AstFixtures.FullSyntaxDocument();
+
+            ImmutableArray<string> ids = QmlAstUtils.CollectIds(document);
+            ImmutableArray<string> typeNames = QmlAstUtils.CollectTypeNames(document);
+            ImmutableArray<string> modules = QmlAstUtils.CollectImportedModules(document);
+            int nodeCount = QmlAstUtils.CountNodes(document);
+            int depth = QmlAstUtils.MaxDepth(document);
+
+            Assert.Contains("myRect", ids);
+            Assert.Equal(["QtQuick"], modules.ToArray());
+            Assert.True(typeNames.Length >= 8);
+            Assert.True(nodeCount > 30);
+            Assert.True(depth >= 4);
+        }
+
+        [Fact]
         public void UT_16_StructuralEqual_returns_true_for_same_tree_and_ignores_span_by_default()
         {
             QmlDocument left = CreateSpannedDocument(

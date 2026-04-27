@@ -253,6 +253,28 @@ namespace QmlSharp.Qml.Ast.Tests.Traversal
         }
 
         [Fact]
+        public void Walker_full_syntax_document_visits_every_NodeKind()
+        {
+            QmlDocument document = AstFixtures.FullSyntaxDocument();
+            HashSet<NodeKind> visitedKinds = [];
+
+            QmlAstWalker.Walk(
+                document,
+                enter: (node, ctx) =>
+                {
+                    _ = ctx;
+                    _ = visitedKinds.Add(node.Kind);
+                    return true;
+                },
+                leave: null);
+
+            foreach (NodeKind nodeKind in FullSyntaxDocumentFactory.AllNodeKinds())
+            {
+                Assert.Contains(nodeKind, visitedKinds);
+            }
+        }
+
+        [Fact]
         public void Walker_visits_comments_including_leading_and_trailing_comments()
         {
             CommentNode leadingComment = new() { Text = "// leading", IsBlock = false };
