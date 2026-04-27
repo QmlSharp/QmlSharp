@@ -10,7 +10,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
         public void ProjectReferences_EmitterDependsOnAstOnlyWithinQmlSharpModules()
         {
             string repositoryRoot = FindRepositoryRoot();
-            string projectPath = Path.Combine(
+            string projectPath = Path.Join(
                 repositoryRoot,
                 "src",
                 "QmlSharp.Qml.Emitter",
@@ -18,7 +18,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
             XDocument project = XDocument.Load(projectPath);
             ImmutableArray<string> referencedProjects = project
                 .Descendants("ProjectReference")
-                .Select(reference => Path.GetFileNameWithoutExtension((string?)reference.Attribute("Include") ?? string.Empty))
+                .Select(reference => GetProjectReferenceName((string?)reference.Attribute("Include") ?? string.Empty))
                 .Order(StringComparer.Ordinal)
                 .ToImmutableArray();
 
@@ -37,7 +37,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
 
             while (directory is not null)
             {
-                string solutionPath = Path.Combine(directory.FullName, "QmlSharp.slnx");
+                string solutionPath = Path.Join(directory.FullName, "QmlSharp.slnx");
                 if (File.Exists(solutionPath))
                 {
                     return directory.FullName;
@@ -47,6 +47,15 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
             }
 
             throw new InvalidOperationException("Could not locate QmlSharp repository root.");
+        }
+
+        private static string GetProjectReferenceName(string include)
+        {
+            string fileName = include
+                .Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries)
+                .LastOrDefault() ?? string.Empty;
+
+            return Path.GetFileNameWithoutExtension(fileName);
         }
     }
 }

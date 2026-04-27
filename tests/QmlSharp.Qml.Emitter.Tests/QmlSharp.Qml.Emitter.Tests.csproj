@@ -25,4 +25,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\QmlSharp.Qml.Emitter\QmlSharp.Qml.Emitter.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Fixtures\Golden\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

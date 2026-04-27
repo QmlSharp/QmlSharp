@@ -78,49 +78,34 @@ namespace QmlSharp.Qml.Emitter.Tests.SourceMaps
 
             public OutputSpan? GetOutputSpan(AstNode node)
             {
-                foreach (SourceMapEntry entry in _entries)
-                {
-                    if (ReferenceEquals(entry.Node, node))
-                    {
-                        return entry.OutputSpan;
-                    }
-                }
-
-                return null;
+                return _entries
+                    .Where(entry => ReferenceEquals(entry.Node, node))
+                    .Select(entry => (OutputSpan?)entry.OutputSpan)
+                    .FirstOrDefault();
             }
 
             public IReadOnlyList<AstNode> GetNodesAtLine(int line)
             {
-                ImmutableArray<AstNode>.Builder nodes = ImmutableArray.CreateBuilder<AstNode>();
-
-                foreach (SourceMapEntry entry in _entries)
-                {
-                    if (entry.OutputSpan.StartLine <= line && entry.OutputSpan.EndLine >= line)
-                    {
-                        nodes.Add(entry.Node);
-                    }
-                }
-
-                return nodes.ToImmutable();
+                return _entries
+                    .Where(entry => entry.OutputSpan.StartLine <= line && entry.OutputSpan.EndLine >= line)
+                    .Select(entry => entry.Node)
+                    .ToImmutableArray();
             }
 
             public AstNode? GetInnermostNodeAt(int line, int column)
             {
-                foreach (SourceMapEntry entry in _entries)
-                {
-                    OutputSpan span = entry.OutputSpan;
-                    bool contains = span.StartLine <= line
-                        && span.EndLine >= line
-                        && span.StartColumn <= column
-                        && span.EndColumn >= column;
-
-                    if (contains)
+                return _entries
+                    .Where(entry =>
                     {
-                        return entry.Node;
-                    }
-                }
+                        OutputSpan span = entry.OutputSpan;
 
-                return null;
+                        return span.StartLine <= line
+                            && span.EndLine >= line
+                            && span.StartColumn <= column
+                            && span.EndColumn >= column;
+                    })
+                    .Select(entry => entry.Node)
+                    .FirstOrDefault();
             }
 
             public SourceMapJson ToJson()
