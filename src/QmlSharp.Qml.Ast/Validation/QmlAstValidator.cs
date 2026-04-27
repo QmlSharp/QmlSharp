@@ -107,6 +107,10 @@ namespace QmlSharp.Qml.Ast.Validation
                     scope.ValidatePropertyName(bindingNode.PropertyName, bindingNode, context);
                     break;
 
+                case GroupedBindingNode groupedBindingNode:
+                    scope.ValidatePropertyName(groupedBindingNode.GroupName, groupedBindingNode, context);
+                    break;
+
                 case ArrayBindingNode arrayBindingNode:
                     scope.ValidatePropertyName(arrayBindingNode.PropertyName, arrayBindingNode, context);
                     break;
@@ -142,7 +146,7 @@ namespace QmlSharp.Qml.Ast.Validation
                     break;
 
                 case InlineComponentNode inlineComponentNode:
-                    ValidateObject(inlineComponentNode.Body, context, parentObjectDepth + 1);
+                    ValidateObject(inlineComponentNode.Body, context.CreateComponentScope(), objectDepth: 1);
                     break;
 
                 case PropertyDeclarationNode propertyDeclarationNode when propertyDeclarationNode.InitialValue is not null:
@@ -333,8 +337,30 @@ namespace QmlSharp.Qml.Ast.Validation
 
         private sealed class StructuralValidationContext
         {
-            private readonly ImmutableArray<AstDiagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<AstDiagnostic>();
-            private readonly Dictionary<string, IdAssignmentNode> _ids = new(StringComparer.Ordinal);
+            private readonly ImmutableArray<AstDiagnostic>.Builder _diagnostics;
+            private readonly Dictionary<string, IdAssignmentNode> _ids;
+
+            public StructuralValidationContext()
+                : this(
+                    ImmutableArray.CreateBuilder<AstDiagnostic>(),
+                    new Dictionary<string, IdAssignmentNode>(StringComparer.Ordinal))
+            {
+            }
+
+            private StructuralValidationContext(
+                ImmutableArray<AstDiagnostic>.Builder diagnostics,
+                Dictionary<string, IdAssignmentNode> ids)
+            {
+                _diagnostics = diagnostics;
+                _ids = ids;
+            }
+
+            public StructuralValidationContext CreateComponentScope()
+            {
+                return new StructuralValidationContext(
+                    _diagnostics,
+                    new Dictionary<string, IdAssignmentNode>(StringComparer.Ordinal));
+            }
 
             public void ValidateIdUniqueness(IdAssignmentNode idAssignmentNode)
             {
@@ -404,15 +430,12 @@ namespace QmlSharp.Qml.Ast.Validation
                 }
 
                 HashSet<string> memberNames = new(StringComparer.Ordinal);
-                foreach (EnumMember member in node.Members)
+                foreach (EnumMember member in node.Members.Where(member => !memberNames.Add(member.Name)))
                 {
-                    if (!memberNames.Add(member.Name))
-                    {
-                        context.Add(
-                            DiagnosticCode.E008_DuplicateEnumName,
-                            $"Duplicate enum member '{member.Name}' in enum '{node.Name}'.",
-                            node);
-                    }
+                    context.Add(
+                        DiagnosticCode.E008_DuplicateEnumName,
+                        $"Duplicate enum member '{member.Name}' in enum '{node.Name}'.",
+                        node);
                 }
             }
         }

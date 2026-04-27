@@ -353,6 +353,65 @@ namespace QmlSharp.Qml.Ast.Tests.Validation
             Assert.Empty(diagnostics);
         }
 
+        [Fact]
+        public void VSD_04_Inline_component_body_has_independent_id_scope()
+        {
+            QmlDocument document = new QmlDocumentBuilder()
+                .SetRootObject("Item", root =>
+                {
+                    _ = root.Id("root")
+                        .InlineComponent("Badge", "Rectangle", badge =>
+                        {
+                            _ = badge.Id("root");
+                        });
+                })
+                .Build();
+
+            ImmutableArray<AstDiagnostic> diagnostics = Validate(document);
+
+            Assert.Empty(diagnostics);
+        }
+
+        [Fact]
+        public void VSD_05_Grouped_binding_group_name_participates_in_property_uniqueness()
+        {
+            QmlDocument document = DocumentWithMembers(
+                new BindingNode { PropertyName = "width", Value = Values.Number(10) },
+                new GroupedBindingNode
+                {
+                    GroupName = "width",
+                    Bindings = [new BindingNode { PropertyName = "pixelSize", Value = Values.Number(14) }],
+                });
+
+            AstDiagnostic diagnostic = SingleDiagnostic(document);
+
+            Assert.Equal(DiagnosticCode.E003_DuplicatePropertyName, diagnostic.Code);
+            Assert.Contains("width", diagnostic.Message, StringComparison.Ordinal);
+            _ = Assert.IsType<GroupedBindingNode>(diagnostic.Node);
+        }
+
+        [Fact]
+        public void VSD_06_Duplicate_grouped_binding_group_names_report_E003()
+        {
+            QmlDocument document = DocumentWithMembers(
+                new GroupedBindingNode
+                {
+                    GroupName = "font",
+                    Bindings = [new BindingNode { PropertyName = "pixelSize", Value = Values.Number(14) }],
+                },
+                new GroupedBindingNode
+                {
+                    GroupName = "font",
+                    Bindings = [new BindingNode { PropertyName = "bold", Value = Values.Boolean(true) }],
+                });
+
+            AstDiagnostic diagnostic = SingleDiagnostic(document);
+
+            Assert.Equal(DiagnosticCode.E003_DuplicatePropertyName, diagnostic.Code);
+            Assert.Contains("font", diagnostic.Message, StringComparison.Ordinal);
+            _ = Assert.IsType<GroupedBindingNode>(diagnostic.Node);
+        }
+
         private static ImmutableArray<AstDiagnostic> Validate(QmlDocument document)
         {
             QmlAstValidator validator = new();
