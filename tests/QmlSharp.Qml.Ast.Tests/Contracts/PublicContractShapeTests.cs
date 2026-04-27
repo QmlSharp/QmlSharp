@@ -7,10 +7,12 @@ namespace QmlSharp.Qml.Ast.Tests.Contracts
     public sealed class PublicContractShapeTests
     {
         [Fact]
-        public void ASTC_08_Source_position_and_span_are_readonly_value_contracts()
+        public void ASTC_08_Source_position_and_span_match_api_design_record_contracts()
         {
-            Assert.True(typeof(SourcePosition).IsValueType);
-            Assert.True(typeof(SourceSpan).IsValueType);
+            Assert.False(typeof(SourcePosition).IsValueType);
+            Assert.False(typeof(SourceSpan).IsValueType);
+            Assert.True(typeof(SourcePosition).IsSealed);
+            Assert.True(typeof(SourceSpan).IsSealed);
             Assert.True(typeof(SourcePosition).IsAssignableTo(typeof(IEquatable<SourcePosition>)));
             Assert.True(typeof(SourceSpan).IsAssignableTo(typeof(IEquatable<SourceSpan>)));
 
