@@ -233,7 +233,7 @@ namespace QmlSharp.Qml.Ast.Tests.Closure
         {
             QmlDocument document = new()
             {
-                Imports = [(ImportNode)new() { ImportKind = (ImportKind)999 }],
+                Imports = [new() { ImportKind = (ImportKind)999 }],
                 RootObject = new ObjectDefinitionNode
                 {
                     TypeName = "Item",
@@ -315,7 +315,7 @@ namespace QmlSharp.Qml.Ast.Tests.Closure
             };
 
             Assert.Equal([NodeKind.Pragma, NodeKind.Import, NodeKind.ObjectDefinition], QmlAstUtils.GetChildren(document).Select(static node => node.Kind));
-            Assert.Equal([NodeKind.ObjectDefinition], QmlAstUtils.GetChildren((InlineComponentNode)new() { Name = "Badge", Body = new ObjectDefinitionNode { TypeName = "Rectangle" } }).Select(static node => node.Kind));
+            Assert.Equal([NodeKind.ObjectDefinition], QmlAstUtils.GetChildren(new InlineComponentNode { Name = "Badge", Body = new ObjectDefinitionNode { TypeName = "Rectangle" } }).Select(static node => node.Kind));
             Assert.Equal([NodeKind.ObjectDefinition], QmlAstUtils.GetChildren((PropertyDeclarationNode)document.RootObject.Members[0]).Select(static node => node.Kind));
             Assert.Equal([NodeKind.Binding], QmlAstUtils.GetChildren((GroupedBindingNode)document.RootObject.Members[1]).Select(static node => node.Kind));
             Assert.Equal([NodeKind.Binding], QmlAstUtils.GetChildren((AttachedBindingNode)document.RootObject.Members[2]).Select(static node => node.Kind));
