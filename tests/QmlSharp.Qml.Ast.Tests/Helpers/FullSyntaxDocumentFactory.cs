@@ -80,18 +80,21 @@ namespace QmlSharp.Qml.Ast.Tests.Helpers
                             new EnumMember("Pending", 2))
                         .InlineComponent("Badge", "Rectangle", badge =>
                         {
-                            _ = badge.Binding("radius", Values.Number(8));
+                            _ = badge.Id("badge")
+                                .Binding("radius", Values.Number(8));
                             _ = badge.Binding("color", Values.String("blue"));
                         })
                         .Child("Text", text =>
                         {
-                            _ = text.Binding("text", Values.String("hello"));
+                            _ = text.Id("titleText")
+                                .Binding("text", Values.String("hello"));
                             _ = text.Child("Item", inner =>
                             {
                                 _ = inner.Binding("visible", Values.Boolean(false));
                                 _ = inner.Child("Rectangle", leaf =>
                                 {
-                                    _ = leaf.Binding("width", Values.Number(12));
+                                    _ = leaf.Id("leafRect")
+                                        .Binding("width", Values.Number(12));
                                 });
                             });
                         })
@@ -109,6 +112,11 @@ namespace QmlSharp.Qml.Ast.Tests.Helpers
         public static ImmutableArray<BindingValueKind> AllBindingValueKinds()
         {
             return [.. Enum.GetValues<BindingValueKind>()];
+        }
+
+        public static ImmutableArray<string> ExpectedIds()
+        {
+            return ["myRect", "badge", "titleText", "leafRect"];
         }
 
         public static ImmutableArray<PragmaName> AllPragmas()

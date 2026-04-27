@@ -7,12 +7,10 @@ using QmlSharp.Qml.Ast.Utilities;
 
 namespace QmlSharp.Qml.Ast.Tests.E2E
 {
-    // QmlTS parity notes (tests/ast/e2e.test.ts):
-    // - built AST passes structural validation -> E2E_01
-    // - serialization roundtrip preserves AST -> E2E_02
-    // - walker parity adapted from id collection to full node-kind inventory (+ id check) -> E2E_03
-    // - transformed AST remains structurally valid -> E2E_04
-    // - full-syntax fixture invariant checks -> E2E_05
+    /// <summary>
+    /// End-to-end AST pipeline coverage for the public builder, validator, traversal, transform,
+    /// serialization, and utility contracts introduced across Step 02.
+    /// </summary>
     [Trait("Category", TestCategories.Integration)]
     public sealed class AstEndToEndTests
     {
@@ -68,9 +66,8 @@ namespace QmlSharp.Qml.Ast.Tests.E2E
             }
 
             ImmutableArray<string> utilityIds = QmlAstUtils.CollectIds(document);
-            Assert.Equal(
-                utilityIds.OrderBy(static id => id, StringComparer.Ordinal),
-                walkedIds.OrderBy(static id => id, StringComparer.Ordinal));
+            Assert.Equal(FullSyntaxDocumentFactory.ExpectedIds().ToArray(), walkedIds.ToArray());
+            Assert.Equal(utilityIds.ToArray(), walkedIds.ToArray());
         }
 
         [Fact]
@@ -199,7 +196,31 @@ namespace QmlSharp.Qml.Ast.Tests.E2E
         }
 
         [Fact]
-        public void E2E_Optional_Semantic_validation_with_TestTypeChecker_passes_without_registry_dependency()
+        public void E2E_06_Full_syntax_transform_validate_serialize_and_utils_pipeline_stays_consistent()
+        {
+            QmlDocument document = AstFixtures.FullSyntaxDocument();
+            QmlAstTransformer transformer = new(new DelegateTransform(valueTransform: value =>
+            {
+                return value is NumberLiteral numberLiteral
+                    ? new NumberLiteral(numberLiteral.Value + 1)
+                    : value;
+            }));
+
+            QmlDocument transformed = transformer.Transform(document);
+            QmlDocument cloned = Serializer.Clone(transformed);
+
+            Assert.Empty(Validator.ValidateStructure(transformed));
+            Assert.True(QmlAstUtils.StructuralEqual(transformed, cloned));
+            Assert.Equal(FullSyntaxDocumentFactory.ExpectedIds().ToArray(), QmlAstUtils.CollectIds(cloned).ToArray());
+            Assert.Equal(QmlAstUtils.CollectTypeNames(transformed).ToArray(), QmlAstUtils.CollectTypeNames(cloned).ToArray());
+            Assert.Equal(QmlAstUtils.CollectImportedModules(transformed).ToArray(), QmlAstUtils.CollectImportedModules(cloned).ToArray());
+            Assert.Equal(QmlAstUtils.CountNodes(transformed), QmlAstUtils.CountNodes(cloned));
+            Assert.Equal(QmlAstUtils.MaxDepth(transformed), QmlAstUtils.MaxDepth(cloned));
+            Assert.Equal(101, Assert.IsType<NumberLiteral>(GetRootBinding(cloned, "width").Value).Value);
+        }
+
+        [Fact]
+        public void E2E_07_Semantic_validation_with_TestTypeChecker_passes_without_registry_dependency()
         {
             QmlDocument document = new QmlDocumentBuilder()
                 .AddModuleImport("QtQuick", "6.11")
