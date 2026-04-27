@@ -1,5 +1,4 @@
 using QmlSharp.Qml.Ast.Tests.Helpers;
-using QmlSharp.Qml.Ast.Values;
 
 namespace QmlSharp.Qml.Ast.Tests.Contracts
 {
