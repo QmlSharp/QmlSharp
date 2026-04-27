@@ -70,10 +70,10 @@ namespace QmlSharp.Qml.Ast.Tests.Builder
 
             SignalHandlerNode handler = Assert.IsType<SignalHandlerNode>(obj.Members[0]);
             Assert.Equal(SignalHandlerForm.Arrow, handler.Form);
-            _ = Assert.NotNull(handler.Parameters);
-            Assert.Equal(2, handler.Parameters.Value.Length);
-            Assert.Equal("x", handler.Parameters.Value[0]);
-            Assert.Equal("y", handler.Parameters.Value[1]);
+            ImmutableArray<string> parameters = Assert.NotNull(handler.Parameters);
+            Assert.Equal(2, parameters.Length);
+            Assert.Equal("x", parameters[0]);
+            Assert.Equal("y", parameters[1]);
         }
 
         [Fact]
