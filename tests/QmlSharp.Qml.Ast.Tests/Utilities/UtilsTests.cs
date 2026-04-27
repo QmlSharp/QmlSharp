@@ -137,6 +137,29 @@ namespace QmlSharp.Qml.Ast.Tests.Utilities
         }
 
         [Fact]
+        public void GetBindingValue_returns_first_direct_ordinal_property_match()
+        {
+            ObjectDefinitionNode obj = new()
+            {
+                TypeName = "Item",
+                Members =
+                [
+                    new BindingNode { PropertyName = "width", Value = Values.Number(100) },
+                    new BindingNode { PropertyName = "Width", Value = Values.Number(200) },
+                    new BindingNode { PropertyName = "width", Value = Values.Number(300) },
+                ],
+            };
+
+            BindingValue? lowercaseValue = QmlAstUtils.GetBindingValue(obj, "width");
+            BindingValue? uppercaseValue = QmlAstUtils.GetBindingValue(obj, "Width");
+
+            NumberLiteral lowercaseNumber = Assert.IsType<NumberLiteral>(lowercaseValue);
+            NumberLiteral uppercaseNumber = Assert.IsType<NumberLiteral>(uppercaseValue);
+            Assert.Equal(100, lowercaseNumber.Value);
+            Assert.Equal(200, uppercaseNumber.Value);
+        }
+
+        [Fact]
         public void UT_09_GetBindingValue_for_unbound_property_returns_null()
         {
             QmlDocument document = CreateUtilityDocument();
@@ -327,6 +350,29 @@ namespace QmlSharp.Qml.Ast.Tests.Utilities
 
             Assert.Equal("root", rootId);
             Assert.Null(missingId);
+        }
+
+        [Fact]
+        public void GetObjectId_returns_first_direct_id_and_ignores_child_ids()
+        {
+            ObjectDefinitionNode obj = new()
+            {
+                TypeName = "Item",
+                Members =
+                [
+                    new ObjectDefinitionNode
+                    {
+                        TypeName = "Child",
+                        Members = [new IdAssignmentNode { Id = "child" }],
+                    },
+                    new IdAssignmentNode { Id = "root" },
+                    new IdAssignmentNode { Id = "duplicate" },
+                ],
+            };
+
+            string? id = QmlAstUtils.GetObjectId(obj);
+
+            Assert.Equal("root", id);
         }
 
         private static QmlDocument CreateUtilityDocument()

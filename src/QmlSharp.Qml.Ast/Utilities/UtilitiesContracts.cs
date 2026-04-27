@@ -69,12 +69,10 @@ namespace QmlSharp.Qml.Ast.Utilities
             ArgumentNullException.ThrowIfNull(document);
 
             ImmutableArray<string>.Builder modules = ImmutableArray.CreateBuilder<string>();
-            foreach (ImportNode importNode in document.Imports)
+            foreach (ImportNode importNode in document.Imports.Where(
+                static importNode => importNode.ImportKind == ImportKind.Module && importNode.ModuleUri is not null))
             {
-                if (importNode.ImportKind == ImportKind.Module && importNode.ModuleUri is not null)
-                {
-                    modules.Add(importNode.ModuleUri);
-                }
+                modules.Add(importNode.ModuleUri!);
             }
 
             return modules.ToImmutable();
@@ -153,15 +151,10 @@ namespace QmlSharp.Qml.Ast.Utilities
         {
             ArgumentNullException.ThrowIfNull(obj);
 
-            foreach (AstNode member in obj.Members)
-            {
-                if (member is IdAssignmentNode idAssignmentNode)
-                {
-                    return idAssignmentNode.Id;
-                }
-            }
-
-            return null;
+            return obj.Members
+                .OfType<IdAssignmentNode>()
+                .FirstOrDefault()?
+                .Id;
         }
 
         /// <summary>
@@ -175,16 +168,11 @@ namespace QmlSharp.Qml.Ast.Utilities
             ArgumentNullException.ThrowIfNull(obj);
             ArgumentNullException.ThrowIfNull(propertyName);
 
-            foreach (AstNode member in obj.Members)
-            {
-                if (member is BindingNode bindingNode
-                    && string.Equals(bindingNode.PropertyName, propertyName, StringComparison.Ordinal))
-                {
-                    return bindingNode.Value;
-                }
-            }
-
-            return null;
+            return obj.Members
+                .OfType<BindingNode>()
+                .Where(bindingNode => string.Equals(bindingNode.PropertyName, propertyName, StringComparison.Ordinal))
+                .Select(static bindingNode => bindingNode.Value)
+                .FirstOrDefault();
         }
 
         /// <summary>
