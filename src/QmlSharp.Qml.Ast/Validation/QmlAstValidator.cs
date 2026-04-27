@@ -27,7 +27,12 @@ namespace QmlSharp.Qml.Ast.Validation
             ArgumentNullException.ThrowIfNull(document);
             ArgumentNullException.ThrowIfNull(typeChecker);
 
-            throw new NotSupportedException("Semantic validation is implemented in Step 02.07.");
+            SemanticValidationContext context = new(typeChecker);
+            context.ValidateImports(document.Imports);
+            ValidateSemanticObject(document.RootObject, context);
+            context.ValidateUnusedImports(document.Imports);
+
+            return context.ToImmutable();
         }
 
         private static void ValidateImportNodes(QmlDocument document, StructuralValidationContext context)
@@ -201,6 +206,124 @@ namespace QmlSharp.Qml.Ast.Validation
                         ValidateBindingValue(element, context, parentObjectDepth);
                     }
 
+                    break;
+            }
+        }
+
+        private static void ValidateSemanticObject(ObjectDefinitionNode objectNode, SemanticValidationContext context)
+        {
+            context.MarkTypeUsed(objectNode.TypeName);
+            bool typeExists = context.ValidateObjectType(objectNode);
+            ObjectSemanticScope scope = ObjectSemanticScope.Create(objectNode);
+
+            if (typeExists)
+            {
+                foreach (AstNode member in objectNode.Members)
+                {
+                    ValidateSemanticObjectMember(objectNode, member, scope, context);
+                }
+            }
+
+            foreach (AstNode member in objectNode.Members)
+            {
+                ValidateSemanticNestedContent(member, context);
+            }
+        }
+
+        private static void ValidateSemanticObjectMember(
+            ObjectDefinitionNode objectNode,
+            AstNode member,
+            ObjectSemanticScope scope,
+            SemanticValidationContext context)
+        {
+            switch (member)
+            {
+                case PropertyDeclarationNode propertyDeclarationNode:
+                    context.ValidatePropertyType(propertyDeclarationNode);
+                    context.ValidateRequiredPropertyDeclaration(objectNode.TypeName, propertyDeclarationNode);
+                    if (propertyDeclarationNode.InitialValue is not null)
+                    {
+                        context.ValidateBindingValue(propertyDeclarationNode.InitialValue);
+                    }
+
+                    break;
+
+                case BindingNode bindingNode:
+                    context.ValidatePropertyBinding(objectNode.TypeName, bindingNode);
+                    break;
+
+                case GroupedBindingNode groupedBindingNode:
+                    context.ValidateGroupedBinding(objectNode.TypeName, groupedBindingNode);
+                    break;
+
+                case AttachedBindingNode attachedBindingNode:
+                    context.ValidateAttachedBinding(attachedBindingNode);
+                    break;
+
+                case ArrayBindingNode arrayBindingNode:
+                    context.ValidateArrayBinding(objectNode.TypeName, arrayBindingNode);
+                    break;
+
+                case BehaviorOnNode behaviorOnNode:
+                    context.ValidateBehaviorOn(objectNode.TypeName, behaviorOnNode);
+                    break;
+
+                case SignalHandlerNode signalHandlerNode:
+                    context.ValidateSignalHandler(objectNode.TypeName, signalHandlerNode, scope);
+                    break;
+
+                case FunctionDeclarationNode functionDeclarationNode:
+                    context.ValidateFunctionDeclaration(functionDeclarationNode);
+                    break;
+
+                case SignalDeclarationNode signalDeclarationNode:
+                    context.ValidateSignalDeclaration(signalDeclarationNode);
+                    break;
+            }
+        }
+
+        private static void ValidateSemanticNestedContent(AstNode member, SemanticValidationContext context)
+        {
+            switch (member)
+            {
+                case ObjectDefinitionNode childObject:
+                    ValidateSemanticObject(childObject, context);
+                    break;
+
+                case InlineComponentNode inlineComponentNode:
+                    ValidateSemanticObject(inlineComponentNode.Body, context);
+                    break;
+
+                case BindingNode bindingNode:
+                    context.ValidateBindingValue(bindingNode.Value);
+                    break;
+
+                case GroupedBindingNode groupedBindingNode:
+                    foreach (BindingNode bindingNode in groupedBindingNode.Bindings)
+                    {
+                        context.ValidateBindingValue(bindingNode.Value);
+                    }
+
+                    break;
+
+                case AttachedBindingNode attachedBindingNode:
+                    foreach (BindingNode bindingNode in attachedBindingNode.Bindings)
+                    {
+                        context.ValidateBindingValue(bindingNode.Value);
+                    }
+
+                    break;
+
+                case ArrayBindingNode arrayBindingNode:
+                    foreach (BindingValue element in arrayBindingNode.Elements)
+                    {
+                        context.ValidateBindingValue(element);
+                    }
+
+                    break;
+
+                case BehaviorOnNode behaviorOnNode:
+                    ValidateSemanticObject(behaviorOnNode.Animation, context);
                     break;
             }
         }
@@ -437,6 +560,375 @@ namespace QmlSharp.Qml.Ast.Validation
                         $"Duplicate enum member '{member.Name}' in enum '{node.Name}'.",
                         node);
                 }
+            }
+        }
+
+        private sealed class SemanticValidationContext
+        {
+            private readonly ImmutableArray<AstDiagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<AstDiagnostic>();
+            private readonly ITypeChecker _typeChecker;
+            private readonly HashSet<string> _usedTypes = new(StringComparer.Ordinal);
+
+            public SemanticValidationContext(ITypeChecker typeChecker)
+            {
+                _typeChecker = typeChecker;
+            }
+
+            public void ValidateImports(ImmutableArray<ImportNode> imports)
+            {
+                foreach (ImportNode importNode in imports)
+                {
+                    string? moduleUri = importNode.ModuleUri;
+                    if (importNode.ImportKind == ImportKind.Module
+                        && !string.IsNullOrWhiteSpace(moduleUri)
+                        && !_typeChecker.HasModule(moduleUri))
+                    {
+                        AddError(
+                            DiagnosticCode.E107_UnknownModule,
+                            $"Unknown module '{moduleUri}'.",
+                            importNode);
+                    }
+                }
+            }
+
+            public bool ValidateObjectType(ObjectDefinitionNode objectNode)
+            {
+                if (_typeChecker.HasType(objectNode.TypeName))
+                {
+                    return true;
+                }
+
+                AddError(
+                    DiagnosticCode.E100_UnknownType,
+                    $"Unknown type '{objectNode.TypeName}'.",
+                    objectNode);
+                return false;
+            }
+
+            public void ValidatePropertyType(PropertyDeclarationNode node)
+            {
+                MarkTypeUsed(node.TypeName);
+                if (!_typeChecker.HasType(node.TypeName))
+                {
+                    AddError(
+                        DiagnosticCode.E100_UnknownType,
+                        $"Unknown property type '{node.TypeName}' for property '{node.Name}'.",
+                        node);
+                }
+            }
+
+            public void ValidateRequiredPropertyDeclaration(string ownerTypeName, PropertyDeclarationNode node)
+            {
+                if (node.IsRequired
+                    && node.InitialValue is null
+                    && _typeChecker.IsPropertyRequired(ownerTypeName, node.Name))
+                {
+                    AddError(
+                        DiagnosticCode.E104_RequiredPropertyNotSet,
+                        $"Required property '{node.Name}' is not set.",
+                        node);
+                }
+            }
+
+            public void ValidatePropertyBinding(string typeName, BindingNode node)
+            {
+                if (!_typeChecker.HasProperty(typeName, node.PropertyName))
+                {
+                    AddError(
+                        DiagnosticCode.E101_UnknownProperty,
+                        $"Unknown property '{node.PropertyName}' on type '{typeName}'.",
+                        node);
+                    return;
+                }
+
+                if (_typeChecker.IsPropertyReadonly(typeName, node.PropertyName))
+                {
+                    AddError(
+                        DiagnosticCode.E105_ReadonlyPropertyBound,
+                        $"Cannot bind readonly property '{node.PropertyName}' on type '{typeName}'.",
+                        node);
+                }
+            }
+
+            public void ValidateGroupedBinding(string typeName, GroupedBindingNode node)
+            {
+                if (!_typeChecker.HasProperty(typeName, node.GroupName))
+                {
+                    AddError(
+                        DiagnosticCode.E101_UnknownProperty,
+                        $"Unknown grouped property '{node.GroupName}' on type '{typeName}'.",
+                        node);
+                }
+            }
+
+            public void ValidateAttachedBinding(AttachedBindingNode node)
+            {
+                MarkTypeUsed(node.AttachedTypeName);
+                if (!_typeChecker.IsAttachedType(node.AttachedTypeName))
+                {
+                    AddError(
+                        DiagnosticCode.E103_UnknownAttachedType,
+                        $"Unknown attached type '{node.AttachedTypeName}'.",
+                        node);
+                    return;
+                }
+
+                foreach (BindingNode bindingNode in node.Bindings)
+                {
+                    ValidatePropertyBinding(node.AttachedTypeName, bindingNode);
+                }
+            }
+
+            public void ValidateArrayBinding(string typeName, ArrayBindingNode node)
+            {
+                if (!_typeChecker.HasProperty(typeName, node.PropertyName))
+                {
+                    AddError(
+                        DiagnosticCode.E101_UnknownProperty,
+                        $"Unknown array property '{node.PropertyName}' on type '{typeName}'.",
+                        node);
+                }
+            }
+
+            public void ValidateBehaviorOn(string typeName, BehaviorOnNode node)
+            {
+                if (!_typeChecker.HasProperty(typeName, node.PropertyName))
+                {
+                    AddError(
+                        DiagnosticCode.E101_UnknownProperty,
+                        $"Unknown behavior target property '{node.PropertyName}' on type '{typeName}'.",
+                        node);
+                }
+                else if (_typeChecker.IsPropertyReadonly(typeName, node.PropertyName))
+                {
+                    AddError(
+                        DiagnosticCode.E105_ReadonlyPropertyBound,
+                        $"Cannot animate readonly property '{node.PropertyName}' on type '{typeName}'.",
+                        node);
+                }
+            }
+
+            public void ValidateSignalHandler(string typeName, SignalHandlerNode node, ObjectSemanticScope scope)
+            {
+                if (!TryGetSignalNameFromHandler(node.HandlerName, out string signalName))
+                {
+                    return;
+                }
+
+                if (_typeChecker.HasSignal(typeName, signalName))
+                {
+                    return;
+                }
+
+                if (TryGetChangedPropertyName(signalName, out string propertyName)
+                    && (scope.HasLocalProperty(propertyName) || _typeChecker.HasProperty(typeName, propertyName)))
+                {
+                    return;
+                }
+
+                AddError(
+                    DiagnosticCode.E102_UnknownSignal,
+                    $"Unknown signal '{signalName}' for handler '{node.HandlerName}' on type '{typeName}'.",
+                    node);
+            }
+
+            public void ValidateSignalDeclaration(SignalDeclarationNode node)
+            {
+                foreach (ParameterDeclaration parameter in node.Parameters)
+                {
+                    ValidateParameterType(parameter.TypeName, node);
+                }
+            }
+
+            public void ValidateFunctionDeclaration(FunctionDeclarationNode node)
+            {
+                foreach (ParameterDeclaration parameter in node.Parameters)
+                {
+                    ValidateParameterType(parameter.TypeName, node);
+                }
+
+                if (node.ReturnType is not null)
+                {
+                    ValidateParameterType(node.ReturnType, node);
+                }
+            }
+
+            public void ValidateBindingValue(BindingValue value)
+            {
+                switch (value)
+                {
+                    case EnumReference enumReference:
+                        MarkTypeUsed(enumReference.TypeName);
+                        if (!_typeChecker.HasEnumMember(enumReference.TypeName, enumReference.MemberName))
+                        {
+                            AddError(
+                                DiagnosticCode.E106_InvalidEnumReference,
+                                $"Invalid enum reference '{enumReference.TypeName}.{enumReference.MemberName}'.",
+                                null);
+                        }
+
+                        break;
+
+                    case ObjectValue objectValue:
+                        ValidateSemanticObject(objectValue.Object, this);
+                        break;
+
+                    case ArrayValue arrayValue:
+                        foreach (BindingValue element in arrayValue.Elements)
+                        {
+                            ValidateBindingValue(element);
+                        }
+
+                        break;
+                }
+            }
+
+            public void MarkTypeUsed(string typeName)
+            {
+                _usedTypes.Add(typeName);
+            }
+
+            public void ValidateUnusedImports(ImmutableArray<ImportNode> imports)
+            {
+                foreach (ImportNode importNode in imports)
+                {
+                    string? moduleUri = importNode.ModuleUri;
+                    if (importNode.ImportKind != ImportKind.Module
+                        || string.IsNullOrWhiteSpace(moduleUri)
+                        || !_typeChecker.HasModule(moduleUri))
+                    {
+                        continue;
+                    }
+
+                    if (IsImportUsed(moduleUri, imports))
+                    {
+                        continue;
+                    }
+
+                    AddWarning(
+                        DiagnosticCode.W001_UnusedImport,
+                        $"Import '{importNode.ModuleUri}' appears unused.",
+                        importNode);
+                }
+            }
+
+            public ImmutableArray<AstDiagnostic> ToImmutable()
+            {
+                return _diagnostics.ToImmutable();
+            }
+
+            private void ValidateParameterType(string typeName, AstNode node)
+            {
+                MarkTypeUsed(typeName);
+                if (!_typeChecker.HasType(typeName))
+                {
+                    AddError(
+                        DiagnosticCode.E100_UnknownType,
+                        $"Unknown type '{typeName}'.",
+                        node);
+                }
+            }
+
+            private bool IsImportUsed(string moduleUri, ImmutableArray<ImportNode> imports)
+            {
+                foreach (string usedType in _usedTypes)
+                {
+                    if (IsQualifiedTypeInModule(moduleUri, usedType)
+                        || _typeChecker.HasType(moduleUri + "." + usedType))
+                    {
+                        return true;
+                    }
+                }
+
+                return imports.Count(static imported => imported.ImportKind == ImportKind.Module && IsNonEmpty(imported.ModuleUri)) == 1
+                    && _usedTypes.Any(typeName => _typeChecker.HasType(typeName));
+            }
+
+            private static bool IsQualifiedTypeInModule(string moduleUri, string typeName)
+            {
+                return typeName.StartsWith(moduleUri + ".", StringComparison.Ordinal);
+            }
+
+            private static bool TryGetSignalNameFromHandler(string handlerName, out string signalName)
+            {
+                signalName = string.Empty;
+                if (!handlerName.StartsWith("on", StringComparison.Ordinal) || handlerName.Length <= 2)
+                {
+                    return false;
+                }
+
+                signalName = char.ToLowerInvariant(handlerName[2]) + handlerName[3..];
+                return true;
+            }
+
+            private static bool TryGetChangedPropertyName(string signalName, out string propertyName)
+            {
+                const string ChangedSuffix = "Changed";
+                propertyName = string.Empty;
+                if (!signalName.EndsWith(ChangedSuffix, StringComparison.Ordinal) || signalName.Length == ChangedSuffix.Length)
+                {
+                    return false;
+                }
+
+                propertyName = signalName[..^ChangedSuffix.Length];
+                return true;
+            }
+
+            private void AddError(DiagnosticCode code, string message, AstNode? node)
+            {
+                Add(code, DiagnosticSeverity.Error, message, node);
+            }
+
+            private void AddWarning(DiagnosticCode code, string message, AstNode? node)
+            {
+                Add(code, DiagnosticSeverity.Warning, message, node);
+            }
+
+            private void Add(DiagnosticCode code, DiagnosticSeverity severity, string message, AstNode? node)
+            {
+                _diagnostics.Add(new AstDiagnostic
+                {
+                    Code = code,
+                    Message = message,
+                    Severity = severity,
+                    Span = node?.Span,
+                    Node = node,
+                });
+            }
+        }
+
+        private sealed class ObjectSemanticScope
+        {
+            private readonly HashSet<string> _localProperties;
+
+            private ObjectSemanticScope(HashSet<string> localProperties)
+            {
+                _localProperties = localProperties;
+            }
+
+            public static ObjectSemanticScope Create(ObjectDefinitionNode objectNode)
+            {
+                HashSet<string> localProperties = new(StringComparer.Ordinal);
+                foreach (AstNode member in objectNode.Members)
+                {
+                    switch (member)
+                    {
+                        case PropertyDeclarationNode propertyDeclarationNode:
+                            _ = localProperties.Add(propertyDeclarationNode.Name);
+                            break;
+
+                        case PropertyAliasNode propertyAliasNode:
+                            _ = localProperties.Add(propertyAliasNode.Name);
+                            break;
+                    }
+                }
+
+                return new ObjectSemanticScope(localProperties);
+            }
+
+            public bool HasLocalProperty(string propertyName)
+            {
+                return _localProperties.Contains(propertyName);
             }
         }
     }
