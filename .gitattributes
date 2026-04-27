@@ -9,6 +9,7 @@
 *.hpp linguist-language=C++
 *.inc linguist-language=C++
 *.qml linguist-language=QML
+tests/QmlSharp.Qml.Emitter.Tests/Fixtures/Golden/*.qml text eol=lf linguist-language=QML
 *.png binary
 *.jpg binary
 *.jpeg binary
