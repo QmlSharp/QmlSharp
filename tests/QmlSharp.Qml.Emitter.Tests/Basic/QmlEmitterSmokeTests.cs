@@ -26,5 +26,23 @@ namespace QmlSharp.Qml.Emitter.Tests.Basic
 
             Assert.Contains("later 03-qml-emitter steps", exception.Message, StringComparison.Ordinal);
         }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
+        public void Emitter_NullInputs_ThrowArgumentNullExceptionBeforeStub()
+        {
+            IQmlEmitter emitter = new QmlEmitter();
+
+            ArgumentNullException emitException = Assert.Throws<ArgumentNullException>(
+                () => emitter.Emit(null!));
+            ArgumentNullException fragmentException = Assert.Throws<ArgumentNullException>(
+                () => emitter.EmitFragment(null!));
+            ArgumentNullException sourceMapException = Assert.Throws<ArgumentNullException>(
+                () => emitter.EmitWithSourceMap(null!));
+
+            Assert.Equal("document", emitException.ParamName);
+            Assert.Equal("node", fragmentException.ParamName);
+            Assert.Equal("document", sourceMapException.ParamName);
+        }
     }
 }
