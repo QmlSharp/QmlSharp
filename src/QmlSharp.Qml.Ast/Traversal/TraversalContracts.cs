@@ -24,6 +24,9 @@ namespace QmlSharp.Qml.Ast.Traversal
     /// </summary>
     public sealed class WalkerContext
     {
+        private readonly AncestorPath? _ancestorPath;
+        private ImmutableArray<AstNode>? _materializedPath;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="WalkerContext"/> class.
         /// </summary>
@@ -32,7 +35,14 @@ namespace QmlSharp.Qml.Ast.Traversal
         /// <param name="depth">Current depth (root document is depth 0).</param>
         public WalkerContext(ImmutableArray<AstNode> path, AstNode? parent, int depth)
         {
-            Path = path;
+            _materializedPath = path;
+            Parent = parent;
+            Depth = depth;
+        }
+
+        internal WalkerContext(AncestorPath? ancestorPath, AstNode? parent, int depth)
+        {
+            _ancestorPath = ancestorPath;
             Parent = parent;
             Depth = depth;
         }
@@ -40,7 +50,20 @@ namespace QmlSharp.Qml.Ast.Traversal
         /// <summary>
         /// Gets ancestors from root to the current node's parent.
         /// </summary>
-        public ImmutableArray<AstNode> Path { get; }
+        public ImmutableArray<AstNode> Path
+        {
+            get
+            {
+                if (_materializedPath.HasValue)
+                {
+                    return _materializedPath.GetValueOrDefault();
+                }
+
+                ImmutableArray<AstNode> path = _ancestorPath?.ToImmutableArray() ?? ImmutableArray<AstNode>.Empty;
+                _materializedPath = path;
+                return path;
+            }
+        }
 
         /// <summary>
         /// Gets the immediate parent node, or null at root.
@@ -51,6 +74,37 @@ namespace QmlSharp.Qml.Ast.Traversal
         /// Gets current traversal depth (document root is 0).
         /// </summary>
         public int Depth { get; }
+
+        internal sealed class AncestorPath
+        {
+            public AncestorPath(AstNode node, AncestorPath? previous)
+            {
+                Node = node;
+                Previous = previous;
+                Length = previous?.Length + 1 ?? 1;
+            }
+
+            public AstNode Node { get; }
+
+            public AncestorPath? Previous { get; }
+
+            public int Length { get; }
+
+            public ImmutableArray<AstNode> ToImmutableArray()
+            {
+                ImmutableArray<AstNode>.Builder builder = ImmutableArray.CreateBuilder<AstNode>(Length);
+                builder.Count = Length;
+
+                AncestorPath? current = this;
+                for (int index = Length - 1; current is not null; index--)
+                {
+                    builder[index] = current.Node;
+                    current = current.Previous;
+                }
+
+                return builder.MoveToImmutable();
+            }
+        }
     }
 
     /// <summary>
@@ -383,13 +437,13 @@ namespace QmlSharp.Qml.Ast.Traversal
         public static void Walk(AstNode node, WalkerEnterDelegate? enter, WalkerLeaveDelegate? leave)
         {
             ArgumentNullException.ThrowIfNull(node);
-            WalkNode(node, parent: null, path: ImmutableArray<AstNode>.Empty, depth: 0, enter, leave);
+            WalkNode(node, parent: null, path: null, depth: 0, enter, leave);
         }
 
         private static void WalkNode(
             AstNode node,
             AstNode? parent,
-            ImmutableArray<AstNode> path,
+            WalkerContext.AncestorPath? path,
             int depth,
             WalkerEnterDelegate? enter,
             WalkerLeaveDelegate? leave)
@@ -401,7 +455,7 @@ namespace QmlSharp.Qml.Ast.Traversal
                 return;
             }
 
-            ImmutableArray<AstNode> childPath = path.Add(node);
+            WalkerContext.AncestorPath childPath = new(node, path);
             WalkChildren(node, childPath, depth + 1, enter, leave);
 
             leave?.Invoke(node, context);
@@ -409,7 +463,7 @@ namespace QmlSharp.Qml.Ast.Traversal
 
         private static void WalkChildren(
             AstNode node,
-            ImmutableArray<AstNode> path,
+            WalkerContext.AncestorPath path,
             int depth,
             WalkerEnterDelegate? enter,
             WalkerLeaveDelegate? leave)
@@ -421,7 +475,7 @@ namespace QmlSharp.Qml.Ast.Traversal
 
         private static void WalkLeadingComments(
             AstNode node,
-            ImmutableArray<AstNode> path,
+            WalkerContext.AncestorPath path,
             int depth,
             WalkerEnterDelegate? enter,
             WalkerLeaveDelegate? leave)
@@ -434,7 +488,7 @@ namespace QmlSharp.Qml.Ast.Traversal
 
         private static void WalkNodeChildren(
             AstNode node,
-            ImmutableArray<AstNode> path,
+            WalkerContext.AncestorPath path,
             int depth,
             WalkerEnterDelegate? enter,
             WalkerLeaveDelegate? leave)
@@ -481,7 +535,7 @@ namespace QmlSharp.Qml.Ast.Traversal
 
         private static void WalkDocumentChildren(
             QmlDocument document,
-            ImmutableArray<AstNode> path,
+            WalkerContext.AncestorPath path,
             int depth,
             WalkerEnterDelegate? enter,
             WalkerLeaveDelegate? leave)
@@ -502,7 +556,7 @@ namespace QmlSharp.Qml.Ast.Traversal
         private static void WalkNodeList(
             ImmutableArray<AstNode> nodes,
             AstNode parent,
-            ImmutableArray<AstNode> path,
+            WalkerContext.AncestorPath path,
             int depth,
             WalkerEnterDelegate? enter,
             WalkerLeaveDelegate? leave)
@@ -516,7 +570,7 @@ namespace QmlSharp.Qml.Ast.Traversal
         private static void WalkBindingNodeList(
             ImmutableArray<BindingNode> bindings,
             AstNode parent,
-            ImmutableArray<AstNode> path,
+            WalkerContext.AncestorPath path,
             int depth,
             WalkerEnterDelegate? enter,
             WalkerLeaveDelegate? leave)
@@ -530,7 +584,7 @@ namespace QmlSharp.Qml.Ast.Traversal
         private static void WalkBindingValueList(
             ImmutableArray<BindingValue> values,
             AstNode parent,
-            ImmutableArray<AstNode> path,
+            WalkerContext.AncestorPath path,
             int depth,
             WalkerEnterDelegate? enter,
             WalkerLeaveDelegate? leave)
@@ -543,7 +597,7 @@ namespace QmlSharp.Qml.Ast.Traversal
 
         private static void WalkTrailingComment(
             AstNode node,
-            ImmutableArray<AstNode> path,
+            WalkerContext.AncestorPath path,
             int depth,
             WalkerEnterDelegate? enter,
             WalkerLeaveDelegate? leave)
@@ -557,7 +611,7 @@ namespace QmlSharp.Qml.Ast.Traversal
         private static void WalkBindingValue(
             BindingValue value,
             AstNode parent,
-            ImmutableArray<AstNode> path,
+            WalkerContext.AncestorPath path,
             int depth,
             WalkerEnterDelegate? enter,
             WalkerLeaveDelegate? leave)

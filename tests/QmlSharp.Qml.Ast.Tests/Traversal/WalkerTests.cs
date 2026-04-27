@@ -317,6 +317,51 @@ namespace QmlSharp.Qml.Ast.Tests.Traversal
             Assert.Contains("NestedItem", typeNames);
         }
 
+        [Fact]
+        public void Walker_context_path_remains_stable_when_read_after_traversal()
+        {
+            QmlDocument document = new QmlDocumentBuilder()
+                .SetRootObject("Column", root =>
+                {
+                    _ = root.Child("Text");
+                    _ = root.Child("Rectangle");
+                })
+                .Build();
+
+            WalkerContext? textContext = null;
+            WalkerContext? rectangleContext = null;
+
+            QmlAstWalker.Walk(
+                document,
+                enter: (node, context) =>
+                {
+                    if (node is ObjectDefinitionNode objectNode && objectNode.TypeName == "Text")
+                    {
+                        textContext = context;
+                    }
+
+                    if (node is ObjectDefinitionNode siblingNode && siblingNode.TypeName == "Rectangle")
+                    {
+                        rectangleContext = context;
+                    }
+
+                    return true;
+                },
+                leave: null);
+
+            Assert.NotNull(textContext);
+            Assert.NotNull(rectangleContext);
+            ImmutableArray<AstNode> textPath = textContext.Path;
+            ImmutableArray<AstNode> rectanglePath = rectangleContext.Path;
+
+            Assert.Equal(2, textPath.Length);
+            Assert.Equal(2, rectanglePath.Length);
+            _ = Assert.IsType<QmlDocument>(textPath[0]);
+            Assert.Equal("Column", Assert.IsType<ObjectDefinitionNode>(textPath[1]).TypeName);
+            _ = Assert.IsType<QmlDocument>(rectanglePath[0]);
+            Assert.Equal("Column", Assert.IsType<ObjectDefinitionNode>(rectanglePath[1]).TypeName);
+        }
+
         private static QmlDocument CreateWalkerOrderDocument()
         {
             return new QmlDocumentBuilder()
