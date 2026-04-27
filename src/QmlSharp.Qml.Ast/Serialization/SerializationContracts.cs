@@ -335,9 +335,9 @@ namespace QmlSharp.Qml.Ast.Serialization
         {
             QmlDocument document = new()
             {
-                Pragmas = ReadOptionalArray<PragmaNode>(root, "pragmas", options),
-                Imports = ReadOptionalArray<ImportNode>(root, "imports", options),
-                RootObject = ReadRequired<ObjectDefinitionNode>(root, "rootObject", options),
+                Pragmas = ReadOptionalNodeArray<PragmaNode>(root, "pragmas", options),
+                Imports = ReadOptionalNodeArray<ImportNode>(root, "imports", options),
+                RootObject = ReadRequiredNode<ObjectDefinitionNode>(root, "rootObject", options),
             };
 
             return ReadNodeCommon(document, root, options);
@@ -378,7 +378,7 @@ namespace QmlSharp.Qml.Ast.Serialization
             return ReadNodeCommon(new InlineComponentNode
             {
                 Name = ReadRequired<string>(root, "name", options),
-                Body = ReadRequired<ObjectDefinitionNode>(root, "body", options),
+                Body = ReadRequiredNode<ObjectDefinitionNode>(root, "body", options),
             }, root, options);
         }
 
@@ -419,7 +419,7 @@ namespace QmlSharp.Qml.Ast.Serialization
             return ReadNodeCommon(new GroupedBindingNode
             {
                 GroupName = ReadRequired<string>(root, "groupName", options),
-                Bindings = ReadOptionalArray<BindingNode>(root, "bindings", options),
+                Bindings = ReadOptionalNodeArray<BindingNode>(root, "bindings", options),
             }, root, options);
         }
 
@@ -428,7 +428,7 @@ namespace QmlSharp.Qml.Ast.Serialization
             return ReadNodeCommon(new AttachedBindingNode
             {
                 AttachedTypeName = ReadRequired<string>(root, "attachedTypeName", options),
-                Bindings = ReadOptionalArray<BindingNode>(root, "bindings", options),
+                Bindings = ReadOptionalNodeArray<BindingNode>(root, "bindings", options),
             }, root, options);
         }
 
@@ -446,7 +446,7 @@ namespace QmlSharp.Qml.Ast.Serialization
             return ReadNodeCommon(new BehaviorOnNode
             {
                 PropertyName = ReadRequired<string>(root, "propertyName", options),
-                Animation = ReadRequired<ObjectDefinitionNode>(root, "animation", options),
+                Animation = ReadRequiredNode<ObjectDefinitionNode>(root, "animation", options),
             }, root, options);
         }
 
@@ -571,7 +571,7 @@ namespace QmlSharp.Qml.Ast.Serialization
                     ReadRequired<string>(root, "memberName", options)),
                 BindingValueKind.ScriptExpression => new ScriptExpression(ReadRequired<string>(root, "code", options)),
                 BindingValueKind.ScriptBlock => new ScriptBlock(ReadRequired<string>(root, "code", options)),
-                BindingValueKind.ObjectValue => new ObjectValue(ReadRequired<ObjectDefinitionNode>(root, "object", options)),
+                BindingValueKind.ObjectValue => new ObjectValue(ReadRequiredNode<ObjectDefinitionNode>(root, "object", options)),
                 BindingValueKind.ArrayValue => new ArrayValue(ReadOptionalArray<BindingValue>(root, "elements", options)),
                 _ => throw new JsonException($"Unknown binding value kind '{kind}'."),
             };
@@ -658,12 +658,35 @@ namespace QmlSharp.Qml.Ast.Serialization
                 throw new JsonException($"{ToSentenceCase(valueName)} discriminator 'kind' cannot be empty.");
             }
 
-            if (!Enum.TryParse(kindText, ignoreCase: false, out TKind kind))
+            if (IsNumericDiscriminator(kindText)
+                || !Enum.TryParse(kindText, ignoreCase: false, out TKind kind)
+                || !Enum.IsDefined(kind))
             {
                 throw new JsonException($"Unknown {valueName} kind '{kindText}'.");
             }
 
             return kind;
+        }
+
+        public static TNode ReadRequiredNode<TNode>(JsonElement root, string propertyName, JsonSerializerOptions options)
+            where TNode : AstNode
+        {
+            AstNode node = ReadRequired<AstNode>(root, propertyName, options);
+            return node as TNode
+                ?? throw new JsonException($"Property '{propertyName}' must be a {typeof(TNode).Name} AST node.");
+        }
+
+        public static TNode? ReadOptionalNode<TNode>(JsonElement root, string propertyName, JsonSerializerOptions options)
+            where TNode : AstNode
+        {
+            AstNode? node = ReadOptional<AstNode>(root, propertyName, options);
+            if (node is null)
+            {
+                return null;
+            }
+
+            return node as TNode
+                ?? throw new JsonException($"Property '{propertyName}' must be a {typeof(TNode).Name} AST node.");
         }
 
         public static TNode ReadNodeCommon<TNode>(TNode node, JsonElement root, JsonSerializerOptions options)
@@ -672,8 +695,8 @@ namespace QmlSharp.Qml.Ast.Serialization
             return node with
             {
                 Span = ReadOptional<SourceSpan?>(root, "span", options),
-                LeadingComments = ReadOptionalArray<CommentNode>(root, "leadingComments", options),
-                TrailingComment = ReadOptional<CommentNode>(root, "trailingComment", options),
+                LeadingComments = ReadOptionalNodeArray<CommentNode>(root, "leadingComments", options),
+                TrailingComment = ReadOptionalNode<CommentNode>(root, "trailingComment", options),
             };
         }
 
@@ -726,6 +749,24 @@ namespace QmlSharp.Qml.Ast.Serialization
 
             ImmutableArray<T>? values = propertyElement.Deserialize<ImmutableArray<T>>(options);
             return values ?? ImmutableArray<T>.Empty;
+        }
+
+        public static ImmutableArray<TNode> ReadOptionalNodeArray<TNode>(JsonElement root, string propertyName, JsonSerializerOptions options)
+            where TNode : AstNode
+        {
+            ImmutableArray<AstNode> nodes = ReadOptionalArray<AstNode>(root, propertyName, options);
+            ImmutableArray<TNode>.Builder values = ImmutableArray.CreateBuilder<TNode>(nodes.Length);
+            foreach (AstNode node in nodes)
+            {
+                if (node is not TNode typedNode)
+                {
+                    throw new JsonException($"Property '{propertyName}' must contain only {typeof(TNode).Name} AST nodes.");
+                }
+
+                values.Add(typedNode);
+            }
+
+            return values.ToImmutable();
         }
 
         public static ImmutableArray<T>? ReadOptionalNullableArray<T>(JsonElement root, string propertyName, JsonSerializerOptions options)
@@ -802,6 +843,13 @@ namespace QmlSharp.Qml.Ast.Serialization
             }
 
             return string.Concat(value[0].ToString().ToUpperInvariant(), value.AsSpan(1));
+        }
+
+        private static bool IsNumericDiscriminator(string value)
+        {
+            return char.IsDigit(value[0])
+                || value[0] == '+'
+                || value[0] == '-';
         }
     }
 }

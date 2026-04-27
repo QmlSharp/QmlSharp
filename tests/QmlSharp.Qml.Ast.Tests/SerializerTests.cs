@@ -143,6 +143,56 @@ namespace QmlSharp.Qml.Ast.Tests
         }
 
         [Fact]
+        public void Deserialize_document_root_object_with_mismatched_discriminator_throws()
+        {
+            string json = "{\"kind\":\"Document\",\"rootObject\":{\"kind\":\"Comment\",\"typeName\":\"Item\",\"members\":[],\"text\":\"wrong\"}}";
+
+            QmlAstSerializationException exception = Assert.Throws<QmlAstSerializationException>(() => Serializer.FromJson(json));
+
+            Assert.Contains("Property 'rootObject' must be a ObjectDefinitionNode AST node.", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_document_imports_with_mismatched_discriminator_throws()
+        {
+            string json = "{\"kind\":\"Document\",\"imports\":[{\"kind\":\"Comment\",\"text\":\"wrong\"}],\"rootObject\":{\"kind\":\"ObjectDefinition\",\"typeName\":\"Item\"}}";
+
+            QmlAstSerializationException exception = Assert.Throws<QmlAstSerializationException>(() => Serializer.FromJson(json));
+
+            Assert.Contains("Property 'imports' must contain only ImportNode AST nodes.", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_nested_object_value_with_mismatched_discriminator_throws()
+        {
+            string json = "{\"kind\":\"Document\",\"rootObject\":{\"kind\":\"ObjectDefinition\",\"typeName\":\"Item\",\"members\":[{\"kind\":\"Binding\",\"propertyName\":\"child\",\"value\":{\"kind\":\"ObjectValue\",\"object\":{\"kind\":\"Comment\",\"typeName\":\"Item\",\"members\":[],\"text\":\"wrong\"}}}]}}";
+
+            QmlAstSerializationException exception = Assert.Throws<QmlAstSerializationException>(() => Serializer.FromJson(json));
+
+            Assert.Contains("Property 'object' must be a ObjectDefinitionNode AST node.", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_numeric_string_node_discriminator_throws()
+        {
+            string json = "{\"kind\":\"1\"}";
+
+            QmlAstSerializationException exception = Assert.Throws<QmlAstSerializationException>(() => Serializer.FromJson(json));
+
+            Assert.Contains("Unknown AST node kind '1'", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_numeric_string_binding_value_discriminator_throws()
+        {
+            string json = "{\"kind\":\"Document\",\"rootObject\":{\"kind\":\"ObjectDefinition\",\"typeName\":\"Item\",\"members\":[{\"kind\":\"Binding\",\"propertyName\":\"width\",\"value\":{\"kind\":\"1\",\"value\":\"wrong\"}}]}}";
+
+            QmlAstSerializationException exception = Assert.Throws<QmlAstSerializationException>(() => Serializer.FromJson(json));
+
+            Assert.Contains("Unknown binding value kind '1'", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void Round_trip_preserves_spans_and_attached_comments()
         {
             CommentNode leadingComment = new()
