@@ -64,7 +64,7 @@ namespace QmlSharp.Qml.Emitter
 
     /// <summary>
     /// Formatter seam used by <see cref="EmitPipeline"/>. The 04-qt-tools wave can adapt
-    /// its qmlformat wrapper to this contract without making the emitter shell out.
+    /// its Qt formatter wrapper to this contract without making the emitter shell out.
     /// </summary>
     public interface IEmitPipelineFormatter
     {
@@ -80,7 +80,7 @@ namespace QmlSharp.Qml.Emitter
 
     /// <summary>
     /// Linter seam used by <see cref="EmitPipeline"/>. The 04-qt-tools wave can adapt
-    /// its qmllint wrapper to this contract without making the emitter shell out.
+    /// its Qt linter wrapper to this contract without making the emitter shell out.
     /// </summary>
     public interface IEmitPipelineLinter
     {
