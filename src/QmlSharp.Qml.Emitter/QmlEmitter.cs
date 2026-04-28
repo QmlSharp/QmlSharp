@@ -91,7 +91,7 @@ namespace QmlSharp.Qml.Emitter
             }
 
             EmitLeadingComments(rootObject, context);
-            EmitObject(rootObject, context);
+            EmitObject(rootObject, context, isDocumentRootObject: true);
         }
 
         private static void EmitHeaderComments(QmlDocument document, EmitContext context)
@@ -174,7 +174,7 @@ namespace QmlSharp.Qml.Emitter
             return text;
         }
 
-        private static void EmitObject(ObjectDefinitionNode? obj, EmitContext context)
+        private static void EmitObject(ObjectDefinitionNode? obj, EmitContext context, bool isDocumentRootObject = false)
         {
             ArgumentNullException.ThrowIfNull(obj);
 
@@ -193,7 +193,7 @@ namespace QmlSharp.Qml.Emitter
             for (int index = 0; index < members.Length; index++)
             {
                 AstNode member = members[index];
-                EmitObjectMember(member, context);
+                EmitObjectMember(member, context, isDocumentRootMember: isDocumentRootObject);
 
                 if (ShouldWriteBlankLineBetweenMembers(member, members, index, context))
                 {
@@ -212,8 +212,10 @@ namespace QmlSharp.Qml.Emitter
                 : obj.Members;
         }
 
-        private static void EmitObjectMember(AstNode member, EmitContext context)
+        private static void EmitObjectMember(AstNode member, EmitContext context, bool isDocumentRootMember)
         {
+            EnsureMemberIsValidForScope(member, isDocumentRootMember);
+
             if (member is not CommentNode)
             {
                 EmitLeadingComments(member, context);
@@ -270,6 +272,22 @@ namespace QmlSharp.Qml.Emitter
                     break;
                 default:
                     throw new NotSupportedException($"Unsupported AST node kind '{member.Kind}' in object member emission.");
+            }
+        }
+
+        private static void EnsureMemberIsValidForScope(AstNode member, bool isDocumentRootMember)
+        {
+            if (isDocumentRootMember)
+            {
+                return;
+            }
+
+            switch (member)
+            {
+                case EnumDeclarationNode:
+                    throw new InvalidOperationException("Enum declarations may only be emitted as members of the document root object.");
+                case InlineComponentNode:
+                    throw new InvalidOperationException("Inline components may only be emitted as members of the document root object.");
             }
         }
 
@@ -499,7 +517,7 @@ namespace QmlSharp.Qml.Emitter
             for (int index = 0; index < members.Length; index++)
             {
                 AstNode member = members[index];
-                EmitObjectMember(member, context);
+                EmitObjectMember(member, context, isDocumentRootMember: false);
 
                 if (ShouldWriteBlankLineBetweenMembers(member, members, index, context))
                 {
@@ -721,7 +739,7 @@ namespace QmlSharp.Qml.Emitter
             for (int index = 0; index < members.Length; index++)
             {
                 AstNode member = members[index];
-                EmitObjectMember(member, context);
+                EmitObjectMember(member, context, isDocumentRootMember: false);
 
                 if (ShouldWriteBlankLineBetweenMembers(member, members, index, context))
                 {

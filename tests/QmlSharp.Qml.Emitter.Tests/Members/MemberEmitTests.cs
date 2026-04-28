@@ -350,6 +350,34 @@ namespace QmlSharp.Qml.Emitter.Tests.Members
 
         [Fact]
         [Trait("Category", TestCategories.Members)]
+        public void MM_27B_EnumDeclarationInNestedObject_ThrowsInvalidOperationException()
+        {
+            QmlDocument document = Document(
+                "Item",
+                root => root.Child("QtObject", child => child.EnumDeclaration("Status", new EnumMember("Active", null))));
+            IQmlEmitter emitter = new QmlEmitter();
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => emitter.Emit(document));
+
+            Assert.Equal("Enum declarations may only be emitted as members of the document root object.", exception.Message);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Members)]
+        public void MM_27C_EnumDeclarationInsideInlineComponentBody_ThrowsInvalidOperationException()
+        {
+            QmlDocument document = Document(
+                "Item",
+                root => root.InlineComponent("Foo", "Rectangle", foo => foo.EnumDeclaration("Status", new EnumMember("Active", null))));
+            IQmlEmitter emitter = new QmlEmitter();
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => emitter.Emit(document));
+
+            Assert.Equal("Enum declarations may only be emitted as members of the document root object.", exception.Message);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Members)]
         public void MM_28_InlineComponent_EmitsComponentDeclaration()
         {
             QmlDocument document = Document("Item", root => root.InlineComponent("Foo", "Rectangle", foo => foo.Binding("color", Values.String("red"))));
@@ -380,6 +408,34 @@ namespace QmlSharp.Qml.Emitter.Tests.Members
                     + "        }\n"
                     + "    }\n"
                     + "}\n");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Members)]
+        public void MM_29B_InlineComponentInNestedObject_ThrowsInvalidOperationException()
+        {
+            QmlDocument document = Document(
+                "Item",
+                root => root.Child("QtObject", child => child.InlineComponent("Foo", "Rectangle", _ => { })));
+            IQmlEmitter emitter = new QmlEmitter();
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => emitter.Emit(document));
+
+            Assert.Equal("Inline components may only be emitted as members of the document root object.", exception.Message);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Members)]
+        public void MM_29C_InlineComponentInsideInlineComponentBody_ThrowsInvalidOperationException()
+        {
+            QmlDocument document = Document(
+                "Item",
+                root => root.InlineComponent("Foo", "Rectangle", foo => foo.InlineComponent("Bar", "QtObject", _ => { })));
+            IQmlEmitter emitter = new QmlEmitter();
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => emitter.Emit(document));
+
+            Assert.Equal("Inline components may only be emitted as members of the document root object.", exception.Message);
         }
 
         [Fact]
