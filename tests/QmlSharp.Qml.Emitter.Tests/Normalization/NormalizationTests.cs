@@ -165,6 +165,34 @@ namespace QmlSharp.Qml.Emitter.Tests.Normalization
 
         [Fact]
         [Trait("Category", TestCategories.Normalization)]
+        public void NR_07B_SortImportsWithPathImports_UsesModuleUriOrPathOrdinalOrder()
+        {
+            QmlDocument document = new()
+            {
+                Imports =
+                [
+                    new ImportNode { ImportKind = ImportKind.Module, ModuleUri = "QtQuick" },
+                    new ImportNode { ImportKind = ImportKind.JavaScript, Path = "scripts/utils.js", Qualifier = "Utils" },
+                    new ImportNode { ImportKind = ImportKind.Directory, Path = "./components" },
+                    new ImportNode { ImportKind = ImportKind.Module, ModuleUri = "QtCore" },
+                ],
+                RootObject = new ObjectDefinitionNode { TypeName = "Item" },
+            };
+
+            string output = Emit(document, new EmitOptions { SortImports = true });
+
+            Assert.Equal(
+                "import \"./components\"\n"
+                    + "import QtCore\n"
+                    + "import QtQuick\n"
+                    + "import \"scripts/utils.js\" as Utils\n"
+                    + "\n"
+                    + "Item {}\n",
+                output);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Normalization)]
         public void NR_08_SortImportsWithAlreadySortedImports_KeepsStableOrder()
         {
             QmlDocument document = new()

@@ -150,6 +150,35 @@ namespace QmlSharp.Qml.Emitter.Tests.Options
             Assert.Equal(expected, output);
         }
 
+        [Fact]
+        [Trait("Category", TestCategories.Options)]
+        public void Options_MaxLineWidth_IsAdvisoryAndDoesNotHardWrapEmission()
+        {
+            QmlDocument document = new()
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Text",
+                    Members =
+                    [
+                        new BindingNode
+                        {
+                            PropertyName = "text",
+                            Value = Values.String("this line intentionally exceeds the configured advisory width"),
+                        },
+                    ],
+                },
+            };
+
+            string defaultOutput = Emit(document, new EmitOptions());
+            string narrowOutput = Emit(document, new EmitOptions { MaxLineWidth = 20 });
+
+            Assert.Equal(defaultOutput, narrowOutput);
+            Assert.Equal(
+                "Text {\n    text: \"this line intentionally exceeds the configured advisory width\"\n}\n",
+                narrowOutput);
+        }
+
         private static QmlDocument MemberDocument()
         {
             return new QmlDocument
