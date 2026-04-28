@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using QmlSharp.Qml.Ast;
 
 namespace QmlSharp.Qml.Emitter
@@ -217,7 +218,19 @@ namespace QmlSharp.Qml.Emitter
                     context.Writer.WriteLine($"id: {id.Id}{context.GetSemicolonSuffix()}");
                     break;
                 case BindingNode binding:
-                    context.Writer.WriteLine($"{binding.PropertyName}: {EmitPrimitiveBindingValue(binding.Value, context)}{context.GetSemicolonSuffix()}");
+                    EmitBinding(binding, context);
+                    break;
+                case GroupedBindingNode grouped:
+                    EmitGroupedBinding(grouped, context);
+                    break;
+                case AttachedBindingNode attached:
+                    EmitAttachedBinding(attached, context);
+                    break;
+                case ArrayBindingNode arrayBinding:
+                    EmitArrayBinding(arrayBinding, context);
+                    break;
+                case BehaviorOnNode behavior:
+                    EmitBehaviorOn(behavior, context);
                     break;
                 case ObjectDefinitionNode child:
                     EmitObject(child, context);
@@ -232,16 +245,323 @@ namespace QmlSharp.Qml.Emitter
             }
         }
 
-        private static string EmitPrimitiveBindingValue(BindingValue value, EmitContext context)
+        private static void EmitBinding(BindingNode binding, EmitContext context)
         {
-            return value switch
+            EmitNamedValue(binding.PropertyName, binding.Value, context, context.GetSemicolonSuffix());
+        }
+
+        private static void EmitNamedValue(string name, BindingValue value, EmitContext context, string suffix)
+        {
+            if (TryFormatInlineBindingValue(value, context, out string? inlineValue))
+            {
+                context.Writer.WriteLine($"{name}: {inlineValue}{suffix}");
+                return;
+            }
+
+            context.Writer.WriteIndent();
+            context.Writer.Write($"{name}: ");
+            EmitMultilineBindingValue(value, context, suffix);
+        }
+
+        private static void EmitGroupedBinding(GroupedBindingNode grouped, EmitContext context)
+        {
+            if (grouped.Bindings.IsDefaultOrEmpty)
+            {
+                context.Writer.WriteLine($"{grouped.GroupName} {{}}");
+                return;
+            }
+
+            context.Writer.WriteLine($"{grouped.GroupName} {{");
+            context.Writer.Indent();
+
+            for (int index = 0; index < grouped.Bindings.Length; index++)
+            {
+                EmitBinding(grouped.Bindings[index], context);
+            }
+
+            context.Writer.Dedent();
+            context.Writer.WriteLine("}");
+        }
+
+        private static void EmitAttachedBinding(AttachedBindingNode attached, EmitContext context)
+        {
+            if (attached.Bindings.IsDefaultOrEmpty)
+            {
+                context.Writer.WriteLine($"{attached.AttachedTypeName} {{}}");
+                return;
+            }
+
+            if (attached.Bindings.Length == 1)
+            {
+                BindingNode binding = attached.Bindings[0];
+                EmitNamedValue($"{attached.AttachedTypeName}.{binding.PropertyName}", binding.Value, context, context.GetSemicolonSuffix());
+                return;
+            }
+
+            context.Writer.WriteLine($"{attached.AttachedTypeName} {{");
+            context.Writer.Indent();
+
+            for (int index = 0; index < attached.Bindings.Length; index++)
+            {
+                EmitBinding(attached.Bindings[index], context);
+            }
+
+            context.Writer.Dedent();
+            context.Writer.WriteLine("}");
+        }
+
+        private static void EmitArrayBinding(ArrayBindingNode arrayBinding, EmitContext context)
+        {
+            EmitArrayValue(arrayBinding.PropertyName, arrayBinding.Elements, context, context.GetSemicolonSuffix(), multilineForMultipleElements: true);
+        }
+
+        private static void EmitBehaviorOn(BehaviorOnNode behavior, EmitContext context)
+        {
+            context.Writer.WriteLine($"Behavior on {behavior.PropertyName} {{");
+            context.Writer.Indent();
+            EmitObject(behavior.Animation, context);
+            context.Writer.Dedent();
+            context.Writer.WriteLine("}");
+        }
+
+        private static bool TryFormatInlineBindingValue(BindingValue value, EmitContext context, [NotNullWhen(true)] out string? text)
+        {
+            text = value switch
             {
                 NumberLiteral number => QmlValueFormatter.FormatNumber(number.Value),
-                StringLiteral text => QmlValueFormatter.FormatString(text, context.Options),
+                StringLiteral stringLiteral => QmlValueFormatter.FormatString(stringLiteral, context.Options),
                 BooleanLiteral boolean => boolean.Value ? "true" : "false",
                 NullLiteral => "null",
-                _ => throw new NotSupportedException($"Binding value kind '{value.Kind}' is implemented in a later 03-qml-emitter step."),
+                EnumReference enumReference => $"{enumReference.TypeName}.{enumReference.MemberName}",
+                ScriptExpression expression when !ContainsLineBreak(expression.Code) => expression.Code,
+                ScriptBlock block when !ContainsLineBreak(block.Code) => $"{{ {block.Code} }}",
+                ObjectValue objectValue => TryFormatInlineObject(objectValue.Object, context),
+                ArrayValue arrayValue => TryFormatInlineArray(arrayValue.Elements, context),
+                _ => null,
             };
+
+            return text is not null;
+        }
+
+        private static void EmitMultilineBindingValue(BindingValue value, EmitContext context, string suffix)
+        {
+            switch (value)
+            {
+                case ScriptExpression expression:
+                    EmitMultilineExpression(expression.Code, context, suffix);
+                    break;
+                case ScriptBlock block:
+                    EmitScriptBlock(block.Code, context, suffix);
+                    break;
+                case ObjectValue objectValue:
+                    EmitObjectValue(objectValue.Object, context, suffix);
+                    break;
+                case ArrayValue arrayValue:
+                    EmitArrayElements(arrayValue.Elements, context, suffix);
+                    break;
+                default:
+                    if (!TryFormatInlineBindingValue(value, context, out string? inlineValue))
+                    {
+                        throw new NotSupportedException($"Binding value kind '{value.Kind}' is not supported by the emitter.");
+                    }
+
+                    context.Writer.Write(inlineValue);
+                    context.Writer.Write(suffix);
+                    context.Writer.WriteLine();
+                    break;
+            }
+        }
+
+        private static string? TryFormatInlineObject(ObjectDefinitionNode obj, EmitContext context)
+        {
+            ImmutableArray<AstNode> members = GetObjectMembers(obj, context);
+            if (members.Length == 0)
+            {
+                return $"{obj.TypeName} {{}}";
+            }
+
+            if (members.Length != 1 || members[0] is not BindingNode binding)
+            {
+                return null;
+            }
+
+            if (!TryFormatInlineBindingValue(binding.Value, context, out string? valueText))
+            {
+                return null;
+            }
+
+            return $"{obj.TypeName} {{ {binding.PropertyName}: {valueText}{context.GetSemicolonSuffix()} }}";
+        }
+
+        private static string? TryFormatInlineArray(ImmutableArray<BindingValue> elements, EmitContext context)
+        {
+            if (elements.IsDefaultOrEmpty)
+            {
+                return "[]";
+            }
+
+            string[] formattedElements = new string[elements.Length];
+            for (int index = 0; index < elements.Length; index++)
+            {
+                if (!TryFormatInlineBindingValue(elements[index], context, out string? elementText))
+                {
+                    return null;
+                }
+
+                formattedElements[index] = elementText;
+            }
+
+            return $"[{string.Join(", ", formattedElements)}]";
+        }
+
+        private static void EmitMultilineExpression(string code, EmitContext context, string suffix)
+        {
+            string[] lines = SplitCodeLines(code);
+            if (lines.Length == 0)
+            {
+                context.Writer.Write(suffix);
+                context.Writer.WriteLine();
+                return;
+            }
+
+            if (lines.Length == 1)
+            {
+                context.Writer.Write(lines[0]);
+                context.Writer.Write(suffix);
+                context.Writer.WriteLine();
+                return;
+            }
+
+            context.Writer.Write(lines[0]);
+            context.Writer.WriteLine();
+
+            context.Writer.Indent();
+            for (int index = 1; index < lines.Length; index++)
+            {
+                string lineSuffix = index + 1 == lines.Length ? suffix : string.Empty;
+                context.Writer.WriteLine($"{lines[index]}{lineSuffix}");
+            }
+
+            context.Writer.Dedent();
+        }
+
+        private static void EmitScriptBlock(string code, EmitContext context, string suffix)
+        {
+            string[] lines = SplitCodeLines(code);
+
+            context.Writer.Write("{");
+            context.Writer.WriteLine();
+            context.Writer.Indent();
+
+            for (int index = 0; index < lines.Length; index++)
+            {
+                context.Writer.WriteLine(lines[index]);
+            }
+
+            context.Writer.Dedent();
+            context.Writer.WriteLine($"}}{suffix}");
+        }
+
+        private static void EmitObjectValue(ObjectDefinitionNode obj, EmitContext context, string suffix)
+        {
+            ImmutableArray<AstNode> members = GetObjectMembers(obj, context);
+
+            if (members.Length == 0 && context.Options.SingleLineEmptyObjects)
+            {
+                context.Writer.Write($"{obj.TypeName} {{}}");
+                context.Writer.Write(suffix);
+                context.Writer.WriteLine();
+                return;
+            }
+
+            context.Writer.Write($"{obj.TypeName} {{");
+            context.Writer.WriteLine();
+            context.Writer.Indent();
+
+            for (int index = 0; index < members.Length; index++)
+            {
+                AstNode member = members[index];
+                EmitObjectMember(member, context);
+
+                if (ShouldWriteBlankLineBetweenMembers(member, members, index, context))
+                {
+                    context.Writer.WriteLine();
+                }
+            }
+
+            context.Writer.Dedent();
+            context.Writer.WriteLine($"}}{suffix}");
+        }
+
+        private static void EmitArrayValue(
+            string propertyName,
+            ImmutableArray<BindingValue> elements,
+            EmitContext context,
+            string suffix,
+            bool multilineForMultipleElements)
+        {
+            if (!multilineForMultipleElements || elements.Length <= 1)
+            {
+                BindingValue value = new ArrayValue(elements);
+                if (TryFormatInlineBindingValue(value, context, out string? inlineValue))
+                {
+                    context.Writer.WriteLine($"{propertyName}: {inlineValue}{suffix}");
+                    return;
+                }
+            }
+
+            context.Writer.WriteIndent();
+            context.Writer.Write($"{propertyName}: ");
+            EmitArrayElements(elements, context, suffix);
+        }
+
+        private static void EmitArrayElements(ImmutableArray<BindingValue> elements, EmitContext context, string suffix)
+        {
+            if (elements.IsDefaultOrEmpty)
+            {
+                context.Writer.Write("[]");
+                context.Writer.Write(suffix);
+                context.Writer.WriteLine();
+                return;
+            }
+
+            context.Writer.Write("[");
+            context.Writer.WriteLine();
+            context.Writer.Indent();
+
+            for (int index = 0; index < elements.Length; index++)
+            {
+                EmitArrayElement(elements[index], context, index + 1 < elements.Length);
+            }
+
+            context.Writer.Dedent();
+            context.Writer.WriteLine($"]{suffix}");
+        }
+
+        private static void EmitArrayElement(BindingValue element, EmitContext context, bool hasFollowingElement)
+        {
+            string suffix = hasFollowingElement ? "," : string.Empty;
+            if (TryFormatInlineBindingValue(element, context, out string? inlineValue))
+            {
+                context.Writer.WriteLine($"{inlineValue}{suffix}");
+                return;
+            }
+
+            context.Writer.WriteIndent();
+            EmitMultilineBindingValue(element, context, suffix);
+        }
+
+        private static string[] SplitCodeLines(string code)
+        {
+            return code
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .Split('\n');
+        }
+
+        private static bool ContainsLineBreak(string value)
+        {
+            return value.Contains('\n', StringComparison.Ordinal) || value.Contains('\r', StringComparison.Ordinal);
         }
 
         private static bool ShouldWriteBlankLineBetweenMembers(
