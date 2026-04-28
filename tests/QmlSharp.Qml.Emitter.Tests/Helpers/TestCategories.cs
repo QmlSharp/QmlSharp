@@ -4,5 +4,6 @@ namespace QmlSharp.Qml.Emitter.Tests.Helpers
     {
         public const string Smoke = "Smoke";
         public const string Contract = "Contract";
+        public const string Basic = "Basic";
     }
 }
