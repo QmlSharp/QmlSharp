@@ -1,0 +1,180 @@
+using System.Globalization;
+using QmlSharp.Qml.Emitter.Tests.Helpers;
+
+namespace QmlSharp.Qml.Emitter.Tests.Determinism
+{
+    public sealed class DeterminismTests
+    {
+        [Fact]
+        [Trait("Category", TestCategories.Determinism)]
+        public void DT_01_EmitSameDocumentOneHundredTimes_ProducesByteIdenticalOutput()
+        {
+            IQmlEmitter emitter = new QmlEmitter();
+            QmlDocument document = DeterministicDocument();
+            string expected = emitter.Emit(document);
+
+            for (int index = 0; index < 100; index++)
+            {
+                string actual = emitter.Emit(document);
+
+                Assert.Equal(expected, actual);
+            }
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Determinism)]
+        public void DT_02_EmitSameDocumentFromTwoEmitterInstances_ProducesByteIdenticalOutput()
+        {
+            QmlDocument document = DeterministicDocument();
+            IQmlEmitter firstEmitter = new QmlEmitter();
+            IQmlEmitter secondEmitter = new QmlEmitter();
+
+            string first = firstEmitter.Emit(document);
+            string second = secondEmitter.Emit(document);
+
+            Assert.Equal(first, second);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Determinism)]
+        public void DT_03_NormalizeUnorderedAstFiftyTimes_ProducesStableOutput()
+        {
+            IQmlEmitter emitter = new QmlEmitter();
+            EmitOptions options = new() { Normalize = true };
+            QmlDocument document = UnorderedDocument();
+            string expected = emitter.Emit(document, options);
+
+            for (int index = 0; index < 50; index++)
+            {
+                string actual = emitter.Emit(document, options);
+
+                Assert.Equal(expected, actual);
+            }
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Determinism)]
+        public async Task DT_04_EmitSameDocumentConcurrently_ProducesStableOutput()
+        {
+            QmlDocument document = DeterministicDocument();
+            EmitOptions options = new() { Normalize = true, SortImports = true };
+            string expected = new QmlEmitter().Emit(document, options);
+            Task<string>[] tasks = new Task<string>[10];
+
+            for (int index = 0; index < tasks.Length; index++)
+            {
+                tasks[index] = Task.Run(() => new QmlEmitter().Emit(document, options));
+            }
+
+            string[] outputs = await Task.WhenAll(tasks);
+
+            for (int index = 0; index < outputs.Length; index++)
+            {
+                Assert.Equal(expected, outputs[index]);
+            }
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Determinism)]
+        public void Determinism_CurrentCultureWithCommaDecimalSeparator_StillEmitsCanonicalNumbers()
+        {
+            CultureInfo originalCulture = CultureInfo.CurrentCulture;
+            CultureInfo originalUiCulture = CultureInfo.CurrentUICulture;
+
+            try
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("de-DE");
+
+                string output = new QmlEmitter().Emit(DecimalDocument());
+
+                Assert.Contains("opacity: 1234.5", output, StringComparison.Ordinal);
+                Assert.DoesNotContain("1234,5", output, StringComparison.Ordinal);
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = originalCulture;
+                CultureInfo.CurrentUICulture = originalUiCulture;
+            }
+        }
+
+        [Theory]
+        [InlineData(NewlineStyle.Lf, "\n")]
+        [InlineData(NewlineStyle.CrLf, "\r\n")]
+        [Trait("Category", TestCategories.Determinism)]
+        public void Determinism_ConfiguredNewlineStyle_DoesNotDependOnOperatingSystemDefault(NewlineStyle newline, string expectedNewline)
+        {
+            QmlDocument document = DecimalDocument();
+            string output = new QmlEmitter().Emit(document, new EmitOptions { Newline = newline });
+
+            Assert.Contains($"Rectangle {{{expectedNewline}", output, StringComparison.Ordinal);
+
+            if (newline == NewlineStyle.CrLf)
+            {
+                LineEndingAssert.ContainsOnlyCrLf(output);
+            }
+            else
+            {
+                LineEndingAssert.ContainsOnlyLf(output);
+            }
+        }
+
+        private static QmlDocument DeterministicDocument()
+        {
+            return new QmlDocument
+            {
+                Imports =
+                [
+                    new ImportNode { ImportKind = ImportKind.Module, ModuleUri = "QtQuick.Controls", Version = "6.0" },
+                    new ImportNode { ImportKind = ImportKind.Module, ModuleUri = "QtQuick", Version = "6.0" },
+                ],
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Rectangle",
+                    Members =
+                    [
+                        new IdAssignmentNode { Id = "root" },
+                        new BindingNode { PropertyName = "width", Value = Values.Number(100) },
+                        new BindingNode { PropertyName = "opacity", Value = Values.Number(0.75) },
+                        new BindingNode { PropertyName = "text", Value = Values.String("ready") },
+                        new FunctionDeclarationNode { Name = "choose", Body = "return ready ? 1 : 0" },
+                    ],
+                },
+            };
+        }
+
+        private static QmlDocument UnorderedDocument()
+        {
+            return new QmlDocument
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Item",
+                    Members =
+                    [
+                        new FunctionDeclarationNode { Name = "run", Body = "work()" },
+                        new BindingNode { PropertyName = "height", Value = Values.Number(200) },
+                        new PropertyDeclarationNode { Name = "count", TypeName = "int" },
+                        new IdAssignmentNode { Id = "root" },
+                        new BindingNode { PropertyName = "width", Value = Values.Number(100) },
+                    ],
+                },
+            };
+        }
+
+        private static QmlDocument DecimalDocument()
+        {
+            return new QmlDocument
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Rectangle",
+                    Members =
+                    [
+                        new BindingNode { PropertyName = "opacity", Value = Values.Number(1234.5) },
+                    ],
+                },
+            };
+        }
+    }
+}
