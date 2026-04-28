@@ -13,10 +13,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Closure
         [Fact]
         public void Closure_AllEmitterTestSpecIds_AreNamedByImplementedTests()
         {
-            ImmutableHashSet<string> methodNames = typeof(EmitterClosureCoverageTests).Assembly
-                .GetTypes()
-                .SelectMany(static type => type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
-                .Select(static method => method.Name)
+            ImmutableHashSet<string> methodNames = GetImplementedTestMethodNames()
                 .ToImmutableHashSet(StringComparer.Ordinal);
 
             ImmutableArray<string> missingIds = SpecIds
@@ -135,7 +132,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Closure
             XDocument project = XDocument.Load(projectPath);
             ImmutableArray<string> projectReferences = project
                 .Descendants("ProjectReference")
-                .Select(static reference => Path.GetFileNameWithoutExtension((string?)reference.Attribute("Include") ?? string.Empty))
+                .Select(static reference => GetProjectReferenceName((string?)reference.Attribute("Include") ?? string.Empty))
                 .Order(StringComparer.Ordinal)
                 .ToImmutableArray();
             ImmutableArray<string> packageReferences = project
@@ -160,14 +157,15 @@ namespace QmlSharp.Qml.Emitter.Tests.Closure
                 "npm",
                 "Bun",
                 "Rust",
-                "qmlformat.exe",
-                "qmllint.exe",
+                "qmlformat",
+                "qmllint",
             ];
             string sourceRoot = Path.Join(repositoryRoot, "src", "QmlSharp.Qml.Emitter");
 
-            foreach (string file in Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories))
+            foreach (string text in Directory
+                .EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+                .Select(File.ReadAllText))
             {
-                string text = File.ReadAllText(file);
                 foreach (string forbiddenTerm in forbiddenTerms)
                 {
                     Assert.DoesNotContain(forbiddenTerm, text, StringComparison.Ordinal);
@@ -335,13 +333,30 @@ namespace QmlSharp.Qml.Emitter.Tests.Closure
 
         private static void AssertTestReferenceExists(string reference)
         {
-            ImmutableArray<string> names = typeof(EmitterClosureCoverageTests).Assembly
-                .GetTypes()
-                .SelectMany(static type => type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
-                .Select(static method => method.Name)
-                .ToImmutableArray();
+            ImmutableArray<string> names = GetImplementedTestMethodNames();
 
             Assert.Contains(names, name => name.Contains(reference, StringComparison.Ordinal));
+        }
+
+        private static ImmutableArray<string> GetImplementedTestMethodNames()
+        {
+            return typeof(EmitterClosureCoverageTests).Assembly
+                .GetTypes()
+                .SelectMany(static type => type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+                .Where(static method =>
+                    method.GetCustomAttribute<FactAttribute>() is not null ||
+                    method.GetCustomAttribute<TheoryAttribute>() is not null)
+                .Select(static method => method.Name)
+                .ToImmutableArray();
+        }
+
+        private static string GetProjectReferenceName(string include)
+        {
+            string fileName = include
+                .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries)
+                .LastOrDefault() ?? string.Empty;
+
+            return Path.GetFileNameWithoutExtension(fileName);
         }
 
         private static void AssertInvalidSourceMapSpan(OutputSpan span)

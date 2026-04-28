@@ -377,6 +377,49 @@ namespace QmlSharp.Qml.Emitter.Tests.Bindings
 
         [Fact]
         [Trait("Category", TestCategories.Bindings)]
+        public void AttachedBindingComments_PreserveChildAndAttachedTrailingPlacement()
+        {
+            BindingNode fillWidth = new()
+            {
+                PropertyName = "fillWidth",
+                Value = Values.Boolean(true),
+                LeadingComments = [new CommentNode { Text = "// Fill width binding" }],
+                TrailingComment = new CommentNode { Text = "// child trailing" },
+            };
+            BindingNode margins = new()
+            {
+                PropertyName = "margins",
+                Value = Values.Number(10),
+                TrailingComment = new CommentNode { Text = "// last child trailing" },
+            };
+            QmlDocument document = new()
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Item",
+                    Members =
+                    [
+                        new AttachedBindingNode
+                        {
+                            AttachedTypeName = "Layout",
+                            Bindings = [fillWidth, margins],
+                            TrailingComment = new CommentNode { Text = "// attached trailing" },
+                        },
+                    ],
+                },
+            };
+
+            AssertBindingOutput(
+                document,
+                "Item {\n"
+                    + "    // Fill width binding\n"
+                    + "    Layout.fillWidth: true // child trailing\n"
+                    + "    Layout.margins: 10 // last child trailing // attached trailing\n"
+                    + "}\n");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Bindings)]
         public void BV_26_ArrayBinding_EmitsMultilineArrayElements()
         {
             QmlDocument document = Document(
@@ -393,6 +436,37 @@ namespace QmlSharp.Qml.Emitter.Tests.Bindings
                     + "        State { name: \"active\" },\n"
                     + "        State { name: \"inactive\" }\n"
                     + "    ]\n"
+                    + "}\n");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Bindings)]
+        public void ArrayBindingTrailingComment_EmitsOnClosingBracketLine()
+        {
+            QmlDocument document = new()
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Item",
+                    Members =
+                    [
+                        new ArrayBindingNode
+                        {
+                            PropertyName = "states",
+                            Elements = [Values.String("active"), Values.String("inactive")],
+                            TrailingComment = new CommentNode { Text = "// states trailing" },
+                        },
+                    ],
+                },
+            };
+
+            AssertBindingOutput(
+                document,
+                "Item {\n"
+                    + "    states: [\n"
+                    + "        \"active\",\n"
+                    + "        \"inactive\"\n"
+                    + "    ] // states trailing\n"
                     + "}\n");
         }
 

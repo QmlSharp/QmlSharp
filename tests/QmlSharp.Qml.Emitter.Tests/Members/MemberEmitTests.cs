@@ -412,6 +412,22 @@ namespace QmlSharp.Qml.Emitter.Tests.Members
 
         [Fact]
         [Trait("Category", TestCategories.Members)]
+        public void InlineComponentTrailingComment_EmitsOnSingleLineDeclaration()
+        {
+            QmlDocument document = Document(
+                "Item",
+                new InlineComponentNode
+                {
+                    Name = "Badge",
+                    Body = new ObjectDefinitionNode { TypeName = "Item" },
+                    TrailingComment = new CommentNode { Text = "// component trailing" },
+                });
+
+            AssertMemberOutput(document, "Item {\n    component Badge: Item {} // component trailing\n}\n");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Members)]
         public void MM_29B_InlineComponentInNestedObject_ThrowsInvalidOperationException()
         {
             QmlDocument document = Document(
