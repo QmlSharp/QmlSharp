@@ -63,6 +63,38 @@ namespace QmlSharp.Qml.Emitter
     }
 
     /// <summary>
+    /// Formatter seam used by <see cref="EmitPipeline"/>. The 04-qt-tools wave can adapt
+    /// its qmlformat wrapper to this contract without making the emitter shell out.
+    /// </summary>
+    public interface IEmitPipelineFormatter
+    {
+        /// <summary>
+        /// Format emitted QML text.
+        /// </summary>
+        /// <param name="documentName">Stable document name or output path.</param>
+        /// <param name="text">QML text from the previous stage.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>Format stage result.</returns>
+        Task<FormatStageResult> FormatAsync(string documentName, string text, CancellationToken ct = default);
+    }
+
+    /// <summary>
+    /// Linter seam used by <see cref="EmitPipeline"/>. The 04-qt-tools wave can adapt
+    /// its qmllint wrapper to this contract without making the emitter shell out.
+    /// </summary>
+    public interface IEmitPipelineLinter
+    {
+        /// <summary>
+        /// Lint emitted or formatted QML text.
+        /// </summary>
+        /// <param name="documentName">Stable document name or output path.</param>
+        /// <param name="text">QML text from the previous stage.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>Lint stage result.</returns>
+        Task<LintStageResult> LintAsync(string documentName, string text, CancellationToken ct = default);
+    }
+
+    /// <summary>
     /// Pipeline orchestrating emit, optional format, and optional lint stages.
     /// </summary>
     public interface IEmitPipeline
@@ -144,6 +176,11 @@ namespace QmlSharp.Qml.Emitter
         public required bool Valid { get; init; }
 
         /// <summary>
+        /// Gets a value indicating whether all enabled stages completed without errors.
+        /// </summary>
+        public bool Succeeded { get; init; } = true;
+
+        /// <summary>
         /// Gets emit-stage result.
         /// </summary>
         public required EmitStageResult EmitResult { get; init; }
@@ -162,6 +199,11 @@ namespace QmlSharp.Qml.Emitter
         /// Gets total wall-clock time for all stages in milliseconds.
         /// </summary>
         public required double TotalDurationMs { get; init; }
+
+        /// <summary>
+        /// Gets diagnostics aggregated in deterministic stage order.
+        /// </summary>
+        public ImmutableArray<PipelineDiagnostic> Diagnostics { get; init; } = ImmutableArray<PipelineDiagnostic>.Empty;
     }
 
     /// <summary>
@@ -199,6 +241,11 @@ namespace QmlSharp.Qml.Emitter
         /// Gets emit-stage duration in milliseconds.
         /// </summary>
         public required double DurationMs { get; init; }
+
+        /// <summary>
+        /// Gets emit-stage diagnostics.
+        /// </summary>
+        public ImmutableArray<PipelineDiagnostic> Diagnostics { get; init; } = ImmutableArray<PipelineDiagnostic>.Empty;
     }
 
     /// <summary>
@@ -215,6 +262,11 @@ namespace QmlSharp.Qml.Emitter
         /// Gets format-stage duration in milliseconds.
         /// </summary>
         public required double DurationMs { get; init; }
+
+        /// <summary>
+        /// Gets format-stage diagnostics.
+        /// </summary>
+        public ImmutableArray<PipelineDiagnostic> Diagnostics { get; init; } = ImmutableArray<PipelineDiagnostic>.Empty;
     }
 
     /// <summary>
