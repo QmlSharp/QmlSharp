@@ -207,9 +207,32 @@ namespace QmlSharp.Qml.Emitter
 
         private static ImmutableArray<AstNode> GetObjectMembers(ObjectDefinitionNode obj, EmitContext context)
         {
-            return context.Options.Normalize
+            ImmutableArray<AstNode> members = context.Options.Normalize
                 ? EmitOrdering.NormalizeMembers(obj.Members)
                 : obj.Members;
+
+            return context.Options.EmitComments
+                ? members
+                : RemoveStandaloneComments(members);
+        }
+
+        private static ImmutableArray<AstNode> RemoveStandaloneComments(ImmutableArray<AstNode> members)
+        {
+            if (members.IsDefaultOrEmpty || !members.Any(static member => member is CommentNode))
+            {
+                return members;
+            }
+
+            ImmutableArray<AstNode>.Builder visibleMembers = ImmutableArray.CreateBuilder<AstNode>(members.Length);
+            for (int index = 0; index < members.Length; index++)
+            {
+                if (members[index] is not CommentNode)
+                {
+                    visibleMembers.Add(members[index]);
+                }
+            }
+
+            return visibleMembers.ToImmutable();
         }
 
         private static void EmitObjectMember(AstNode member, EmitContext context, bool isDocumentRootMember)
