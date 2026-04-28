@@ -92,6 +92,28 @@ namespace QmlSharp.Qml.Emitter.Tests.Options
         }
 
         [Theory]
+        [InlineData(NewlineStyle.Lf)]
+        [InlineData(NewlineStyle.CrLf)]
+        [Trait("Category", TestCategories.Contract)]
+        public void Writer_GetSpanFrom_AfterTrailingNewlineEndsAtLastContentCharacter(NewlineStyle newline)
+        {
+            ResolvedEmitOptions options = ResolvedEmitOptions.From(new EmitOptions { Newline = newline });
+            QmlWriter writer = new(options);
+
+            (int Line, int Column) start = writer.GetPosition();
+            writer.WriteLine("Item {}");
+
+            OutputSpan span = writer.GetSpanFrom(start);
+
+            Assert.Equal(1, span.StartLine);
+            Assert.Equal(1, span.StartColumn);
+            Assert.Equal(1, span.EndLine);
+            Assert.Equal(7, span.EndColumn);
+            Assert.Equal(2, writer.Line);
+            Assert.Equal(1, writer.Column);
+        }
+
+        [Theory]
         [InlineData(QuoteStyle.Double, "say \"hi\"\nnext", "\"say \\\"hi\\\"\\nnext\"")]
         [InlineData(QuoteStyle.Single, "it's ok\\done", "'it\\'s ok\\\\done'")]
         [Trait("Category", TestCategories.Contract)]
@@ -133,6 +155,18 @@ namespace QmlSharp.Qml.Emitter.Tests.Options
         {
             _ = Assert.Throws<ArgumentOutOfRangeException>(() => QmlValueFormatter.FormatNumber(double.NaN));
             _ = Assert.Throws<ArgumentOutOfRangeException>(() => QmlValueFormatter.FormatNumber(double.PositiveInfinity));
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
+        public void Writer_NumberFormatting_PreservesRoundTripPrecision()
+        {
+            const double preciseValue = 1.2345678901234567;
+
+            string text = QmlValueFormatter.FormatNumber(preciseValue);
+
+            Assert.Equal("1.2345678901234567", text);
+            Assert.Equal(preciseValue, double.Parse(text, CultureInfo.InvariantCulture));
         }
     }
 }

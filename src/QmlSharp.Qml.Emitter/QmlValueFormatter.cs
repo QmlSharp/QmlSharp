@@ -12,12 +12,7 @@ namespace QmlSharp.Qml.Emitter
                 throw new ArgumentOutOfRangeException(nameof(value), value, "QML numeric literals must be finite.");
             }
 
-            if (value == Math.Truncate(value))
-            {
-                return value.ToString("0", CultureInfo.InvariantCulture);
-            }
-
-            return value.ToString("G15", CultureInfo.InvariantCulture);
+            return value.ToString("R", CultureInfo.InvariantCulture);
         }
 
         internal static string FormatString(StringLiteral value, ResolvedEmitOptions options)

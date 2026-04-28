@@ -29,6 +29,28 @@ namespace QmlSharp.Qml.Emitter.Tests.Options
 
         [Fact]
         [Trait("Category", TestCategories.Contract)]
+        public void Context_NodeEndingWithTrailingNewline_DoesNotMapNextLineStart()
+        {
+            ResolvedEmitOptions options = ResolvedEmitOptions.From(null);
+            SourceMapImpl sourceMap = new();
+            EmitContext context = new(options, sourceMap);
+            ObjectDefinitionNode node = new() { TypeName = "Item" };
+
+            context.BeginNode(node);
+            context.Writer.WriteLine("Item {}");
+            context.EndNode(node);
+
+            OutputSpan? span = sourceMap.GetOutputSpan(node);
+
+            Assert.NotNull(span);
+            Assert.Equal(1, span.EndLine);
+            Assert.Equal(7, span.EndColumn);
+            Assert.Same(node, sourceMap.GetInnermostNodeAt(1, 7));
+            Assert.Null(sourceMap.GetInnermostNodeAt(2, 1));
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
         public void Context_EndNodeWithoutBegin_ThrowsInvalidOperationException()
         {
             ResolvedEmitOptions options = ResolvedEmitOptions.From(null);

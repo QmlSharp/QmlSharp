@@ -10,7 +10,10 @@ namespace QmlSharp.Qml.Emitter
     {
         private readonly StringBuilder _builder = new();
         private readonly ResolvedEmitOptions _options;
+        private int _lastContentColumn = 1;
+        private int _lastContentLine = 1;
         private int _indentLevel;
+        private bool _hasContent;
 
         internal QmlWriter(ResolvedEmitOptions options, int initialIndentLevel = 0)
         {
@@ -99,12 +102,14 @@ namespace QmlSharp.Qml.Emitter
 
         internal OutputSpan GetSpanFrom((int Line, int Column) start)
         {
+            (int EndLine, int EndColumn) = GetEndPosition(start);
+
             return new OutputSpan
             {
                 StartLine = start.Line,
                 StartColumn = start.Column,
-                EndLine = Line,
-                EndColumn = Math.Max(1, Column - 1),
+                EndLine = EndLine,
+                EndColumn = EndColumn,
             };
         }
 
@@ -133,9 +138,28 @@ namespace QmlSharp.Qml.Emitter
                 }
                 else
                 {
+                    _lastContentLine = Line;
+                    _lastContentColumn = Column;
+                    _hasContent = true;
                     Column++;
                 }
             }
+        }
+
+        private (int Line, int Column) GetEndPosition((int Line, int Column) start)
+        {
+            if (_hasContent && IsAtOrAfter((_lastContentLine, _lastContentColumn), start))
+            {
+                return (_lastContentLine, _lastContentColumn);
+            }
+
+            return start;
+        }
+
+        private static bool IsAtOrAfter((int Line, int Column) candidate, (int Line, int Column) start)
+        {
+            return candidate.Line > start.Line
+                || (candidate.Line == start.Line && candidate.Column >= start.Column);
         }
 
         private void AdvanceLine()

@@ -24,16 +24,10 @@ namespace QmlSharp.Qml.Emitter
                 throw new ArgumentOutOfRangeException(nameof(line), line, "Line must be 1-based.");
             }
 
-            ImmutableArray<AstNode>.Builder nodes = ImmutableArray.CreateBuilder<AstNode>();
-            foreach (SourceMapEntry entry in _entries)
-            {
-                if (entry.OutputSpan.StartLine <= line && entry.OutputSpan.EndLine >= line)
-                {
-                    nodes.Add(entry.Node);
-                }
-            }
-
-            return nodes.ToImmutable();
+            return _entries
+                .Where(entry => entry.OutputSpan.StartLine <= line && entry.OutputSpan.EndLine >= line)
+                .Select(entry => entry.Node)
+                .ToImmutableArray();
         }
 
         public AstNode? GetInnermostNodeAt(int line, int column)
