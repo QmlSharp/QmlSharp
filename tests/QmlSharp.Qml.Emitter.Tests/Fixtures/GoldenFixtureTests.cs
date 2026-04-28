@@ -34,9 +34,8 @@ namespace QmlSharp.Qml.Emitter.Tests.Fixtures
         [Trait("Category", TestCategories.Golden)]
         public void Golden_CommittedFileSet_MatchesExpectedFixtureSet()
         {
-            string goldenDirectory = Path.Join(AppContext.BaseDirectory, "Fixtures", "Golden");
             string[] committedFiles = Directory
-                .EnumerateFiles(goldenDirectory, "*.qml", SearchOption.TopDirectoryOnly)
+                .EnumerateFiles(GoldenFileLoader.SourceGoldenDirectory, "*.qml", SearchOption.TopDirectoryOnly)
                 .Select(Path.GetFileName)
                 .OfType<string>()
                 .Order(StringComparer.Ordinal)
