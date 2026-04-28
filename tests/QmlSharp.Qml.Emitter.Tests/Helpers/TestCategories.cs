@@ -13,6 +13,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Helpers
         public const string Fragments = "Fragments";
         public const string SourceMaps = "SourceMaps";
         public const string Pipeline = "Pipeline";
+        public const string Golden = "Golden";
         public const string RequiresQt = "RequiresQt";
     }
 }
