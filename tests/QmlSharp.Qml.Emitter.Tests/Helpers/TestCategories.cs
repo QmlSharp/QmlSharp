@@ -14,6 +14,8 @@ namespace QmlSharp.Qml.Emitter.Tests.Helpers
         public const string SourceMaps = "SourceMaps";
         public const string Pipeline = "Pipeline";
         public const string Golden = "Golden";
+        public const string Errors = "Errors";
+        public const string Performance = "Performance";
         public const string RequiresQt = "RequiresQt";
     }
 }
