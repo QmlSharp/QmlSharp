@@ -26,9 +26,26 @@ namespace QmlSharp.Qml.Emitter
         public string EmitFragment(AstNode node, FragmentEmitOptions? options = null)
         {
             ArgumentNullException.ThrowIfNull(node);
-            _ = ResolveFragmentOptions(options);
 
-            throw new NotSupportedException("QML fragment emission is implemented in later 03-qml-emitter steps.");
+            FragmentEmitSettings settings = ResolveFragmentOptions(options);
+            EmitContext context = new(settings.ResolvedOptions, initialIndentLevel: settings.IndentLevel);
+
+            EmitNodeFragment(node, context, settings);
+
+            return FinalizeOutput(context.Writer.GetOutput(), settings.ResolvedOptions);
+        }
+
+        /// <inheritdoc/>
+        public string EmitFragment(BindingValue value, FragmentEmitOptions? options = null)
+        {
+            ArgumentNullException.ThrowIfNull(value);
+
+            FragmentEmitSettings settings = ResolveFragmentOptions(options);
+            EmitContext context = new(settings.ResolvedOptions, initialIndentLevel: settings.IndentLevel);
+
+            EmitBindingValueFragment(value, context);
+
+            return FinalizeOutput(context.Writer.GetOutput(), settings.ResolvedOptions);
         }
 
         /// <inheritdoc/>
@@ -40,14 +57,110 @@ namespace QmlSharp.Qml.Emitter
             throw new NotSupportedException("QML source-map emission is implemented in later 03-qml-emitter steps.");
         }
 
-        private static ResolvedEmitOptions ResolveFragmentOptions(FragmentEmitOptions? options)
+        private static FragmentEmitSettings ResolveFragmentOptions(FragmentEmitOptions? options)
         {
             if (options?.IndentLevel < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(options), options.IndentLevel, "Fragment indentation level cannot be negative.");
             }
 
-            return ResolvedEmitOptions.From(options?.Options);
+            EmitOptions baseOptions = options?.Options ?? new EmitOptions();
+            EmitOptions fragmentOptions = baseOptions with
+            {
+                EmitComments = options?.PreserveComments ?? baseOptions.EmitComments,
+                TrailingNewline = options?.IncludeTrailingNewline ?? false,
+            };
+
+            return new FragmentEmitSettings(
+                ResolvedEmitOptions.From(fragmentOptions),
+                options?.IndentLevel ?? 0,
+                options?.AllowDocumentOnlyConstructs ?? true);
+        }
+
+        private static void EmitNodeFragment(AstNode node, EmitContext context, FragmentEmitSettings settings)
+        {
+            if (!settings.AllowDocumentOnlyConstructs && IsDocumentOnlyFragment(node))
+            {
+                throw new NotSupportedException($"Unsupported AST node kind '{node.Kind}' in fragment emission when document-only constructs are disabled.");
+            }
+
+            switch (node)
+            {
+                case QmlDocument document:
+                    EmitDocument(document, context);
+                    break;
+                case ImportNode import:
+                    EmitLeadingComments(import, context);
+                    EmitImport(import, context);
+                    break;
+                case PragmaNode pragma:
+                    EmitLeadingComments(pragma, context);
+                    EmitPragma(pragma, context);
+                    break;
+                case ObjectDefinitionNode obj:
+                    EmitLeadingComments(obj, context);
+                    EmitObject(obj, context, isDocumentRootObject: settings.AllowDocumentOnlyConstructs);
+                    break;
+                case CommentNode comment when context.Options.EmitComments:
+                    context.Writer.WriteLine(comment.Text);
+                    break;
+                case CommentNode:
+                    break;
+                case InlineComponentNode:
+                case EnumDeclarationNode:
+                    EmitObjectMember(node, context, isDocumentRootMember: settings.AllowDocumentOnlyConstructs);
+                    break;
+                case IdAssignmentNode:
+                case PropertyDeclarationNode:
+                case PropertyAliasNode:
+                case BindingNode:
+                case GroupedBindingNode:
+                case AttachedBindingNode:
+                case ArrayBindingNode:
+                case BehaviorOnNode:
+                case SignalDeclarationNode:
+                case SignalHandlerNode:
+                case FunctionDeclarationNode:
+                    EmitObjectMember(node, context, isDocumentRootMember: false);
+                    break;
+                default:
+                    throw new NotSupportedException($"Unsupported AST node kind '{node.Kind}' in fragment emission.");
+            }
+        }
+
+        private static bool IsDocumentOnlyFragment(AstNode node)
+        {
+            return node is QmlDocument or ImportNode or PragmaNode or InlineComponentNode or EnumDeclarationNode;
+        }
+
+        private static void EmitBindingValueFragment(BindingValue value, EmitContext context)
+        {
+            context.Writer.WriteIndent();
+
+            if (TryFormatInlineBindingValue(value, context, out string? inlineValue))
+            {
+                context.Writer.Write(inlineValue);
+                context.Writer.WriteLine();
+                return;
+            }
+
+            switch (value)
+            {
+                case ScriptExpression expression:
+                    EmitMultilineExpression(expression.Code, context, suffix: string.Empty);
+                    break;
+                case ScriptBlock block:
+                    EmitScriptBlock(block.Code, context, suffix: string.Empty);
+                    break;
+                case ObjectValue objectValue:
+                    EmitObjectValue(objectValue.Object, context, suffix: string.Empty);
+                    break;
+                case ArrayValue arrayValue:
+                    EmitArrayElements(arrayValue.Elements, context, suffix: string.Empty);
+                    break;
+                default:
+                    throw new NotSupportedException($"Unsupported binding value kind '{value.Kind}' in fragment emission.");
+            }
         }
 
         private static void EmitDocument(QmlDocument document, EmitContext context)
@@ -921,5 +1034,10 @@ namespace QmlSharp.Qml.Emitter
 
             return output[..^options.NewlineString.Length];
         }
+
+        private sealed record FragmentEmitSettings(
+            ResolvedEmitOptions ResolvedOptions,
+            int IndentLevel,
+            bool AllowDocumentOnlyConstructs);
     }
 }

@@ -36,12 +36,15 @@ namespace QmlSharp.Qml.Emitter.Tests.Basic
             ArgumentNullException emitException = Assert.Throws<ArgumentNullException>(
                 () => emitter.Emit(null!));
             ArgumentNullException fragmentException = Assert.Throws<ArgumentNullException>(
-                () => emitter.EmitFragment(null!));
+                () => emitter.EmitFragment((AstNode)null!));
+            ArgumentNullException valueFragmentException = Assert.Throws<ArgumentNullException>(
+                () => emitter.EmitFragment((BindingValue)null!));
             ArgumentNullException sourceMapException = Assert.Throws<ArgumentNullException>(
                 () => emitter.EmitWithSourceMap(null!));
 
             Assert.Equal("document", emitException.ParamName);
             Assert.Equal("node", fragmentException.ParamName);
+            Assert.Equal("value", valueFragmentException.ParamName);
             Assert.Equal("document", sourceMapException.ParamName);
         }
     }

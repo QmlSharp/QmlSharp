@@ -36,6 +36,9 @@ namespace QmlSharp.Qml.Emitter.Tests.Options
 
             Assert.Null(options.Options);
             Assert.Equal(0, options.IndentLevel);
+            Assert.False(options.IncludeTrailingNewline);
+            Assert.True(options.AllowDocumentOnlyConstructs);
+            Assert.Null(options.PreserveComments);
         }
 
         [Fact]

@@ -179,6 +179,23 @@ namespace QmlSharp.Qml.Emitter
         /// Gets starting indentation level. Zero means no indentation.
         /// </summary>
         public int IndentLevel { get; init; }
+
+        /// <summary>
+        /// Gets a value indicating whether the emitted fragment ends with a trailing newline.
+        /// </summary>
+        public bool IncludeTrailingNewline { get; init; }
+
+        /// <summary>
+        /// Gets a value indicating whether document-only constructs such as imports,
+        /// pragmas, root-only enums, inline components, or complete documents may be emitted.
+        /// </summary>
+        public bool AllowDocumentOnlyConstructs { get; init; } = true;
+
+        /// <summary>
+        /// Gets an optional fragment-level comment preservation override.
+        /// Null inherits <see cref="EmitOptions.EmitComments"/>.
+        /// </summary>
+        public bool? PreserveComments { get; init; }
     }
 
     /// <summary>
@@ -201,6 +218,14 @@ namespace QmlSharp.Qml.Emitter
         /// <param name="options">Fragment emission options.</param>
         /// <returns>Text representation of the node.</returns>
         string EmitFragment(AstNode node, FragmentEmitOptions? options = null);
+
+        /// <summary>
+        /// Emit a binding value as a text fragment.
+        /// </summary>
+        /// <param name="value">The binding value to emit.</param>
+        /// <param name="options">Fragment emission options.</param>
+        /// <returns>Text representation of the binding value.</returns>
+        string EmitFragment(BindingValue value, FragmentEmitOptions? options = null);
 
         /// <summary>
         /// Emit a complete QML document with source map tracking.
