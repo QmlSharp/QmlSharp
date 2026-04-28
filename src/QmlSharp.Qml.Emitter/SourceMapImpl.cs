@@ -7,8 +7,16 @@ namespace QmlSharp.Qml.Emitter
     {
         private readonly Dictionary<AstNode, SourceMapEntry> _byNode = new(ReferenceEqualityComparer.Instance);
         private readonly List<SourceMapEntry> _entries = [];
+        private bool _entriesNeedSort;
 
-        public IReadOnlyList<SourceMapEntry> Entries => _entries;
+        public IReadOnlyList<SourceMapEntry> Entries
+        {
+            get
+            {
+                EnsureEntriesSorted();
+                return _entries;
+            }
+        }
 
         public OutputSpan? GetOutputSpan(AstNode node)
         {
@@ -24,6 +32,7 @@ namespace QmlSharp.Qml.Emitter
                 throw new ArgumentOutOfRangeException(nameof(line), line, "Line must be 1-based.");
             }
 
+            EnsureEntriesSorted();
             return _entries
                 .Where(entry => entry.OutputSpan.StartLine <= line && entry.OutputSpan.EndLine >= line)
                 .Select(entry => entry.Node)
@@ -43,6 +52,7 @@ namespace QmlSharp.Qml.Emitter
             }
 
             SourceMapEntry? best = null;
+            EnsureEntriesSorted();
             foreach (SourceMapEntry entry in _entries)
             {
                 if (!Contains(entry.OutputSpan, line, column))
@@ -61,6 +71,7 @@ namespace QmlSharp.Qml.Emitter
 
         public SourceMapJson ToJson()
         {
+            EnsureEntriesSorted();
             ImmutableArray<SourceMapEntryJson>.Builder entries = ImmutableArray.CreateBuilder<SourceMapEntryJson>(_entries.Count);
             foreach (SourceMapEntry entry in _entries)
             {
@@ -80,6 +91,9 @@ namespace QmlSharp.Qml.Emitter
             ArgumentNullException.ThrowIfNull(node);
             ArgumentNullException.ThrowIfNull(span);
 
+            ValidateOutputSpan(span);
+            ValidateSourceSpan(node.Span);
+
             SourceMapEntry entry = new()
             {
                 Node = node,
@@ -89,21 +103,19 @@ namespace QmlSharp.Qml.Emitter
             };
 
             _byNode[node] = entry;
-            InsertInOutputOrder(entry);
+            _entries.Add(entry);
+            _entriesNeedSort = true;
         }
 
-        private void InsertInOutputOrder(SourceMapEntry entry)
+        private void EnsureEntriesSorted()
         {
-            for (int index = 0; index < _entries.Count; index++)
+            if (!_entriesNeedSort)
             {
-                if (CompareOutputOrder(entry, _entries[index]) < 0)
-                {
-                    _entries.Insert(index, entry);
-                    return;
-                }
+                return;
             }
 
-            _entries.Add(entry);
+            _entries.Sort(CompareOutputOrder);
+            _entriesNeedSort = false;
         }
 
         private static int CompareOutputOrder(SourceMapEntry left, SourceMapEntry right)
@@ -133,6 +145,60 @@ namespace QmlSharp.Qml.Emitter
             }
 
             return string.Compare(left.NodeKind, right.NodeKind, StringComparison.Ordinal);
+        }
+
+        private static void ValidateOutputSpan(OutputSpan span)
+        {
+            if (span.StartLine <= 0)
+            {
+                throw new InvalidOperationException("Source map output spans must use 1-based start lines.");
+            }
+
+            if (span.StartColumn <= 0)
+            {
+                throw new InvalidOperationException("Source map output spans must use 1-based start columns.");
+            }
+
+            if (span.EndLine <= 0)
+            {
+                throw new InvalidOperationException("Source map output spans must use 1-based end lines.");
+            }
+
+            if (span.EndColumn <= 0)
+            {
+                throw new InvalidOperationException("Source map output spans must use 1-based end columns.");
+            }
+
+            if (span.EndLine < span.StartLine
+                || (span.EndLine == span.StartLine && span.EndColumn < span.StartColumn))
+            {
+                throw new InvalidOperationException("Source map output spans must end at or after their start position.");
+            }
+        }
+
+        private static void ValidateSourceSpan(SourceSpan? span)
+        {
+            if (span is null)
+            {
+                return;
+            }
+
+            if (span.Start.Line <= 0 || span.Start.Column <= 0 || span.Start.Offset < 0)
+            {
+                throw new InvalidOperationException("Source map source spans must use 1-based start line/column and non-negative offsets.");
+            }
+
+            if (span.End.Line <= 0 || span.End.Column <= 0 || span.End.Offset < 0)
+            {
+                throw new InvalidOperationException("Source map source spans must use 1-based end line/column and non-negative offsets.");
+            }
+
+            if (span.End.Line < span.Start.Line
+                || (span.End.Line == span.Start.Line && span.End.Column < span.Start.Column)
+                || span.End.Offset < span.Start.Offset)
+            {
+                throw new InvalidOperationException("Source map source spans must end at or after their start position.");
+            }
         }
 
         private static bool Contains(OutputSpan span, int line, int column)
