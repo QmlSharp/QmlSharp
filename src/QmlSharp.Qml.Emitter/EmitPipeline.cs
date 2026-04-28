@@ -22,8 +22,8 @@ namespace QmlSharp.Qml.Emitter
         /// </summary>
         /// <param name="emitter">Emitter used for the emit stage.</param>
         /// <param name="config">Pipeline configuration. Null uses defaults.</param>
-        /// <param name="formatter">Optional formatter adapter.</param>
-        /// <param name="linter">Optional linter adapter.</param>
+        /// <param name="formatter">Formatter adapter. Required when formatting is enabled.</param>
+        /// <param name="linter">Linter adapter. Required when linting is enabled.</param>
         public EmitPipeline(
             IQmlEmitter emitter,
             EmitPipelineConfig? config = null,
@@ -87,6 +87,7 @@ namespace QmlSharp.Qml.Emitter
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Pipeline stages are isolated so batch processing can report per-document failures.")]
+        [SuppressMessage("Maintainability", "MA0051:Method is too long", Justification = "The pipeline orchestrator keeps stage order and result composition together.")]
         private async Task<PipelineResult> ProcessCoreAsync(string documentName, QmlDocument document, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
@@ -106,8 +107,13 @@ namespace QmlSharp.Qml.Emitter
             ct.ThrowIfCancellationRequested();
 
             FormatStageResult? formatResult = null;
-            if (_config.EnableFormat && _formatter is not null)
+            if (_config.EnableFormat)
             {
+                if (!RequireStageService(diagnostics, "format", documentName, _formatter))
+                {
+                    return CreateResult(currentText, valid: false, succeeded: false, emitResult, null, null, total, diagnostics.ToImmutable());
+                }
+
                 StageOutcome<FormatStageResult> formatOutcome = await TryRunFormatStageAsync(documentName, currentText, ct).ConfigureAwait(false);
                 formatResult = formatOutcome.Result;
                 currentText = formatResult.Text;
@@ -121,8 +127,13 @@ namespace QmlSharp.Qml.Emitter
             ct.ThrowIfCancellationRequested();
 
             LintStageResult? lintResult = null;
-            if (_config.EnableLint && _linter is not null)
+            if (_config.EnableLint)
             {
+                if (!RequireStageService(diagnostics, "lint", documentName, _linter))
+                {
+                    return CreateResult(currentText, valid: false, succeeded: false, emitResult, formatResult, null, total, diagnostics.ToImmutable());
+                }
+
                 lintResult = await TryRunLintStageAsync(documentName, currentText, ct).ConfigureAwait(false);
                 AddDiagnostics(diagnostics, lintResult.Diagnostics);
             }
@@ -317,6 +328,35 @@ namespace QmlSharp.Qml.Emitter
             {
                 builder.Add(diagnostics[index]);
             }
+        }
+
+        private static bool RequireStageService(
+            ImmutableArray<PipelineDiagnostic>.Builder builder,
+            string stage,
+            string documentName,
+            object? service)
+        {
+            if (service is not null)
+            {
+                return true;
+            }
+
+            AddMissingStageDiagnostic(builder, stage, documentName);
+            return false;
+        }
+
+        private static void AddMissingStageDiagnostic(
+            ImmutableArray<PipelineDiagnostic>.Builder builder,
+            string stage,
+            string documentName)
+        {
+            builder.Add(new PipelineDiagnostic
+            {
+                Code = "PIPELINE-CONFIG",
+                Severity = PipelineDiagnosticSeverity.Error,
+                Message = $"Pipeline {stage} stage is enabled but no {stage} service was injected.",
+                File = string.Equals(documentName, DefaultDocumentName, StringComparison.Ordinal) ? null : documentName,
+            });
         }
 
         private static bool ContainsError(ImmutableArray<PipelineDiagnostic> diagnostics)

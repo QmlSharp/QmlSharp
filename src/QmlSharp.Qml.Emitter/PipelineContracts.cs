@@ -146,11 +146,13 @@ namespace QmlSharp.Qml.Emitter
 
         /// <summary>
         /// Gets a value indicating whether to run a formatter after emit.
+        /// When true, the pipeline requires an injected formatter service.
         /// </summary>
         public bool EnableFormat { get; init; } = true;
 
         /// <summary>
         /// Gets a value indicating whether to run a linter after format.
+        /// When true, the pipeline requires an injected linter service.
         /// </summary>
         public bool EnableLint { get; init; } = true;
 

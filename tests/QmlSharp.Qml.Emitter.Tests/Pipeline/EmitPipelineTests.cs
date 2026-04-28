@@ -173,6 +173,56 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
 
         [Fact]
         [Trait("Category", TestCategories.Pipeline)]
+        public async Task ProcessAsync_FormatEnabledWithoutFormatter_ReturnsConfigurationFailure()
+        {
+            QmlDocument document = AstFixtureFactory.MinimalDocument();
+            EmitPipelineConfig config = new()
+            {
+                EnableFormat = true,
+                EnableLint = false,
+            };
+            EmitPipeline pipeline = new(new QmlEmitter(), config);
+
+            PipelineResult result = await pipeline.ProcessAsync(document);
+
+            Assert.False(result.Succeeded);
+            Assert.False(result.Valid);
+            Assert.Equal("Item {}\n", result.Text);
+            Assert.Null(result.FormatResult);
+            Assert.Null(result.LintResult);
+            PipelineDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("PIPELINE-CONFIG", diagnostic.Code);
+            Assert.Equal(PipelineDiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Equal("Pipeline format stage is enabled but no format service was injected.", diagnostic.Message);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Pipeline)]
+        public async Task ProcessAsync_LintEnabledWithoutLinter_ReturnsConfigurationFailure()
+        {
+            QmlDocument document = AstFixtureFactory.MinimalDocument();
+            EmitPipelineConfig config = new()
+            {
+                EnableFormat = false,
+                EnableLint = true,
+            };
+            EmitPipeline pipeline = new(new QmlEmitter(), config);
+
+            PipelineResult result = await pipeline.ProcessAsync(document);
+
+            Assert.False(result.Succeeded);
+            Assert.False(result.Valid);
+            Assert.Equal("Item {}\n", result.Text);
+            Assert.Null(result.FormatResult);
+            Assert.Null(result.LintResult);
+            PipelineDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("PIPELINE-CONFIG", diagnostic.Code);
+            Assert.Equal(PipelineDiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Equal("Pipeline lint stage is enabled but no lint service was injected.", diagnostic.Message);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Pipeline)]
         public async Task PL_07_ProcessBatchAsync_MultiDocumentInput_PreservesInputOrdering()
         {
             ImmutableArray<NamedDocument> documents =
