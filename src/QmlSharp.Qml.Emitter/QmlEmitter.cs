@@ -287,27 +287,14 @@ namespace QmlSharp.Qml.Emitter
         {
             if (attached.Bindings.IsDefaultOrEmpty)
             {
-                context.Writer.WriteLine($"{attached.AttachedTypeName} {{}}");
                 return;
             }
-
-            if (attached.Bindings.Length == 1)
-            {
-                BindingNode binding = attached.Bindings[0];
-                EmitNamedValue($"{attached.AttachedTypeName}.{binding.PropertyName}", binding.Value, context, context.GetSemicolonSuffix());
-                return;
-            }
-
-            context.Writer.WriteLine($"{attached.AttachedTypeName} {{");
-            context.Writer.Indent();
 
             for (int index = 0; index < attached.Bindings.Length; index++)
             {
-                EmitBinding(attached.Bindings[index], context);
+                BindingNode binding = attached.Bindings[index];
+                EmitNamedValue($"{attached.AttachedTypeName}.{binding.PropertyName}", binding.Value, context, context.GetSemicolonSuffix());
             }
-
-            context.Writer.Dedent();
-            context.Writer.WriteLine("}");
         }
 
         private static void EmitArrayBinding(ArrayBindingNode arrayBinding, EmitContext context)
@@ -334,7 +321,7 @@ namespace QmlSharp.Qml.Emitter
                 NullLiteral => "null",
                 EnumReference enumReference => $"{enumReference.TypeName}.{enumReference.MemberName}",
                 ScriptExpression expression when !ContainsLineBreak(expression.Code) => expression.Code,
-                ScriptBlock block when !ContainsLineBreak(block.Code) => $"{{ {block.Code} }}",
+                ScriptBlock block when TryFormatInlineScriptBlock(block.Code, out string? blockText) => blockText,
                 ObjectValue objectValue => TryFormatInlineObject(objectValue.Object, context),
                 ArrayValue arrayValue => TryFormatInlineArray(arrayValue.Elements, context),
                 _ => null,
@@ -447,7 +434,7 @@ namespace QmlSharp.Qml.Emitter
 
         private static void EmitScriptBlock(string code, EmitContext context, string suffix)
         {
-            string[] lines = SplitCodeLines(code);
+            string[] lines = SplitCodeLines(NormalizeScriptBlockBody(code));
 
             context.Writer.Write("{");
             context.Writer.WriteLine();
@@ -455,11 +442,44 @@ namespace QmlSharp.Qml.Emitter
 
             for (int index = 0; index < lines.Length; index++)
             {
+                if (lines.Length == 1 && lines[index].Length == 0)
+                {
+                    continue;
+                }
+
                 context.Writer.WriteLine(lines[index]);
             }
 
             context.Writer.Dedent();
             context.Writer.WriteLine($"}}{suffix}");
+        }
+
+        private static bool TryFormatInlineScriptBlock(string code, [NotNullWhen(true)] out string? text)
+        {
+            string body = NormalizeScriptBlockBody(code).Trim();
+            if (ContainsLineBreak(body))
+            {
+                text = null;
+                return false;
+            }
+
+            text = body.Length == 0 ? "{ }" : $"{{ {body} }}";
+            return true;
+        }
+
+        private static string NormalizeScriptBlockBody(string code)
+        {
+            string normalized = code
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n');
+            string trimmed = normalized.Trim();
+
+            if (trimmed.Length >= 2 && trimmed[0] == '{' && trimmed[^1] == '}')
+            {
+                return trimmed[1..^1].Trim();
+            }
+
+            return normalized;
         }
 
         private static void EmitObjectValue(ObjectDefinitionNode obj, EmitContext context, string suffix)

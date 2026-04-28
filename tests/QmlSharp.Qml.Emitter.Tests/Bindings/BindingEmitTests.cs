@@ -174,9 +174,34 @@ namespace QmlSharp.Qml.Emitter.Tests.Bindings
 
         [Fact]
         [Trait("Category", TestCategories.Bindings)]
+        public void BV_16B_ScriptBlockWithExistingInlineBraces_DoesNotDoubleWrap()
+        {
+            QmlDocument document = Document("Item", root => root.Binding("onCompleted", Values.Block("{ console.log(\"done\") }")));
+
+            AssertBindingOutput(document, "Item {\n    onCompleted: { console.log(\"done\") }\n}\n");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Bindings)]
         public void BV_17_ScriptBlockMultiline_EmitsIndentedBlock()
         {
             QmlDocument document = Document("Item", root => root.Binding("onCompleted", Values.Block("console.log(\"done\")\nready = true")));
+
+            AssertBindingOutput(
+                document,
+                "Item {\n"
+                    + "    onCompleted: {\n"
+                    + "        console.log(\"done\")\n"
+                    + "        ready = true\n"
+                    + "    }\n"
+                    + "}\n");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Bindings)]
+        public void BV_17B_ScriptBlockWithExistingMultilineBraces_DoesNotDoubleWrap()
+        {
+            QmlDocument document = Document("Item", root => root.Binding("onCompleted", Values.Block("{\nconsole.log(\"done\")\nready = true\n}")));
 
             AssertBindingOutput(
                 document,
@@ -323,7 +348,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Bindings
 
         [Fact]
         [Trait("Category", TestCategories.Bindings)]
-        public void BV_25_AttachedBindingMultipleProperties_EmitsAttachedTypeBlock()
+        public void BV_25_AttachedBindingMultipleProperties_EmitsDottedPropertyBindings()
         {
             QmlDocument document = Document(
                 "Item",
@@ -336,11 +361,18 @@ namespace QmlSharp.Qml.Emitter.Tests.Bindings
             AssertBindingOutput(
                 document,
                 "Item {\n"
-                    + "    Layout {\n"
-                    + "        fillWidth: true\n"
-                    + "        margins: 10\n"
-                    + "    }\n"
+                    + "    Layout.fillWidth: true\n"
+                    + "    Layout.margins: 10\n"
                     + "}\n");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Bindings)]
+        public void BV_25B_AttachedBindingWithoutProperties_EmitsNoInvalidBlock()
+        {
+            QmlDocument document = Document("Item", root => root.AttachedBinding("Layout", _ => { }));
+
+            AssertBindingOutput(document, "Item {\n}\n");
         }
 
         [Fact]
