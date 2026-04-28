@@ -91,11 +91,11 @@ namespace QmlSharp.Qml.Emitter
                     break;
                 case ImportNode import:
                     EmitLeadingComments(import, context);
-                    EmitImport(import, context);
+                    EmitImportFragment(import, context);
                     break;
                 case PragmaNode pragma:
                     EmitLeadingComments(pragma, context);
-                    EmitPragma(pragma, context);
+                    EmitPragmaFragment(pragma, context);
                     break;
                 case ObjectDefinitionNode obj:
                     EmitLeadingComments(obj, context);
@@ -224,24 +224,40 @@ namespace QmlSharp.Qml.Emitter
 
         private static void EmitPragma(PragmaNode pragma, EmitContext context)
         {
-            string text = pragma.Value is null
+            context.Writer.WriteLine(FormatPragma(pragma));
+        }
+
+        private static void EmitPragmaFragment(PragmaNode pragma, EmitContext context)
+        {
+            context.Writer.WriteLine($"{FormatPragma(pragma)}{GetTrailingCommentSuffix(pragma, context)}");
+        }
+
+        private static string FormatPragma(PragmaNode pragma)
+        {
+            return pragma.Value is null
                 ? $"pragma {pragma.Name}"
                 : $"pragma {pragma.Name}: {pragma.Value}";
-
-            context.Writer.WriteLine(text);
         }
 
         private static void EmitImport(ImportNode import, EmitContext context)
         {
-            string text = import.ImportKind switch
+            context.Writer.WriteLine(FormatImport(import));
+        }
+
+        private static void EmitImportFragment(ImportNode import, EmitContext context)
+        {
+            context.Writer.WriteLine($"{FormatImport(import)}{GetTrailingCommentSuffix(import, context)}");
+        }
+
+        private static string FormatImport(ImportNode import)
+        {
+            return import.ImportKind switch
             {
                 ImportKind.Module => EmitModuleImport(import),
                 ImportKind.Directory => EmitPathImport(import),
                 ImportKind.JavaScript => EmitPathImport(import),
                 _ => throw new NotSupportedException($"Unsupported import kind '{import.ImportKind}'."),
             };
-
-            context.Writer.WriteLine(text);
         }
 
         private static string EmitModuleImport(ImportNode import)

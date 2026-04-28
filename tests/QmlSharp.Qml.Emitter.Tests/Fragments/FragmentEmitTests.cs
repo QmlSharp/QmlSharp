@@ -49,6 +49,24 @@ namespace QmlSharp.Qml.Emitter.Tests.Fragments
 
         [Fact]
         [Trait("Category", TestCategories.Fragments)]
+        public void FE_03_ImportFragment_PreservesTrailingComment()
+        {
+            ImportNode import = new()
+            {
+                ImportKind = ImportKind.Module,
+                ModuleUri = "QtQuick",
+                TrailingComment = new CommentNode { Text = "// keep import reason" },
+            };
+
+            string preserved = EmitNode(import);
+            string omitted = EmitNode(import, new FragmentEmitOptions { PreserveComments = false });
+
+            Assert.Equal("import QtQuick // keep import reason", preserved);
+            Assert.Equal("import QtQuick", omitted);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Fragments)]
         public void FE_04_PragmaFragment_EmitsSinglePragmaLine()
         {
             PragmaNode pragma = new()
@@ -59,6 +77,21 @@ namespace QmlSharp.Qml.Emitter.Tests.Fragments
             string actual = EmitNode(pragma);
 
             Assert.Equal("pragma Singleton", actual);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Fragments)]
+        public void FE_04_PragmaFragment_PreservesTrailingComment()
+        {
+            PragmaNode pragma = new()
+            {
+                Name = PragmaName.Singleton,
+                TrailingComment = new CommentNode { Text = "// singleton type" },
+            };
+
+            string actual = EmitNode(pragma);
+
+            Assert.Equal("pragma Singleton // singleton type", actual);
         }
 
         [Fact]
@@ -110,6 +143,22 @@ namespace QmlSharp.Qml.Emitter.Tests.Fragments
             string actual = EmitNode(binding, options);
 
             Assert.Equal("  text: 'hello';", actual);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Fragments)]
+        public void Fragment_SignalHandler_EmitsSingleMemberFragment()
+        {
+            SignalHandlerNode handler = new()
+            {
+                HandlerName = "onClicked",
+                Form = SignalHandlerForm.Expression,
+                Code = "activate()",
+            };
+
+            string actual = EmitNode(handler);
+
+            Assert.Equal("onClicked: activate()", actual);
         }
 
         [Fact]
@@ -242,6 +291,24 @@ namespace QmlSharp.Qml.Emitter.Tests.Fragments
                 () => emitter.EmitFragment(import, new FragmentEmitOptions { AllowDocumentOnlyConstructs = false }));
 
             Assert.Equal("Unsupported AST node kind 'Import' in fragment emission when document-only constructs are disabled.", exception.Message);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Fragments)]
+        public void Fragment_DocumentFragment_EmitsCompleteDocumentByDefault()
+        {
+            QmlDocument document = new()
+            {
+                Imports =
+                [
+                    new ImportNode { ImportKind = ImportKind.Module, ModuleUri = "QtQuick" },
+                ],
+                RootObject = new ObjectDefinitionNode { TypeName = "Item" },
+            };
+
+            string actual = EmitNode(document);
+
+            Assert.Equal("import QtQuick\n\nItem {}", actual);
         }
 
         [Fact]
