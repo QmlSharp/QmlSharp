@@ -6,5 +6,6 @@ namespace QmlSharp.Qml.Emitter.Tests.Helpers
         public const string Contract = "Contract";
         public const string Basic = "Basic";
         public const string Bindings = "Bindings";
+        public const string Members = "Members";
     }
 }
