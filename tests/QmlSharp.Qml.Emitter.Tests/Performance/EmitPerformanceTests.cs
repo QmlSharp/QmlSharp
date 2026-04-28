@@ -3,6 +3,7 @@ using QmlSharp.Qml.Emitter.Tests.Helpers;
 
 namespace QmlSharp.Qml.Emitter.Tests.Performance
 {
+    [Collection(EmitPerformanceCollection.Name)]
     public sealed class EmitPerformanceTests
     {
         private const double SmallDocumentAverageBudgetMs = 5.0;
