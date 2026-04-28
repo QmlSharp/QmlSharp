@@ -129,6 +129,18 @@ namespace QmlSharp.Qml.Emitter.Tests.Basic
 
         [Fact]
         [Trait("Category", TestCategories.Basic)]
+        public void EB_09B_DocumentWithVersionlessModuleImportQualifier_EmitsQualifiedImport()
+        {
+            QmlDocument document = new QmlDocumentBuilder()
+                .AddModuleImport("QtQuick", qualifier: "QQ")
+                .SetRootObject("Item", _ => { })
+                .Build();
+
+            AssertBasicOutput(document, "import QtQuick as QQ\n\nItem {}\n");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Basic)]
         public void EB_10_DocumentWithDirectoryImport_EmitsPathImport()
         {
             QmlDocument document = new QmlDocumentBuilder()
@@ -137,6 +149,20 @@ namespace QmlSharp.Qml.Emitter.Tests.Basic
                 .Build();
 
             AssertBasicOutput(document, "import \"./components\"\n\nItem {}\n");
+        }
+
+        [Theory]
+        [InlineData("./quoted\"components", "import \"./quoted\\\"components\"\n\nItem {}\n")]
+        [InlineData("..\\shared\\components", "import \"..\\\\shared\\\\components\"\n\nItem {}\n")]
+        [Trait("Category", TestCategories.Basic)]
+        public void EB_10B_DocumentWithPathImportEscapesQuotedPathLiteral(string path, string expected)
+        {
+            QmlDocument document = new QmlDocumentBuilder()
+                .AddDirectoryImport(path)
+                .SetRootObject("Item", _ => { })
+                .Build();
+
+            AssertBasicOutput(document, expected);
         }
 
         [Fact]
@@ -149,6 +175,38 @@ namespace QmlSharp.Qml.Emitter.Tests.Basic
                 .Build();
 
             AssertBasicOutput(document, "import \"utils.js\" as Utils\n\nItem {}\n");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Basic)]
+        public void EB_11B_DocumentWithJavaScriptImportWithoutQualifier_ThrowsInvalidOperationException()
+        {
+            QmlDocument document = new QmlDocumentBuilder()
+                .AddImport(new ImportNode
+                {
+                    ImportKind = ImportKind.JavaScript,
+                    Path = "utils.js",
+                })
+                .SetRootObject("Item", _ => { })
+                .Build();
+            IQmlEmitter emitter = new QmlEmitter();
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+                () => emitter.Emit(document));
+
+            Assert.Contains("JavaScript imports require a qualifier", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Basic)]
+        public void EB_11C_DocumentWithJavaScriptImportEscapesPathLiteral()
+        {
+            QmlDocument document = new QmlDocumentBuilder()
+                .AddJavaScriptImport("scripts\\utils.js", "Utils")
+                .SetRootObject("Item", _ => { })
+                .Build();
+
+            AssertBasicOutput(document, "import \"scripts\\\\utils.js\" as Utils\n\nItem {}\n");
         }
 
         [Fact]

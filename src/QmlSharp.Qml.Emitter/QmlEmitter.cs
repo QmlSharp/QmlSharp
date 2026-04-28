@@ -157,7 +157,13 @@ namespace QmlSharp.Qml.Emitter
                 throw new InvalidOperationException("Directory and JavaScript imports require a path.");
             }
 
-            string text = $"import \"{import.Path}\"";
+            if (import.ImportKind == ImportKind.JavaScript && string.IsNullOrWhiteSpace(import.Qualifier))
+            {
+                throw new InvalidOperationException("JavaScript imports require a qualifier.");
+            }
+
+            string escapedPath = StringLiteralEscaper.Escape(import.Path, '"');
+            string text = $"import \"{escapedPath}\"";
             if (!string.IsNullOrWhiteSpace(import.Qualifier))
             {
                 text = $"{text} as {import.Qualifier}";
