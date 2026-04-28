@@ -280,6 +280,124 @@ namespace QmlSharp.Qml.Emitter.Tests.SourceMaps
 
         [Fact]
         [Trait("Category", TestCategories.SourceMaps)]
+        public void SourceMap_AttachedBinding_MapsParentAndChildBindingSpans()
+        {
+            BindingNode fillWidth = new()
+            {
+                PropertyName = "fillWidth",
+                Value = Values.Boolean(true),
+                Span = Span(21, 5, 210, 21, 27, 232),
+            };
+            BindingNode margins = new()
+            {
+                PropertyName = "margins",
+                Value = Values.Number(10),
+                Span = Span(22, 5, 234, 22, 23, 252),
+            };
+            AttachedBindingNode attached = new()
+            {
+                AttachedTypeName = "Layout",
+                Bindings = [fillWidth, margins],
+                Span = Span(21, 5, 210, 22, 23, 252),
+            };
+            QmlDocument document = new()
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Item",
+                    Members = [attached],
+                },
+            };
+            IQmlEmitter emitter = new QmlEmitter();
+
+            EmitResult result = emitter.EmitWithSourceMap(document);
+
+            AssertEntry(result, attached, "    Layout.fillWidth: true\n    Layout.margins: 10", attached.Span);
+            AssertEntry(result, fillWidth, "    Layout.fillWidth: true", fillWidth.Span);
+            AssertEntry(result, margins, "    Layout.margins: 10", margins.Span);
+            Assert.Same(fillWidth, result.SourceMap.GetInnermostNodeAt(2, 12));
+            Assert.Same(margins, result.SourceMap.GetInnermostNodeAt(3, 12));
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.SourceMaps)]
+        public void SourceMap_MemberEntries_CoverComplexMemberKindsWithSourceSpans()
+        {
+            GroupedBindingNode grouped = new()
+            {
+                GroupName = "font",
+                Bindings =
+                [
+                    new BindingNode { PropertyName = "pixelSize", Value = Values.Number(14) },
+                ],
+                Span = Span(30, 5, 300, 32, 6, 331),
+            };
+            ArrayBindingNode array = new()
+            {
+                PropertyName = "states",
+                Elements = [Values.Number(1), Values.Number(2)],
+                Span = Span(33, 5, 333, 36, 6, 366),
+            };
+            ObjectDefinitionNode animation = new()
+            {
+                TypeName = "NumberAnimation",
+                Span = Span(38, 9, 380, 38, 28, 399),
+            };
+            BehaviorOnNode behavior = new()
+            {
+                PropertyName = "x",
+                Animation = animation,
+                Span = Span(37, 5, 370, 39, 6, 406),
+            };
+            SignalHandlerNode handler = new()
+            {
+                HandlerName = "onClicked",
+                Form = SignalHandlerForm.Expression,
+                Code = "run()",
+                Span = Span(40, 5, 408, 40, 21, 424),
+            };
+            FunctionDeclarationNode function = new()
+            {
+                Name = "run",
+                Body = "work()",
+                Span = Span(41, 5, 426, 43, 6, 456),
+            };
+            EnumDeclarationNode enumDeclaration = new()
+            {
+                Name = "Mode",
+                Members = [new EnumMember("On", null)],
+                Span = Span(44, 5, 458, 46, 6, 481),
+            };
+            InlineComponentNode component = new()
+            {
+                Name = "Badge",
+                Body = new ObjectDefinitionNode { TypeName = "Item" },
+                Span = Span(47, 5, 483, 47, 27, 505),
+            };
+            QmlDocument document = new()
+            {
+                RootObject = new ObjectDefinitionNode
+                {
+                    TypeName = "Item",
+                    Members = [grouped, array, behavior, handler, function, enumDeclaration, component],
+                },
+            };
+            IQmlEmitter emitter = new QmlEmitter();
+
+            EmitResult result = emitter.EmitWithSourceMap(document);
+
+            AssertEntry(result, grouped, "    font {\n        pixelSize: 14\n    }", grouped.Span);
+            AssertEntry(result, array, "    states: [\n        1,\n        2\n    ]", array.Span);
+            AssertEntry(result, behavior, "    Behavior on x {\n        NumberAnimation {}\n    }", behavior.Span);
+            AssertEntry(result, animation, "        NumberAnimation {}", animation.Span);
+            AssertEntry(result, handler, "    onClicked: run()", handler.Span);
+            AssertEntry(result, function, "    function run() {\n        work()\n    }", function.Span);
+            AssertEntry(result, enumDeclaration, "    enum Mode {\n        On\n    }", enumDeclaration.Span);
+            AssertEntry(result, component, "    component Badge: Item {}", component.Span);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.SourceMaps)]
         public void SourceMap_InlineObjectValue_MapsNestedObjectSpanWithoutChangingText()
         {
             ObjectDefinitionNode fontObject = new()
