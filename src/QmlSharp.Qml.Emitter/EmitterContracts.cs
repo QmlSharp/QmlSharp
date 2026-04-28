@@ -294,6 +294,11 @@ namespace QmlSharp.Qml.Emitter
         public required string NodeKind { get; init; }
 
         /// <summary>
+        /// Gets the source span from the input AST when known.
+        /// </summary>
+        public SourceSpan? SourceSpan { get; init; }
+
+        /// <summary>
         /// Gets emitted output span for the node.
         /// </summary>
         public required OutputSpan OutputSpan { get; init; }
@@ -358,6 +363,11 @@ namespace QmlSharp.Qml.Emitter
         /// Gets node kind string.
         /// </summary>
         public required string NodeKind { get; init; }
+
+        /// <summary>
+        /// Gets source span from the input AST when known.
+        /// </summary>
+        public SourceSpan? SourceSpan { get; init; }
 
         /// <summary>
         /// Gets emitted output span.

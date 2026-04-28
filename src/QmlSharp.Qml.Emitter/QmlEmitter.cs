@@ -52,9 +52,18 @@ namespace QmlSharp.Qml.Emitter
         public EmitResult EmitWithSourceMap(QmlDocument document, EmitOptions? options = null)
         {
             ArgumentNullException.ThrowIfNull(document);
-            _ = ResolvedEmitOptions.From(options);
 
-            throw new NotSupportedException("QML source-map emission is implemented in later 03-qml-emitter steps.");
+            ResolvedEmitOptions resolvedOptions = ResolvedEmitOptions.From(options);
+            SourceMapImpl sourceMap = new();
+            EmitContext context = new(resolvedOptions, sourceMap);
+
+            EmitDocument(document, context);
+
+            return new EmitResult
+            {
+                Text = FinalizeOutput(context.Writer.GetOutput(), resolvedOptions),
+                SourceMap = sourceMap,
+            };
         }
 
         private static FragmentEmitSettings ResolveFragmentOptions(FragmentEmitOptions? options)
@@ -102,7 +111,7 @@ namespace QmlSharp.Qml.Emitter
                     EmitObject(obj, context, isDocumentRootObject: settings.AllowDocumentOnlyConstructs);
                     break;
                 case CommentNode comment when context.Options.EmitComments:
-                    context.Writer.WriteLine(comment.Text);
+                    EmitCommentLine(comment, context);
                     break;
                 case CommentNode:
                     break;
@@ -216,7 +225,7 @@ namespace QmlSharp.Qml.Emitter
 
             for (int index = 0; index < document.LeadingComments.Length; index++)
             {
-                context.Writer.WriteLine(document.LeadingComments[index].Text);
+                EmitCommentLine(document.LeadingComments[index], context);
             }
 
             WriteSectionSeparator(context);
@@ -224,12 +233,28 @@ namespace QmlSharp.Qml.Emitter
 
         private static void EmitPragma(PragmaNode pragma, EmitContext context)
         {
-            context.Writer.WriteLine(FormatPragma(pragma));
+            context.BeginNode(pragma);
+            try
+            {
+                context.Writer.WriteLine(FormatPragma(pragma));
+            }
+            finally
+            {
+                context.EndNode(pragma);
+            }
         }
 
         private static void EmitPragmaFragment(PragmaNode pragma, EmitContext context)
         {
-            context.Writer.WriteLine($"{FormatPragma(pragma)}{GetTrailingCommentSuffix(pragma, context)}");
+            context.BeginNode(pragma);
+            try
+            {
+                context.Writer.WriteLine($"{FormatPragma(pragma)}{GetTrailingCommentSuffix(pragma, context)}");
+            }
+            finally
+            {
+                context.EndNode(pragma);
+            }
         }
 
         private static string FormatPragma(PragmaNode pragma)
@@ -241,12 +266,28 @@ namespace QmlSharp.Qml.Emitter
 
         private static void EmitImport(ImportNode import, EmitContext context)
         {
-            context.Writer.WriteLine(FormatImport(import));
+            context.BeginNode(import);
+            try
+            {
+                context.Writer.WriteLine(FormatImport(import));
+            }
+            finally
+            {
+                context.EndNode(import);
+            }
         }
 
         private static void EmitImportFragment(ImportNode import, EmitContext context)
         {
-            context.Writer.WriteLine($"{FormatImport(import)}{GetTrailingCommentSuffix(import, context)}");
+            context.BeginNode(import);
+            try
+            {
+                context.Writer.WriteLine($"{FormatImport(import)}{GetTrailingCommentSuffix(import, context)}");
+            }
+            finally
+            {
+                context.EndNode(import);
+            }
         }
 
         private static string FormatImport(ImportNode import)
@@ -307,31 +348,39 @@ namespace QmlSharp.Qml.Emitter
         {
             ArgumentNullException.ThrowIfNull(obj);
 
-            ImmutableArray<AstNode> members = GetObjectMembers(obj, context);
-            string suffix = GetTrailingCommentSuffix(obj, context);
-
-            if (members.Length == 0 && context.Options.SingleLineEmptyObjects)
+            context.BeginNode(obj);
+            try
             {
-                context.Writer.WriteLine($"{obj.TypeName} {{}}{suffix}");
-                return;
-            }
+                ImmutableArray<AstNode> members = GetObjectMembers(obj, context);
+                string suffix = GetTrailingCommentSuffix(obj, context);
 
-            context.Writer.WriteLine($"{obj.TypeName} {{");
-            context.Writer.Indent();
-
-            for (int index = 0; index < members.Length; index++)
-            {
-                AstNode member = members[index];
-                EmitObjectMember(member, context, isDocumentRootMember: isDocumentRootObject);
-
-                if (ShouldWriteBlankLineBetweenMembers(member, members, index, context))
+                if (members.Length == 0 && context.Options.SingleLineEmptyObjects)
                 {
-                    context.Writer.WriteLine();
+                    context.Writer.WriteLine($"{obj.TypeName} {{}}{suffix}");
+                    return;
                 }
-            }
 
-            context.Writer.Dedent();
-            context.Writer.WriteLine($"}}{suffix}");
+                context.Writer.WriteLine($"{obj.TypeName} {{");
+                context.Writer.Indent();
+
+                for (int index = 0; index < members.Length; index++)
+                {
+                    AstNode member = members[index];
+                    EmitObjectMember(member, context, isDocumentRootMember: isDocumentRootObject);
+
+                    if (ShouldWriteBlankLineBetweenMembers(member, members, index, context))
+                    {
+                        context.Writer.WriteLine();
+                    }
+                }
+
+                context.Writer.Dedent();
+                context.Writer.WriteLine($"}}{suffix}");
+            }
+            finally
+            {
+                context.EndNode(obj);
+            }
         }
 
         private static ImmutableArray<AstNode> GetObjectMembers(ObjectDefinitionNode obj, EmitContext context)
@@ -376,13 +425,13 @@ namespace QmlSharp.Qml.Emitter
             switch (member)
             {
                 case IdAssignmentNode id:
-                    context.Writer.WriteLine($"id: {id.Id}{GetMemberSuffix(id, context)}");
+                    EmitIdAssignment(id, context);
                     break;
                 case PropertyDeclarationNode property:
                     EmitPropertyDeclaration(property, context);
                     break;
                 case PropertyAliasNode alias:
-                    context.Writer.WriteLine($"{FormatAliasPrefix(alias)}property alias {alias.Name}: {alias.Target}{GetMemberSuffix(alias, context)}");
+                    EmitPropertyAlias(alias, context);
                     break;
                 case BindingNode binding:
                     EmitBinding(binding, context);
@@ -400,7 +449,7 @@ namespace QmlSharp.Qml.Emitter
                     EmitBehaviorOn(behavior, context);
                     break;
                 case SignalDeclarationNode signal:
-                    context.Writer.WriteLine($"signal {signal.Name}({FormatParameters(signal.Parameters)}){GetMemberSuffix(signal, context)}");
+                    EmitSignalDeclaration(signal, context);
                     break;
                 case SignalHandlerNode handler:
                     EmitSignalHandler(handler, context);
@@ -418,12 +467,51 @@ namespace QmlSharp.Qml.Emitter
                     EmitObject(child, context);
                     break;
                 case CommentNode comment when context.Options.EmitComments:
-                    context.Writer.WriteLine(comment.Text);
+                    EmitCommentLine(comment, context);
                     break;
                 case CommentNode:
                     break;
                 default:
                     throw new NotSupportedException($"Unsupported AST node kind '{member.Kind}' in object member emission.");
+            }
+        }
+
+        private static void EmitIdAssignment(IdAssignmentNode id, EmitContext context)
+        {
+            context.BeginNode(id);
+            try
+            {
+                context.Writer.WriteLine($"id: {id.Id}{GetMemberSuffix(id, context)}");
+            }
+            finally
+            {
+                context.EndNode(id);
+            }
+        }
+
+        private static void EmitPropertyAlias(PropertyAliasNode alias, EmitContext context)
+        {
+            context.BeginNode(alias);
+            try
+            {
+                context.Writer.WriteLine($"{FormatAliasPrefix(alias)}property alias {alias.Name}: {alias.Target}{GetMemberSuffix(alias, context)}");
+            }
+            finally
+            {
+                context.EndNode(alias);
+            }
+        }
+
+        private static void EmitSignalDeclaration(SignalDeclarationNode signal, EmitContext context)
+        {
+            context.BeginNode(signal);
+            try
+            {
+                context.Writer.WriteLine($"signal {signal.Name}({FormatParameters(signal.Parameters)}){GetMemberSuffix(signal, context)}");
+            }
+            finally
+            {
+                context.EndNode(signal);
             }
         }
 
@@ -445,16 +533,24 @@ namespace QmlSharp.Qml.Emitter
 
         private static void EmitPropertyDeclaration(PropertyDeclarationNode property, EmitContext context)
         {
-            string declaration = $"{FormatPropertyModifiers(property)}property {property.TypeName} {property.Name}";
-            string suffix = GetMemberSuffix(property, context);
-
-            if (property.InitialValue is null)
+            context.BeginNode(property);
+            try
             {
-                context.Writer.WriteLine($"{declaration}{suffix}");
-                return;
-            }
+                string declaration = $"{FormatPropertyModifiers(property)}property {property.TypeName} {property.Name}";
+                string suffix = GetMemberSuffix(property, context);
 
-            EmitNamedValue(declaration, property.InitialValue, context, suffix);
+                if (property.InitialValue is null)
+                {
+                    context.Writer.WriteLine($"{declaration}{suffix}");
+                    return;
+                }
+
+                EmitNamedValue(declaration, property.InitialValue, context, suffix);
+            }
+            finally
+            {
+                context.EndNode(property);
+            }
         }
 
         private static string FormatPropertyModifiers(PropertyDeclarationNode property)
@@ -486,11 +582,24 @@ namespace QmlSharp.Qml.Emitter
 
         private static void EmitBinding(BindingNode binding, EmitContext context)
         {
-            EmitNamedValue(binding.PropertyName, binding.Value, context, GetMemberSuffix(binding, context));
+            context.BeginNode(binding);
+            try
+            {
+                EmitNamedValue(binding.PropertyName, binding.Value, context, GetMemberSuffix(binding, context));
+            }
+            finally
+            {
+                context.EndNode(binding);
+            }
         }
 
         private static void EmitNamedValue(string name, BindingValue value, EmitContext context, string suffix)
         {
+            if (TryEmitMappedInlineObjectValue(name, value, context, suffix))
+            {
+                return;
+            }
+
             if (TryFormatInlineBindingValue(value, context, out string? inlineValue))
             {
                 context.Writer.WriteLine($"{name}: {inlineValue}{suffix}");
@@ -504,26 +613,34 @@ namespace QmlSharp.Qml.Emitter
 
         private static void EmitGroupedBinding(GroupedBindingNode grouped, EmitContext context)
         {
-            string suffix = GetMemberSuffix(grouped, context);
-
-            if (grouped.Bindings.IsDefaultOrEmpty)
+            context.BeginNode(grouped);
+            try
             {
-                context.Writer.WriteLine($"{grouped.GroupName} {{}}{suffix}");
-                return;
+                string suffix = GetMemberSuffix(grouped, context);
+
+                if (grouped.Bindings.IsDefaultOrEmpty)
+                {
+                    context.Writer.WriteLine($"{grouped.GroupName} {{}}{suffix}");
+                    return;
+                }
+
+                context.Writer.WriteLine($"{grouped.GroupName} {{");
+                context.Writer.Indent();
+
+                for (int index = 0; index < grouped.Bindings.Length; index++)
+                {
+                    BindingNode binding = grouped.Bindings[index];
+                    EmitLeadingComments(binding, context);
+                    EmitBinding(binding, context);
+                }
+
+                context.Writer.Dedent();
+                context.Writer.WriteLine($"}}{suffix}");
             }
-
-            context.Writer.WriteLine($"{grouped.GroupName} {{");
-            context.Writer.Indent();
-
-            for (int index = 0; index < grouped.Bindings.Length; index++)
+            finally
             {
-                BindingNode binding = grouped.Bindings[index];
-                EmitLeadingComments(binding, context);
-                EmitBinding(binding, context);
+                context.EndNode(grouped);
             }
-
-            context.Writer.Dedent();
-            context.Writer.WriteLine($"}}{suffix}");
         }
 
         private static void EmitAttachedBinding(AttachedBindingNode attached, EmitContext context)
@@ -533,52 +650,92 @@ namespace QmlSharp.Qml.Emitter
                 return;
             }
 
-            for (int index = 0; index < attached.Bindings.Length; index++)
+            context.BeginNode(attached);
+            try
             {
-                BindingNode binding = attached.Bindings[index];
-                EmitLeadingComments(binding, context);
-
-                string suffix = GetMemberSuffix(binding, context);
-                if (index + 1 == attached.Bindings.Length)
+                for (int index = 0; index < attached.Bindings.Length; index++)
                 {
-                    suffix = string.Concat(context.GetSemicolonSuffix(), GetTrailingCommentSuffix(binding, context), GetTrailingCommentSuffix(attached, context));
-                }
+                    BindingNode binding = attached.Bindings[index];
+                    EmitLeadingComments(binding, context);
 
-                EmitNamedValue($"{attached.AttachedTypeName}.{binding.PropertyName}", binding.Value, context, suffix);
+                    string suffix = GetMemberSuffix(binding, context);
+                    if (index + 1 == attached.Bindings.Length)
+                    {
+                        suffix = string.Concat(context.GetSemicolonSuffix(), GetTrailingCommentSuffix(binding, context), GetTrailingCommentSuffix(attached, context));
+                    }
+
+                    context.BeginNode(binding);
+                    try
+                    {
+                        EmitNamedValue($"{attached.AttachedTypeName}.{binding.PropertyName}", binding.Value, context, suffix);
+                    }
+                    finally
+                    {
+                        context.EndNode(binding);
+                    }
+                }
+            }
+            finally
+            {
+                context.EndNode(attached);
             }
         }
 
         private static void EmitArrayBinding(ArrayBindingNode arrayBinding, EmitContext context)
         {
-            EmitArrayValue(arrayBinding.PropertyName, arrayBinding.Elements, context, GetMemberSuffix(arrayBinding, context), multilineForMultipleElements: true);
+            context.BeginNode(arrayBinding);
+            try
+            {
+                EmitArrayValue(arrayBinding.PropertyName, arrayBinding.Elements, context, GetMemberSuffix(arrayBinding, context), multilineForMultipleElements: true);
+            }
+            finally
+            {
+                context.EndNode(arrayBinding);
+            }
         }
 
         private static void EmitBehaviorOn(BehaviorOnNode behavior, EmitContext context)
         {
-            string suffix = GetMemberSuffix(behavior, context);
+            context.BeginNode(behavior);
+            try
+            {
+                string suffix = GetMemberSuffix(behavior, context);
 
-            context.Writer.WriteLine($"Behavior on {behavior.PropertyName} {{");
-            context.Writer.Indent();
-            EmitObject(behavior.Animation, context);
-            context.Writer.Dedent();
-            context.Writer.WriteLine($"}}{suffix}");
+                context.Writer.WriteLine($"Behavior on {behavior.PropertyName} {{");
+                context.Writer.Indent();
+                EmitObject(behavior.Animation, context);
+                context.Writer.Dedent();
+                context.Writer.WriteLine($"}}{suffix}");
+            }
+            finally
+            {
+                context.EndNode(behavior);
+            }
         }
 
         private static void EmitSignalHandler(SignalHandlerNode handler, EmitContext context)
         {
-            switch (handler.Form)
+            context.BeginNode(handler);
+            try
             {
-                case SignalHandlerForm.Expression:
-                    context.Writer.WriteLine($"{handler.HandlerName}: {NormalizeInlineCode(handler.Code)}{GetMemberSuffix(handler, context)}");
-                    break;
-                case SignalHandlerForm.Block:
-                    EmitNamedScriptBlock(handler.HandlerName, handler.Code, context, GetMemberSuffix(handler, context));
-                    break;
-                case SignalHandlerForm.Arrow:
-                    EmitArrowSignalHandler(handler, context);
-                    break;
-                default:
-                    throw new NotSupportedException($"Unsupported signal handler form '{handler.Form}'.");
+                switch (handler.Form)
+                {
+                    case SignalHandlerForm.Expression:
+                        context.Writer.WriteLine($"{handler.HandlerName}: {NormalizeInlineCode(handler.Code)}{GetMemberSuffix(handler, context)}");
+                        break;
+                    case SignalHandlerForm.Block:
+                        EmitNamedScriptBlock(handler.HandlerName, handler.Code, context, GetMemberSuffix(handler, context));
+                        break;
+                    case SignalHandlerForm.Arrow:
+                        EmitArrowSignalHandler(handler, context);
+                        break;
+                    default:
+                        throw new NotSupportedException($"Unsupported signal handler form '{handler.Form}'.");
+                }
+            }
+            finally
+            {
+                context.EndNode(handler);
             }
         }
 
@@ -612,73 +769,97 @@ namespace QmlSharp.Qml.Emitter
 
         private static void EmitFunctionDeclaration(FunctionDeclarationNode function, EmitContext context)
         {
-            string returnType = string.IsNullOrWhiteSpace(function.ReturnType)
-                ? string.Empty
-                : $": {function.ReturnType}";
-            string suffix = GetMemberSuffix(function, context);
-
-            context.Writer.WriteLine($"function {function.Name}({FormatParameters(function.Parameters)}){returnType} {{");
-            context.Writer.Indent();
-
-            string[] lines = SplitCodeLines(NormalizeScriptBlockBody(function.Body));
-            for (int index = 0; index < lines.Length; index++)
+            context.BeginNode(function);
+            try
             {
-                if (lines.Length == 1 && lines[index].Length == 0)
+                string returnType = string.IsNullOrWhiteSpace(function.ReturnType)
+                    ? string.Empty
+                    : $": {function.ReturnType}";
+                string suffix = GetMemberSuffix(function, context);
+
+                context.Writer.WriteLine($"function {function.Name}({FormatParameters(function.Parameters)}){returnType} {{");
+                context.Writer.Indent();
+
+                string[] lines = SplitCodeLines(NormalizeScriptBlockBody(function.Body));
+                for (int index = 0; index < lines.Length; index++)
                 {
-                    continue;
+                    if (lines.Length == 1 && lines[index].Length == 0)
+                    {
+                        continue;
+                    }
+
+                    context.Writer.WriteLine(lines[index]);
                 }
 
-                context.Writer.WriteLine(lines[index]);
+                context.Writer.Dedent();
+                context.Writer.WriteLine($"}}{suffix}");
             }
-
-            context.Writer.Dedent();
-            context.Writer.WriteLine($"}}{suffix}");
+            finally
+            {
+                context.EndNode(function);
+            }
         }
 
         private static void EmitEnumDeclaration(EnumDeclarationNode enumDeclaration, EmitContext context)
         {
-            context.Writer.WriteLine($"enum {enumDeclaration.Name} {{");
-            context.Writer.Indent();
-
-            for (int index = 0; index < enumDeclaration.Members.Length; index++)
+            context.BeginNode(enumDeclaration);
+            try
             {
-                EnumMember member = enumDeclaration.Members[index];
-                string value = member.Value.HasValue ? $" = {member.Value.Value}" : string.Empty;
-                string comma = index + 1 < enumDeclaration.Members.Length ? "," : string.Empty;
-                context.Writer.WriteLine($"{member.Name}{value}{comma}");
-            }
+                context.Writer.WriteLine($"enum {enumDeclaration.Name} {{");
+                context.Writer.Indent();
 
-            context.Writer.Dedent();
-            context.Writer.WriteLine($"}}{GetMemberSuffix(enumDeclaration, context)}");
+                for (int index = 0; index < enumDeclaration.Members.Length; index++)
+                {
+                    EnumMember member = enumDeclaration.Members[index];
+                    string value = member.Value.HasValue ? $" = {member.Value.Value}" : string.Empty;
+                    string comma = index + 1 < enumDeclaration.Members.Length ? "," : string.Empty;
+                    context.Writer.WriteLine($"{member.Name}{value}{comma}");
+                }
+
+                context.Writer.Dedent();
+                context.Writer.WriteLine($"}}{GetMemberSuffix(enumDeclaration, context)}");
+            }
+            finally
+            {
+                context.EndNode(enumDeclaration);
+            }
         }
 
         private static void EmitInlineComponent(InlineComponentNode component, EmitContext context)
         {
-            ImmutableArray<AstNode> members = GetObjectMembers(component.Body, context);
-            string suffix = GetMemberSuffix(component, context);
-
-            if (members.Length == 0 && context.Options.SingleLineEmptyObjects)
+            context.BeginNode(component);
+            try
             {
-                context.Writer.WriteLine($"component {component.Name}: {component.Body.TypeName} {{}}{suffix}");
-                return;
-            }
+                ImmutableArray<AstNode> members = GetObjectMembers(component.Body, context);
+                string suffix = GetMemberSuffix(component, context);
 
-            context.Writer.WriteLine($"component {component.Name}: {component.Body.TypeName} {{");
-            context.Writer.Indent();
-
-            for (int index = 0; index < members.Length; index++)
-            {
-                AstNode member = members[index];
-                EmitObjectMember(member, context, isDocumentRootMember: false);
-
-                if (ShouldWriteBlankLineBetweenMembers(member, members, index, context))
+                if (members.Length == 0 && context.Options.SingleLineEmptyObjects)
                 {
-                    context.Writer.WriteLine();
+                    context.Writer.WriteLine($"component {component.Name}: {component.Body.TypeName} {{}}{suffix}");
+                    return;
                 }
-            }
 
-            context.Writer.Dedent();
-            context.Writer.WriteLine($"}}{suffix}");
+                context.Writer.WriteLine($"component {component.Name}: {component.Body.TypeName} {{");
+                context.Writer.Indent();
+
+                for (int index = 0; index < members.Length; index++)
+                {
+                    AstNode member = members[index];
+                    EmitObjectMember(member, context, isDocumentRootMember: false);
+
+                    if (ShouldWriteBlankLineBetweenMembers(member, members, index, context))
+                    {
+                        context.Writer.WriteLine();
+                    }
+                }
+
+                context.Writer.Dedent();
+                context.Writer.WriteLine($"}}{suffix}");
+            }
+            finally
+            {
+                context.EndNode(component);
+            }
         }
 
         private static bool TryFormatInlineBindingValue(BindingValue value, EmitContext context, [NotNullWhen(true)] out string? text)
@@ -874,33 +1055,41 @@ namespace QmlSharp.Qml.Emitter
 
         private static void EmitObjectValue(ObjectDefinitionNode obj, EmitContext context, string suffix)
         {
-            ImmutableArray<AstNode> members = GetObjectMembers(obj, context);
-
-            if (members.Length == 0 && context.Options.SingleLineEmptyObjects)
+            context.BeginNode(obj);
+            try
             {
-                context.Writer.Write($"{obj.TypeName} {{}}");
-                context.Writer.Write(suffix);
-                context.Writer.WriteLine();
-                return;
-            }
+                ImmutableArray<AstNode> members = GetObjectMembers(obj, context);
 
-            context.Writer.Write($"{obj.TypeName} {{");
-            context.Writer.WriteLine();
-            context.Writer.Indent();
-
-            for (int index = 0; index < members.Length; index++)
-            {
-                AstNode member = members[index];
-                EmitObjectMember(member, context, isDocumentRootMember: false);
-
-                if (ShouldWriteBlankLineBetweenMembers(member, members, index, context))
+                if (members.Length == 0 && context.Options.SingleLineEmptyObjects)
                 {
+                    context.Writer.Write($"{obj.TypeName} {{}}");
+                    context.Writer.Write(suffix);
                     context.Writer.WriteLine();
+                    return;
                 }
-            }
 
-            context.Writer.Dedent();
-            context.Writer.WriteLine($"}}{suffix}");
+                context.Writer.Write($"{obj.TypeName} {{");
+                context.Writer.WriteLine();
+                context.Writer.Indent();
+
+                for (int index = 0; index < members.Length; index++)
+                {
+                    AstNode member = members[index];
+                    EmitObjectMember(member, context, isDocumentRootMember: false);
+
+                    if (ShouldWriteBlankLineBetweenMembers(member, members, index, context))
+                    {
+                        context.Writer.WriteLine();
+                    }
+                }
+
+                context.Writer.Dedent();
+                context.Writer.WriteLine($"}}{suffix}");
+            }
+            finally
+            {
+                context.EndNode(obj);
+            }
         }
 
         private static void EmitArrayValue(
@@ -951,6 +1140,11 @@ namespace QmlSharp.Qml.Emitter
         private static void EmitArrayElement(BindingValue element, EmitContext context, bool hasFollowingElement)
         {
             string suffix = hasFollowingElement ? "," : string.Empty;
+            if (TryEmitMappedInlineArrayObjectElement(element, context, suffix))
+            {
+                return;
+            }
+
             if (TryFormatInlineBindingValue(element, context, out string? inlineValue))
             {
                 context.Writer.WriteLine($"{inlineValue}{suffix}");
@@ -959,6 +1153,57 @@ namespace QmlSharp.Qml.Emitter
 
             context.Writer.WriteIndent();
             EmitMultilineBindingValue(element, context, suffix);
+        }
+
+        private static bool TryEmitMappedInlineObjectValue(string name, BindingValue value, EmitContext context, string suffix)
+        {
+            if (context.SourceMap is null
+                || value is not ObjectValue objectValue
+                || TryFormatInlineObject(objectValue.Object, context) is not { } inlineValue)
+            {
+                return false;
+            }
+
+            context.Writer.WriteIndent();
+            context.Writer.Write($"{name}: ");
+            context.BeginNode(objectValue.Object);
+            try
+            {
+                context.Writer.Write(inlineValue);
+            }
+            finally
+            {
+                context.EndNode(objectValue.Object);
+            }
+
+            context.Writer.Write(suffix);
+            context.Writer.WriteLine();
+            return true;
+        }
+
+        private static bool TryEmitMappedInlineArrayObjectElement(BindingValue element, EmitContext context, string suffix)
+        {
+            if (context.SourceMap is null
+                || element is not ObjectValue objectValue
+                || TryFormatInlineObject(objectValue.Object, context) is not { } inlineValue)
+            {
+                return false;
+            }
+
+            context.Writer.WriteIndent();
+            context.BeginNode(objectValue.Object);
+            try
+            {
+                context.Writer.Write(inlineValue);
+            }
+            finally
+            {
+                context.EndNode(objectValue.Object);
+            }
+
+            context.Writer.Write(suffix);
+            context.Writer.WriteLine();
+            return true;
         }
 
         private static string[] SplitCodeLines(string code)
@@ -1001,7 +1246,20 @@ namespace QmlSharp.Qml.Emitter
 
             for (int index = 0; index < node.LeadingComments.Length; index++)
             {
-                context.Writer.WriteLine(node.LeadingComments[index].Text);
+                EmitCommentLine(node.LeadingComments[index], context);
+            }
+        }
+
+        private static void EmitCommentLine(CommentNode comment, EmitContext context)
+        {
+            context.BeginNode(comment);
+            try
+            {
+                context.Writer.WriteLine(comment.Text);
+            }
+            finally
+            {
+                context.EndNode(comment);
             }
         }
 
