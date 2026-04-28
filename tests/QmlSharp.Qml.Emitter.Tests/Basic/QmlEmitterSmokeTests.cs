@@ -17,14 +17,14 @@ namespace QmlSharp.Qml.Emitter.Tests.Basic
 
         [Fact]
         [Trait("Category", TestCategories.Smoke)]
-        public void Emitter_MinimalDocument_CurrentlyThrowsDocumentedUnsupportedException()
+        public void Emitter_MinimalDocument_EmitsCanonicalQml()
         {
             IQmlEmitter emitter = new QmlEmitter();
             QmlDocument document = AstFixtureFactory.MinimalDocument();
 
-            NotSupportedException exception = Assert.Throws<NotSupportedException>(() => emitter.Emit(document));
+            string output = emitter.Emit(document);
 
-            Assert.Contains("later 03-qml-emitter steps", exception.Message, StringComparison.Ordinal);
+            Assert.Equal("Item {}\n", output);
         }
 
         [Fact]
