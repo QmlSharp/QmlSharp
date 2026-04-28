@@ -6,7 +6,7 @@ namespace QmlSharp.Qml.Emitter
     internal sealed class SourceMapImpl : ISourceMap
     {
         private readonly Dictionary<AstNode, SourceMapEntry> _byNode = new(ReferenceEqualityComparer.Instance);
-        private readonly ImmutableArray<SourceMapEntry>.Builder _entries = ImmutableArray.CreateBuilder<SourceMapEntry>();
+        private readonly List<SourceMapEntry> _entries = [];
 
         public IReadOnlyList<SourceMapEntry> Entries => _entries;
 
@@ -67,6 +67,7 @@ namespace QmlSharp.Qml.Emitter
                 entries.Add(new SourceMapEntryJson
                 {
                     NodeKind = entry.NodeKind,
+                    SourceSpan = entry.SourceSpan,
                     Span = entry.OutputSpan,
                 });
             }
@@ -83,11 +84,55 @@ namespace QmlSharp.Qml.Emitter
             {
                 Node = node,
                 NodeKind = node.Kind.ToString(),
+                SourceSpan = node.Span,
                 OutputSpan = span,
             };
 
             _byNode[node] = entry;
+            InsertInOutputOrder(entry);
+        }
+
+        private void InsertInOutputOrder(SourceMapEntry entry)
+        {
+            for (int index = 0; index < _entries.Count; index++)
+            {
+                if (CompareOutputOrder(entry, _entries[index]) < 0)
+                {
+                    _entries.Insert(index, entry);
+                    return;
+                }
+            }
+
             _entries.Add(entry);
+        }
+
+        private static int CompareOutputOrder(SourceMapEntry left, SourceMapEntry right)
+        {
+            int startLine = left.OutputSpan.StartLine.CompareTo(right.OutputSpan.StartLine);
+            if (startLine != 0)
+            {
+                return startLine;
+            }
+
+            int startColumn = left.OutputSpan.StartColumn.CompareTo(right.OutputSpan.StartColumn);
+            if (startColumn != 0)
+            {
+                return startColumn;
+            }
+
+            int endLine = left.OutputSpan.EndLine.CompareTo(right.OutputSpan.EndLine);
+            if (endLine != 0)
+            {
+                return endLine;
+            }
+
+            int endColumn = left.OutputSpan.EndColumn.CompareTo(right.OutputSpan.EndColumn);
+            if (endColumn != 0)
+            {
+                return endColumn;
+            }
+
+            return string.Compare(left.NodeKind, right.NodeKind, StringComparison.Ordinal);
         }
 
         private static bool Contains(OutputSpan span, int line, int column)

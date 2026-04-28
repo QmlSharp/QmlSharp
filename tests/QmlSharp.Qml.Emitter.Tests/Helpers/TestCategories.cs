@@ -11,5 +11,6 @@ namespace QmlSharp.Qml.Emitter.Tests.Helpers
         public const string Determinism = "Determinism";
         public const string Options = "Options";
         public const string Fragments = "Fragments";
+        public const string SourceMaps = "SourceMaps";
     }
 }
