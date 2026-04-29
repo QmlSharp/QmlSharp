@@ -260,9 +260,10 @@ namespace QmlSharp.Qt.Tools
             ImmutableArray<string>.Builder attemptedSteps)
         {
             string path = _getEnvironmentVariable("PATH") ?? string.Empty;
-            foreach (string pathEntry in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            foreach (string binDir in path
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                .Select(static pathEntry => NormalizePath(pathEntry) ?? string.Empty))
             {
-                string binDir = NormalizePath(pathEntry) ?? string.Empty;
                 if (binDir.Length == 0)
                 {
                     continue;
@@ -353,7 +354,10 @@ namespace QmlSharp.Qt.Tools
         private ToolInfo CreateToolInfo(QtInstallation installation, string toolName)
         {
             string normalizedName = toolName.Trim();
-            string path = Path.Join(installation.BinDir, GetExecutableName(normalizedName));
+            string executableName = GetExecutableName(normalizedName);
+            string fallbackPath = Path.Join(installation.BinDir, executableName);
+            string path = EnumerateToolPathCandidates(installation, executableName)
+                .FirstOrDefault(_fileExists) ?? fallbackPath;
             bool available = _fileExists(path);
 
             return new ToolInfo
@@ -363,6 +367,16 @@ namespace QmlSharp.Qt.Tools
                 Available = available,
                 Version = available ? installation.Version.String : null,
             };
+        }
+
+        private static IEnumerable<string> EnumerateToolPathCandidates(QtInstallation installation, string executableName)
+        {
+            yield return Path.Join(installation.BinDir, executableName);
+            yield return Path.Join(installation.RootDir, "libexec", executableName);
+            yield return Path.Join(installation.RootDir, "lib", "qt6", "bin", executableName);
+            yield return Path.Join(installation.RootDir, "lib", "qt6", "libexec", executableName);
+            yield return Path.Join(installation.RootDir, "lib", "qt", "bin", executableName);
+            yield return Path.Join(installation.RootDir, "lib", "qt", "libexec", executableName);
         }
 
         private IEnumerable<string> EnumerateConfigFileCandidates(QtToolchainConfig config)
@@ -397,19 +411,11 @@ namespace QmlSharp.Qt.Tools
         private IEnumerable<string> EnumerateWellKnownQtRoots()
         {
             HashSet<string> candidates = new(GetPathComparer());
-            foreach (string root in EnumerateWellKnownQtParents())
+            foreach (string root in EnumerateWellKnownQtParents().Where(_directoryExists))
             {
-                if (!_directoryExists(root))
+                foreach (string candidate in EnumerateKnownChildren(root).Where(candidates.Add))
                 {
-                    continue;
-                }
-
-                foreach (string candidate in EnumerateKnownChildren(root))
-                {
-                    if (candidates.Add(candidate))
-                    {
-                        yield return candidate;
-                    }
+                    yield return candidate;
                 }
             }
         }
@@ -461,7 +467,10 @@ namespace QmlSharp.Qt.Tools
         {
             try
             {
-                return Directory.EnumerateDirectories(directory).OrderBy(static path => path, GetPathComparer());
+                return Directory
+                    .EnumerateDirectories(directory)
+                    .OrderBy(static path => path, GetPathComparer())
+                    .ToArray();
             }
             catch (IOException)
             {
@@ -482,15 +491,14 @@ namespace QmlSharp.Qt.Tools
             }
 
             ImmutableArray<string>.Builder builder = ImmutableArray.CreateBuilder<string>();
-            foreach (JsonElement element in importPathsElement.EnumerateArray())
+            foreach (JsonElement element in importPathsElement
+                .EnumerateArray()
+                .Where(static element => element.ValueKind == JsonValueKind.String))
             {
-                if (element.ValueKind == JsonValueKind.String)
+                string? value = NormalizePath(element.GetString());
+                if (value is not null)
                 {
-                    string? value = NormalizePath(element.GetString());
-                    if (value is not null)
-                    {
-                        builder.Add(value);
-                    }
+                    builder.Add(value);
                 }
             }
 
@@ -513,9 +521,8 @@ namespace QmlSharp.Qt.Tools
             ImmutableArray<string>.Builder builder,
             HashSet<string> seen)
         {
-            foreach (string path in paths)
+            foreach (string? normalized in paths.Select(NormalizePath))
             {
-                string? normalized = NormalizePath(path);
                 if (normalized is not null && seen.Add(normalized))
                 {
                     builder.Add(normalized);
@@ -597,7 +604,35 @@ namespace QmlSharp.Qt.Tools
                 return null;
             }
 
-            return Path.GetFullPath(path.Trim());
+            string normalizedPath = path.Trim();
+            if (normalizedPath.Length >= 2
+                && normalizedPath.StartsWith('"')
+                && normalizedPath.EndsWith('"'))
+            {
+                normalizedPath = normalizedPath[1..^1].Trim();
+            }
+
+            if (normalizedPath.Length == 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                return Path.GetFullPath(normalizedPath);
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+            catch (NotSupportedException)
+            {
+                return null;
+            }
+            catch (PathTooLongException)
+            {
+                return null;
+            }
         }
 
         private static StringComparer GetPathComparer()

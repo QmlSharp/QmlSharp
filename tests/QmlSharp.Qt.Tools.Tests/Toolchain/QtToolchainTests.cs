@@ -49,7 +49,7 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
             using TemporaryQtInstallation explicitQt = TemporaryQtInstallation.Create(includeAllTools: true);
             using EnvironmentVariableScope scope = new EnvironmentVariableScope();
             scope.Set(QtToolsTestEnvironment.QtDirVariableName, environmentQt.RootDir);
-            scope.Set("QMLSHARP_QT_DIR", environmentQt.RootDir);
+            scope.Set("QMLSHARP_QT_DIR", explicitQt.RootDir);
 
             QtInstallation fromEnvironment = await new QtToolchain().DiscoverAsync();
             QtInstallation fromExplicit = await new QtToolchain().DiscoverAsync(
@@ -57,6 +57,38 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
 
             Assert.Equal(environmentQt.RootDir, fromEnvironment.RootDir);
             Assert.Equal(explicitQt.RootDir, fromExplicit.RootDir);
+        }
+
+        [Fact]
+        public async Task TC003_Discover_IgnoresLegacyQmlSharpQtDirEnvironmentVariable()
+        {
+            using TemporaryQtInstallation legacyOnlyQt = TemporaryQtInstallation.Create(includeAllTools: true);
+            QtToolchain toolchain = new(
+                name => name switch
+                {
+                    "QMLSHARP_QT_DIR" => legacyOnlyQt.RootDir,
+                    "PATH" => string.Empty,
+                    _ => null,
+                },
+                path => IsUnderRoot(path, legacyOnlyQt.RootDir) && Directory.Exists(path),
+                path => IsUnderRoot(path, legacyOnlyQt.RootDir) && File.Exists(path),
+                () => legacyOnlyQt.RootDir);
+
+            QtInstallationNotFoundError error = await Assert.ThrowsAsync<QtInstallationNotFoundError>(
+                () => toolchain.DiscoverAsync());
+
+            Assert.DoesNotContain(error.AttemptedSteps, step => step.Contains("QMLSHARP_QT_DIR", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public async Task DiscoverAsync_NormalizesQuotedExplicitQtDir()
+        {
+            using TemporaryQtInstallation qt = TemporaryQtInstallation.Create(includeAllTools: true);
+
+            QtInstallation installation = await new QtToolchain().DiscoverAsync(
+                new QtToolchainConfig { QtDir = $"\"{qt.RootDir}\"" });
+
+            Assert.Equal(qt.RootDir, installation.RootDir);
         }
 
         [Fact]
@@ -106,6 +138,22 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
             Assert.False(availability.QmlCachegen.Available);
             Assert.Null(availability.QmlCachegen.Version);
             Assert.False(availability.QmlAotStats.Available);
+        }
+
+        [Fact]
+        public async Task CheckToolsAsync_FindsHostToolsInLibexecDirectory()
+        {
+            using TemporaryQtInstallation qt = TemporaryQtInstallation.Create(includeAllTools: false);
+            qt.AddTool("qmlformat");
+            qt.AddTool("qmlcachegen", "libexec");
+            QtToolchain toolchain = new();
+            _ = await toolchain.DiscoverAsync(new QtToolchainConfig { QtDir = qt.RootDir });
+
+            ToolAvailability availability = await toolchain.CheckToolsAsync();
+
+            Assert.True(availability.QmlCachegen.Available);
+            Assert.Equal(Path.Join(qt.RootDir, "libexec", ExecutableName("qmlcachegen")), availability.QmlCachegen.Path);
+            Assert.Equal("6.11.0", availability.QmlCachegen.Version);
         }
 
         [Fact]
@@ -248,15 +296,15 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
             Assert.Equal("6.11.0", installation.Version.String);
             Assert.True(availability.QmlFormat.Available);
             Assert.True(availability.QmlLint.Available);
-            Assert.True(availability.QmlCachegen.Available);
-            Assert.True(availability.Qmltc.Available);
-            Assert.True(availability.QmlImportScanner.Available);
-            Assert.True(availability.QmlDom.Available);
-            Assert.True(availability.Qml.Available);
-            Assert.True(availability.Rcc.Available);
-            Assert.True(availability.QmlTypeRegistrar.Available);
-            Assert.True(availability.Moc.Available);
-            Assert.True(availability.QmlAotStats.Available);
+            AssertToolInfoShape(availability.QmlCachegen, "qmlcachegen");
+            AssertToolInfoShape(availability.Qmltc, "qmltc");
+            AssertToolInfoShape(availability.QmlImportScanner, "qmlimportscanner");
+            AssertToolInfoShape(availability.QmlDom, "qmldom");
+            AssertToolInfoShape(availability.Qml, "qml");
+            AssertToolInfoShape(availability.Rcc, "rcc");
+            AssertToolInfoShape(availability.QmlTypeRegistrar, "qmltyperegistrar");
+            AssertToolInfoShape(availability.Moc, "moc");
+            AssertToolInfoShape(availability.QmlAotStats, "qmlaotstats");
         }
 
         private static string ExpectedPlatform
@@ -285,6 +333,20 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
         private static string EscapeJson(string value)
         {
             return value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
+        }
+
+        private static void AssertToolInfoShape(ToolInfo tool, string name)
+        {
+            Assert.Equal(name, tool.Name);
+            Assert.True(Path.IsPathFullyQualified(tool.Path));
+            if (tool.Available)
+            {
+                Assert.Equal("6.11.0", tool.Version);
+            }
+            else
+            {
+                Assert.Null(tool.Version);
+            }
         }
 
         private static bool IsUnderRoot(string path, string root)
@@ -341,11 +403,11 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
                 return qt;
             }
 
-            public void AddTool(string toolName)
+            public void AddTool(string toolName, string directoryName = "bin")
             {
-                string binDir = Path.Join(RootDir, "bin");
-                string toolPath = Path.Join(binDir, ExecutableName(toolName));
-                _ = Directory.CreateDirectory(binDir);
+                string toolDirectory = Path.Join(RootDir, directoryName);
+                string toolPath = Path.Join(toolDirectory, ExecutableName(toolName));
+                _ = Directory.CreateDirectory(toolDirectory);
                 File.WriteAllText(toolPath, string.Empty);
             }
 
@@ -354,7 +416,7 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
                 string deletePath = _ownsRootParent
                     ? Path.GetFullPath(Path.Join(RootDir, "..", "..", ".."))
                     : RootDir;
-                Directory.Delete(deletePath, recursive: true);
+                TryDeleteDirectory(deletePath);
             }
 
             private void CreateLayout(bool includeAllTools)
@@ -398,9 +460,9 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
 
             public void Dispose()
             {
-                if (_ownsDirectory && Directory.Exists(Path))
+                if (_ownsDirectory)
                 {
-                    Directory.Delete(Path, recursive: true);
+                    TryDeleteDirectory(Path);
                 }
             }
         }
@@ -425,6 +487,27 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
                 {
                     Environment.SetEnvironmentVariable(item.Key, item.Value);
                 }
+            }
+        }
+
+        private static void TryDeleteDirectory(string path)
+        {
+            if (!Directory.Exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                Directory.Delete(path, recursive: true);
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup for temporary test directories.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Best-effort cleanup for temporary test directories.
             }
         }
     }
