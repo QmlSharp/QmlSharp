@@ -4,6 +4,7 @@ namespace QmlSharp.Qt.Tools.Tests.Helpers
     {
         public const string Smoke = "Smoke";
         public const string Contract = "Contract";
+        public const string ToolRunner = "ToolRunner";
         public const string RequiresQt = "RequiresQt";
     }
 }

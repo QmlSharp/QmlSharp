@@ -23,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\QmlSharp.Qt.Tools.ProcessProbe\QmlSharp.Qt.Tools.ProcessProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\QmlSharp.Qt.Tools\QmlSharp.Qt.Tools.csproj" />
   </ItemGroup>
 

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Qt.Tools.ProcessProbe</AssemblyName>
+    <RootNamespace>QmlSharp.Qt.Tools.ProcessProbe</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <UseAppHost>true</UseAppHost>
+  </PropertyGroup>
+</Project>

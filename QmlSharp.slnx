@@ -15,6 +15,7 @@
     <Project Path="tools/GenerateRegistrySnapshot/QmlSharp.GenerateRegistrySnapshot.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/QmlSharp.Qt.Tools.ProcessProbe/QmlSharp.Qt.Tools.ProcessProbe.csproj" />
     <Project Path="tests/QmlSharp.Qml.Ast.Tests/QmlSharp.Qml.Ast.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qml.Emitter.Tests/QmlSharp.Qml.Emitter.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qt.Tools.Tests/QmlSharp.Qt.Tools.Tests.csproj" />
