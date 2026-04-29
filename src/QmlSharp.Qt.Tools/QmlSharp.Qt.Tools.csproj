@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Qt.Tools</AssemblyName>
+    <RootNamespace>QmlSharp.Qt.Tools</RootNamespace>
+  </PropertyGroup>
+</Project>

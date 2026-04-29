@@ -1,0 +1,17 @@
+{
+  "classes": [
+    {
+      "className": "TestViewModel",
+      "object": true,
+      "qualifiedClassName": "QmlSharp::TestViewModel",
+      "superClasses": [
+        {
+          "name": "QObject",
+          "access": "public"
+        }
+      ]
+    }
+  ],
+  "inputFile": "TestViewModel.h",
+  "outputRevision": 68
+}

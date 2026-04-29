@@ -1,0 +1,27 @@
+[
+  {
+    "filename": "syntax-error.qml",
+    "line": 4,
+    "column": 1,
+    "type": "error",
+    "message": "Expected token '}'",
+    "category": "syntax"
+  },
+  {
+    "filename": "lint-warnings.qml",
+    "line": 7,
+    "column": 15,
+    "type": "warning",
+    "message": "Unqualified access",
+    "category": "unqualified",
+    "suggestion": "Qualify the access through an id"
+  },
+  {
+    "filename": "valid.qml",
+    "line": 1,
+    "column": 1,
+    "type": "info",
+    "message": "No issues found",
+    "category": "compiler"
+  }
+]

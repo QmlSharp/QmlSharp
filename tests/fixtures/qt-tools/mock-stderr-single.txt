@@ -1,0 +1,1 @@
+test.qml:10:5: error: Unknown property "foo"

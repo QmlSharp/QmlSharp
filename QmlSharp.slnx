@@ -8,6 +8,7 @@
     <Project Path="src/QmlSharp.Core/QmlSharp.Core.csproj" />
     <Project Path="src/QmlSharp.Qml.Ast/QmlSharp.Qml.Ast.csproj" />
     <Project Path="src/QmlSharp.Qml.Emitter/QmlSharp.Qml.Emitter.csproj" />
+    <Project Path="src/QmlSharp.Qt.Tools/QmlSharp.Qt.Tools.csproj" />
     <Project Path="src/QmlSharp.Registry/QmlSharp.Registry.csproj" />
   </Folder>
   <Folder Name="/tools/">
@@ -16,6 +17,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/QmlSharp.Qml.Ast.Tests/QmlSharp.Qml.Ast.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qml.Emitter.Tests/QmlSharp.Qml.Emitter.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Qt.Tools.Tests/QmlSharp.Qt.Tools.Tests.csproj" />
     <Project Path="tests/QmlSharp.Registry.Tests/QmlSharp.Registry.Tests.csproj" />
   </Folder>
 </Solution>
