@@ -34,15 +34,21 @@ namespace QmlSharp.Qt.Tools.ProcessProbe
 
         private static async Task InspectAsync(string[] args)
         {
-            string stdin = await Console.In.ReadToEndAsync().ConfigureAwait(false);
+            bool readStdin = args.Contains("--read-stdin", StringComparer.Ordinal);
+            string[] inspectedArgs = args
+                .Where(static arg => !string.Equals(arg, "--read-stdin", StringComparison.Ordinal))
+                .ToArray();
+            string stdin = readStdin
+                ? await Console.In.ReadToEndAsync().ConfigureAwait(false)
+                : string.Empty;
             Console.WriteLine($"CWD={Environment.CurrentDirectory}");
             Console.WriteLine($"ENV_TOOLRUNNER_PROBE={Environment.GetEnvironmentVariable("TOOLRUNNER_PROBE")}");
             Console.WriteLine($"STDIN={stdin}");
-            Console.WriteLine($"ARGC={args.Length}");
+            Console.WriteLine($"ARGC={inspectedArgs.Length}");
 
-            for (int index = 0; index < args.Length; index++)
+            for (int index = 0; index < inspectedArgs.Length; index++)
             {
-                Console.WriteLine($"ARG{index}={args[index]}");
+                Console.WriteLine($"ARG{index}={inspectedArgs[index]}");
             }
         }
 

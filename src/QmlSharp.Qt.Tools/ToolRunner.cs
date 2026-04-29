@@ -20,7 +20,7 @@ namespace QmlSharp.Qt.Tools
                 throw new ArgumentOutOfRangeException(
                     nameof(options),
                     effectiveOptions.Timeout,
-                    "Tool runner timeout must be positive or Timeout.InfiniteTimeSpan.");
+                    "ToolRunnerOptions.Timeout must be positive or Timeout.InfiniteTimeSpan.");
             }
 
             if (!File.Exists(toolPath))
@@ -180,6 +180,7 @@ namespace QmlSharp.Qt.Tools
             }
             catch (InvalidOperationException)
             {
+                // The process may already have exited between HasExited and Kill.
             }
         }
 
@@ -214,7 +215,7 @@ namespace QmlSharp.Qt.Tools
                 return value;
             }
 
-            return "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+            return "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
         }
 
         private sealed record CapturedOutput(string Stdout, string Stderr);

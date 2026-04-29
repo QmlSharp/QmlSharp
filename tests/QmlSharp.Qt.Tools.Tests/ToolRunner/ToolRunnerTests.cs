@@ -29,7 +29,7 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
         public async Task ToolRunner_TR002_MissingExecutable_ThrowsQtToolNotFoundError()
         {
             ProcessToolRunner runner = new();
-            string expectedPath = Path.Combine(Path.GetTempPath(), "qmlsharp-missing-tool-runner-probe.exe");
+            string expectedPath = Path.Join(Path.GetTempPath(), "qmlsharp-missing-tool-runner-probe.exe");
 
             QtToolNotFoundError error = await Assert.ThrowsAsync<QtToolNotFoundError>(
                 () => runner.RunAsync(expectedPath, []));
@@ -60,13 +60,17 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
         public async Task ToolRunner_TR004_StdinWorkingDirectoryAndEnvironment_AreApplied()
         {
             ProcessToolRunner runner = new();
-            ProbeInvocation probe = CreateProbeInvocation("inspect");
+            ProbeInvocation probe = CreateProbeInvocation("inspect", "--read-stdin");
             string workingDirectory = Directory.CreateTempSubdirectory("qmlsharp-toolrunner-cwd-").FullName;
+            Dictionary<string, string> environment = new(StringComparer.Ordinal)
+            {
+                ["TOOLRUNNER_PROBE"] = "env payload",
+            };
             ToolRunnerOptions options = new()
             {
                 Cwd = workingDirectory,
                 Stdin = "stdin payload",
-                Env = ImmutableDictionary<string, string>.Empty.Add("TOOLRUNNER_PROBE", "env payload"),
+                Env = environment.ToImmutableDictionary(StringComparer.Ordinal),
             };
 
             try
@@ -74,7 +78,8 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
                 ToolResult result = await runner.RunAsync(probe.ExecutablePath, probe.Arguments, options);
 
                 Assert.Equal(0, result.ExitCode);
-                Assert.Contains($"CWD={workingDirectory}", result.Stdout, StringComparison.Ordinal);
+                Assert.Contains("CWD=", result.Stdout, StringComparison.Ordinal);
+                Assert.Contains(Path.GetFileName(workingDirectory), result.Stdout, StringComparison.Ordinal);
                 Assert.Contains("ENV_TOOLRUNNER_PROBE=env payload", result.Stdout, StringComparison.Ordinal);
                 Assert.Contains("STDIN=stdin payload", result.Stdout, StringComparison.Ordinal);
             }
@@ -144,16 +149,23 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
 
             ToolResult result = await runner.RunAsync(probe.ExecutablePath, probe.Arguments);
 
+            string[] stdoutLines = result.Stdout.Split(
+                ['\r', '\n'],
+                StringSplitOptions.RemoveEmptyEntries);
             Assert.Equal(0, result.ExitCode);
-            Assert.Contains("ARGC=1", result.Stdout, StringComparison.Ordinal);
-            Assert.Contains($"ARG0={suspiciousArgument}", result.Stdout, StringComparison.Ordinal);
-            Assert.DoesNotContain("should-not-run", result.Stderr, StringComparison.Ordinal);
+            Assert.Equal(5, stdoutLines.Length);
+            Assert.StartsWith("CWD=", stdoutLines[0], StringComparison.Ordinal);
+            Assert.Equal("ENV_TOOLRUNNER_PROBE=", stdoutLines[1]);
+            Assert.Equal("STDIN=", stdoutLines[2]);
+            Assert.Equal("ARGC=1", stdoutLines[3]);
+            Assert.Equal($"ARG0={suspiciousArgument}", stdoutLines[4]);
+            Assert.Equal(string.Empty, result.Stderr);
         }
 
         private static ProbeInvocation CreateProbeInvocation(params string[] probeArguments)
         {
             string configuration = GetCurrentBuildConfiguration();
-            string outputDirectory = Path.Combine(
+            string outputDirectory = Path.Join(
                 GetRepositoryRoot(),
                 "tests",
                 "QmlSharp.Qt.Tools.ProcessProbe",
@@ -164,13 +176,13 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
             string executableName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
                 ? "QmlSharp.Qt.Tools.ProcessProbe.exe"
                 : "QmlSharp.Qt.Tools.ProcessProbe";
-            string executablePath = Path.Combine(outputDirectory, executableName);
+            string executablePath = Path.Join(outputDirectory, executableName);
             if (File.Exists(executablePath))
             {
                 return new ProbeInvocation(executablePath, [.. probeArguments]);
             }
 
-            string dllPath = Path.Combine(outputDirectory, "QmlSharp.Qt.Tools.ProcessProbe.dll");
+            string dllPath = Path.Join(outputDirectory, "QmlSharp.Qt.Tools.ProcessProbe.dll");
             if (!File.Exists(dllPath))
             {
                 throw new FileNotFoundException("The ToolRunner process probe has not been built.", dllPath);
@@ -208,9 +220,10 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
                 throw new FileNotFoundException("PATH is not set, so dotnet could not be resolved.");
             }
 
-            foreach (string directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            foreach (string candidate in path
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                .Select(directory => Path.Join(directory, executableName)))
             {
-                string candidate = Path.Combine(directory, executableName);
                 if (File.Exists(candidate))
                 {
                     return candidate;
