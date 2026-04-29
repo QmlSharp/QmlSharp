@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\QmlSharp.Qml.Emitter\QmlSharp.Qml.Emitter.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Qt.Tools\QmlSharp.Qt.Tools.csproj" />
   </ItemGroup>
 
   <ItemGroup>
