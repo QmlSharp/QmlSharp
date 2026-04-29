@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="icon.png">icon.png</file>
+    <file alias="data.json">data.json</file>
+  </qresource>
+</RCC>

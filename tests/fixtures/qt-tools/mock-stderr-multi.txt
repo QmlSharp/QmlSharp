@@ -1,0 +1,3 @@
+first.qml:3:1: warning: Unqualified access
+second.qml:9:7: error: Expected token "}"
+third.qml:12:3: info: Import was not used

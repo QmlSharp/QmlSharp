@@ -1,0 +1,17 @@
+[
+  {
+    "name": "QtQuick",
+    "type": "module",
+    "version": "6.11"
+  },
+  {
+    "name": "./module",
+    "type": "directory",
+    "path": "tests/fixtures/qml/module"
+  },
+  {
+    "name": "helpers.js",
+    "type": "javascript",
+    "path": "tests/fixtures/qml/helpers.js"
+  }
+]
