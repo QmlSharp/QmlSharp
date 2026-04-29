@@ -85,6 +85,11 @@ namespace QmlSharp.Qt.Tools
             QmlLintOptions? options = null,
             CancellationToken ct = default)
         {
+            if (filePaths.IsDefaultOrEmpty)
+            {
+                return [];
+            }
+
             QmlLintOptions effectiveOptions = options ?? new QmlLintOptions();
             ImmutableArray<string> normalizedFilePaths = filePaths
                 .Select(Path.GetFullPath)
@@ -311,6 +316,7 @@ namespace QmlSharp.Qt.Tools
             if (diagnostics.IsDefaultOrEmpty)
             {
                 diagnostics = _diagnosticParser.ParseStderr(toolResult.Stderr, filenameOverride);
+                diagnostics = RewriteStringInputDiagnostics(diagnostics, inputPath, filenameOverride);
             }
 
             return diagnostics;
@@ -416,16 +422,6 @@ namespace QmlSharp.Qt.Tools
                 return true;
             }
 
-            string fileName = Path.GetFileName(filePath);
-            foreach (KeyValuePair<string, ImmutableArray<QtDiagnostic>> pair in diagnosticsByFile)
-            {
-                if (string.Equals(Path.GetFileName(pair.Key), fileName, StringComparison.OrdinalIgnoreCase))
-                {
-                    diagnostics = pair.Value;
-                    return true;
-                }
-            }
-
             diagnostics = [];
             return false;
         }
@@ -494,12 +490,15 @@ namespace QmlSharp.Qt.Tools
             }
             catch (ArgumentException)
             {
+                // Best-effort normalization: keep the original candidate when the path is invalid.
             }
             catch (NotSupportedException)
             {
+                // Best-effort normalization: keep the original candidate when the path format is unsupported.
             }
             catch (PathTooLongException)
             {
+                // Best-effort normalization: keep the original candidate when full-path resolution exceeds limits.
             }
 
             return OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()

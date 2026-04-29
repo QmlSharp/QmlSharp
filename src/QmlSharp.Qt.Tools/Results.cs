@@ -363,8 +363,7 @@ namespace QmlSharp.Qt.Tools
         public ImmutableArray<QtDiagnostic> Diagnostics { get; init; } = [];
 
         /// <summary>Per-level timing information.</summary>
-        public ImmutableDictionary<QualityGateLevel, long> LevelDurationMs { get; init; }
-            = ImmutableDictionary<QualityGateLevel, long>.Empty;
+        public ImmutableDictionary<QualityGateLevel, long> LevelDurationMs { get; init; } = [];
 
         /// <summary>Total duration in milliseconds.</summary>
         public required long TotalDurationMs { get; init; }

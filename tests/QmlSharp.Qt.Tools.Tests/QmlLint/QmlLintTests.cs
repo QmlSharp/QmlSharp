@@ -110,9 +110,11 @@ namespace QmlSharp.Qt.Tools.Tests.QmlLint
                 file.Path,
                 new QmlLintOptions
                 {
-                    WarningLevels = ImmutableDictionary<QmlLintCategory, DiagnosticSeverity>.Empty
-                        .Add(QmlLintCategory.Deprecated, DiagnosticSeverity.Disabled)
-                        .Add(QmlLintCategory.UnqualifiedAccess, DiagnosticSeverity.Error),
+                    WarningLevels = new Dictionary<QmlLintCategory, DiagnosticSeverity>
+                    {
+                        [QmlLintCategory.Deprecated] = DiagnosticSeverity.Disabled,
+                        [QmlLintCategory.UnqualifiedAccess] = DiagnosticSeverity.Error,
+                    }.ToImmutableDictionary(),
                 });
 
             AssertOptionValue(runner.SingleCall.Args, "--deprecated", "disable");
@@ -208,6 +210,59 @@ namespace QmlSharp.Qt.Tools.Tests.QmlLint
             Assert.True(results[0].Success);
             Assert.False(results[1].Success);
             Assert.Equal([first.Path, second.Path], runner.SingleCall.Args.TakeLast(2).ToArray());
+        }
+
+        [Fact]
+        public async Task QL011B_LintBatch_WithEmptyInput_ReturnsEmptyWithoutToolLookup()
+        {
+            MockToolRunner runner = new();
+            global::QmlSharp.Qt.Tools.QmlLint linter = new(
+                new ThrowingQtToolchain(),
+                runner,
+                new QtDiagnosticParser());
+
+            ImmutableArray<QmlLintResult> results = await linter.LintBatchAsync([]);
+
+            Assert.Empty(results);
+            Assert.Empty(runner.RecordedCalls);
+        }
+
+        [Fact]
+        public async Task QL011C_LintBatch_WithDuplicateBasenames_RequiresExactPathMatch()
+        {
+            string root = Path.Join(Path.GetTempPath(), "qmlsharp-qmllint-batch-" + Guid.NewGuid().ToString("N"));
+            string firstDirectory = Path.Join(root, "a");
+            string secondDirectory = Path.Join(root, "b");
+            string firstPath = Path.Join(firstDirectory, "Main.qml");
+            string secondPath = Path.Join(secondDirectory, "Main.qml");
+            _ = Directory.CreateDirectory(firstDirectory);
+            _ = Directory.CreateDirectory(secondDirectory);
+            File.WriteAllText(firstPath, "Item {}\n");
+            File.WriteAllText(secondPath, "Item {}\n");
+            try
+            {
+                MockToolRunner runner = new();
+                runner.Enqueue(CreateToolResult(
+                    1,
+                    CreateJson(firstPath, success: false, [DiagnosticJson(1, 1, "warning", "first only", "syntax")]),
+                    string.Empty));
+                global::QmlSharp.Qt.Tools.QmlLint linter = CreateLinter(runner);
+
+                ImmutableArray<QmlLintResult> results = await linter.LintBatchAsync([firstPath, secondPath]);
+
+                Assert.Equal(2, results.Length);
+                Assert.Equal("first only", Assert.Single(results[0].Diagnostics).Message);
+                QtDiagnostic missingDiagnostic = Assert.Single(results[1].Diagnostics);
+                Assert.Equal(Path.GetFullPath(secondPath), missingDiagnostic.File);
+                Assert.Contains("did not include a result", missingDiagnostic.Message, StringComparison.Ordinal);
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
         }
 
         [Fact]
@@ -333,6 +388,27 @@ namespace QmlSharp.Qt.Tools.Tests.QmlLint
             Assert.Equal(file.Path, diagnostic.File);
             Assert.Equal(10, diagnostic.Line);
             Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        }
+
+        [Fact]
+        public async Task QL004B_LintString_WithJsonDisabled_RewritesStderrDiagnosticsToStringPath()
+        {
+            MockToolRunner runner = new(static call =>
+                CreateToolResult(
+                    1,
+                    string.Empty,
+                    $"{call.Args[^1]}:10:5: warning: Unknown property \"foo\""));
+            global::QmlSharp.Qt.Tools.QmlLint linter = CreateLinter(runner);
+
+            QmlLintResult result = await linter.LintStringAsync(
+                "import QtQuick\nItem {\n",
+                new QmlLintOptions { JsonOutput = false });
+
+            Assert.DoesNotContain("--json", runner.SingleCall.Args);
+            QtDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("<string>", diagnostic.File);
+            Assert.Equal(10, diagnostic.Line);
+            Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
         }
 
         [RequiresQtFact]
@@ -485,6 +561,26 @@ namespace QmlSharp.Qt.Tools.Tests.QmlLint
             {
                 Assert.Equal(_toolInfo.Name, toolName);
                 return Task.FromResult(_toolInfo);
+            }
+        }
+
+        private sealed class ThrowingQtToolchain : IQtToolchain
+        {
+            public QtInstallation? Installation => null;
+
+            public Task<QtInstallation> DiscoverAsync(QtToolchainConfig? config = null, CancellationToken ct = default)
+            {
+                throw new InvalidOperationException("Toolchain discovery should not be called.");
+            }
+
+            public Task<ToolAvailability> CheckToolsAsync(CancellationToken ct = default)
+            {
+                throw new InvalidOperationException("Toolchain availability should not be checked.");
+            }
+
+            public Task<ToolInfo> GetToolInfoAsync(string toolName, CancellationToken ct = default)
+            {
+                throw new InvalidOperationException("Tool lookup should not be called.");
             }
         }
 
