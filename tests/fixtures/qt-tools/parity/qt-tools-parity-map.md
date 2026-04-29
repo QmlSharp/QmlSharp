@@ -43,8 +43,10 @@ Required QmlTS inputs reviewed:
 
 ## Test Count Repair
 
-`ApiDesign/04-qt-tools/test-spec.md` says the module has 112 tests, but its listed
-suites currently enumerate only 106 tests. The missing suite is
+`ApiDesign/04-qt-tools/test-spec.md` says the module has 112 tests across 12 suites,
+but its listed suites currently enumerate only 106 tests. The implementation contract
+for the 04 wave is the corrected 13-suite map below unless ApiDesign is updated later
+with an equivalent correction. The missing suite is
 `QmlTypeRegistrarTests`, which is required because:
 
 - `ApiDesign/04-qt-tools/README.md` says all 9 Qt CLI tools are wrapped.
@@ -72,7 +74,7 @@ Corrected suite count:
 | `DiagnosticParserTests` | `DP-001` through `DP-006` | 6 | parser |
 | Total |  | 112 | all 9 CLI tools covered |
 
-Proposed qmltyperegistrar suite to add to the C# test-spec or implement directly if the
+Required qmltyperegistrar suite to add to the C# test-spec or implement directly if the
 design document is still stale:
 
 | ID | Test Case | Expected Result | QmlTS source |
@@ -89,8 +91,10 @@ design document is still stale:
 Some older ApiDesign Qt-tools text still refers to `QMLSHARP_QT_DIR`. The active
 implementation contract for this wave is `QT_DIR`, matching current QmlSharp registry
 tests and CI. When Step 04.01 and Step 04.03 implement Qt test guards and discovery,
-test names and skip messages should use `QT_DIR`; any stale design-doc reference should
-be treated as a design correction item, not copied into product code.
+test names and skip messages must use `QT_DIR`. `QMLSHARP_QT_DIR` must not be added as
+a fallback or competing discovery path unless a later explicit design-update step changes
+the project-wide Qt SDK contract. Any stale design-doc reference should be treated as a
+design correction item, not copied into product code.
 
 ## Tool Coverage Check
 
