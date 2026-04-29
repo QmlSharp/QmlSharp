@@ -317,12 +317,27 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
             Assert.Equal("Rectangle {}\n", results[2].Result.Text);
         }
 
-        [Fact(Skip = "Requires 04-qt-tools real qmlformat integration in implementation wave 04.")]
+        [RequiresQtFact]
         [Trait("Category", TestCategories.RequiresQt)]
         [Trait("Category", TestCategories.Pipeline)]
-        public Task PL_09_ProcessAsync_WithRealQmlFormat_FormatsAndLintsOutput()
+        public async Task PL_09_ProcessAsync_WithRealQmlFormat_FormatsOutput()
         {
-            return Task.CompletedTask;
+            QmlDocument document = AstFixtureFactory.MinimalDocument();
+            EmitPipelineConfig config = new()
+            {
+                EnableFormat = true,
+                EnableLint = false,
+            };
+            QtQmlFormatPipelineAdapter formatter = new(new QmlSharp.Qt.Tools.QmlFormat());
+            EmitPipeline pipeline = new(new QmlEmitter(), config, formatter);
+
+            PipelineResult result = await pipeline.ProcessAsync(document);
+
+            Assert.True(result.Succeeded);
+            Assert.True(result.Valid);
+            Assert.NotNull(result.FormatResult);
+            Assert.Equal(result.FormatResult.Text, result.Text);
+            Assert.Empty(result.FormatResult.Diagnostics);
         }
 
         [Fact(Skip = "Requires 04-qt-tools real qmllint integration in implementation wave 04.")]
@@ -331,6 +346,57 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
         public Task PL_10_ProcessAsync_WithRealQmlLint_ReturnsValidForValidQml()
         {
             return Task.CompletedTask;
+        }
+
+        private sealed class QtQmlFormatPipelineAdapter : IEmitPipelineFormatter
+        {
+            private readonly QmlSharp.Qt.Tools.IQmlFormat _formatter;
+
+            public QtQmlFormatPipelineAdapter(QmlSharp.Qt.Tools.IQmlFormat formatter)
+            {
+                _formatter = formatter;
+            }
+
+            public async Task<FormatStageResult> FormatAsync(string documentName, string text, CancellationToken ct = default)
+            {
+                QmlSharp.Qt.Tools.QmlFormatResult result = await _formatter.FormatStringAsync(text, ct: ct);
+                return new FormatStageResult
+                {
+                    Text = result.FormattedSource ?? text,
+                    DurationMs = result.ToolResult.DurationMs,
+                    Diagnostics = ConvertDiagnostics(result.Diagnostics),
+                };
+            }
+
+            private static ImmutableArray<PipelineDiagnostic> ConvertDiagnostics(ImmutableArray<QmlSharp.Qt.Tools.QtDiagnostic> diagnostics)
+            {
+                ImmutableArray<PipelineDiagnostic>.Builder builder = ImmutableArray.CreateBuilder<PipelineDiagnostic>(diagnostics.Length);
+                for (int index = 0; index < diagnostics.Length; index++)
+                {
+                    QmlSharp.Qt.Tools.QtDiagnostic diagnostic = diagnostics[index];
+                    builder.Add(new PipelineDiagnostic
+                    {
+                        Code = diagnostic.Category,
+                        Severity = ConvertSeverity(diagnostic.Severity),
+                        Message = diagnostic.Message,
+                        File = diagnostic.File,
+                        Line = diagnostic.Line,
+                        Column = diagnostic.Column,
+                    });
+                }
+
+                return builder.MoveToImmutable();
+            }
+
+            private static PipelineDiagnosticSeverity ConvertSeverity(QmlSharp.Qt.Tools.DiagnosticSeverity severity)
+            {
+                return severity switch
+                {
+                    QmlSharp.Qt.Tools.DiagnosticSeverity.Error => PipelineDiagnosticSeverity.Error,
+                    QmlSharp.Qt.Tools.DiagnosticSeverity.Warning => PipelineDiagnosticSeverity.Warning,
+                    _ => PipelineDiagnosticSeverity.Info,
+                };
+            }
         }
     }
 }
