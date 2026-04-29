@@ -161,8 +161,8 @@ namespace QmlSharp.Qt.Tools
         /// <summary>Human-readable summary.</summary>
         public string? Summary { get; init; }
 
-        /// <summary>True when the underlying tool succeeded.</summary>
-        public bool Success => ToolResult.Success;
+        /// <summary>True when qmllint completed and reported no errors or warnings.</summary>
+        public bool Success => ToolResult.Success && ErrorCount == 0 && WarningCount == 0;
     }
 
     /// <summary>Result of qmlcachegen.</summary>
