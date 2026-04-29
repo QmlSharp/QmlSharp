@@ -22,9 +22,60 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
             Assert.True(result.Success);
             Assert.Empty(result.Diagnostics);
             string outputFile = Assert.Single(result.OutputFiles);
-            Assert.Equal(Path.Join(outputDirectory.Path, Path.GetFileName(file.Path) + ".cpp"), outputFile);
+            Assert.Equal(outputDirectory.Path, Path.GetDirectoryName(outputFile));
+            Assert.EndsWith(".cpp", outputFile, StringComparison.OrdinalIgnoreCase);
             AssertOptionValue(runner.SingleCall.Args, "-o", outputFile);
+            AssertOptionValue(runner.SingleCall.Args, "--resource-path", global::QmlSharp.Qt.Tools.QmlCachegen.CreateResourcePath(file.Path));
             Assert.Equal(file.Path, runner.SingleCall.Args[^1]);
+        }
+
+        [Fact]
+        public void QC001B_CreateResourcePath_PreservesRelativeDirectories()
+        {
+            string resourcePath = global::QmlSharp.Qt.Tools.QmlCachegen.CreateResourcePath(Path.Join("Views", "Main.qml"));
+            using TemporaryDirectory outputDirectory = TemporaryDirectory.Create();
+
+            string outputFile = global::QmlSharp.Qt.Tools.QmlCachegen.CreateOutputFilePath(
+                resourcePath,
+                outputDirectory.Path,
+                new QmlCachegenOptions());
+
+            Assert.Equal("/Views/Main.qml", resourcePath);
+            Assert.Equal(outputDirectory.Path, Path.GetDirectoryName(outputFile));
+            Assert.StartsWith("Views_Main.qml.", Path.GetFileName(outputFile), StringComparison.Ordinal);
+            Assert.EndsWith(".cpp", outputFile, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task QC001C_CompileBatch_WithDuplicateBasenames_UsesDistinctResourcePathsAndOutputs()
+        {
+            using TemporaryDirectory inputRoot = TemporaryDirectory.Create();
+            using TemporaryDirectory outputDirectory = TemporaryDirectory.Create();
+            string firstDirectory = Path.Join(inputRoot.Path, "Views");
+            string secondDirectory = Path.Join(inputRoot.Path, "Dialogs");
+            string firstPath = Path.Join(firstDirectory, "Main.qml");
+            string secondPath = Path.Join(secondDirectory, "Main.qml");
+            _ = Directory.CreateDirectory(firstDirectory);
+            _ = Directory.CreateDirectory(secondDirectory);
+            File.WriteAllText(firstPath, "import QtQuick\nItem {}\n");
+            File.WriteAllText(secondPath, "import QtQuick\nItem {}\n");
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(0, string.Empty, string.Empty));
+            runner.Enqueue(CreateToolResult(0, string.Empty, string.Empty));
+            global::QmlSharp.Qt.Tools.QmlCachegen cachegen = CreateCachegen(runner);
+
+            QmlCachegenBatchResult result = await cachegen.CompileBatchAsync(
+                [firstPath, secondPath],
+                new QmlCachegenOptions { OutputDir = outputDirectory.Path });
+
+            string firstOutput = Assert.Single(result.Results[0].OutputFiles);
+            string secondOutput = Assert.Single(result.Results[1].OutputFiles);
+            string firstResourcePath = ValueAfter(runner.RecordedCalls[0].Args, "--resource-path");
+            string secondResourcePath = ValueAfter(runner.RecordedCalls[1].Args, "--resource-path");
+            Assert.NotEqual(firstOutput, secondOutput);
+            Assert.NotEqual(firstResourcePath, secondResourcePath);
+            Assert.NotEqual("/Main.qml", firstResourcePath);
+            Assert.NotEqual("/Main.qml", secondResourcePath);
         }
 
         [Fact]
@@ -45,6 +96,30 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
             Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
             Assert.Equal(file.Path, diagnostic.File);
             Assert.Equal(2, diagnostic.Line);
+        }
+
+        [Fact]
+        public async Task QC002B_CompileFile_FailedInvocationDoesNotReportStaleOutputFiles()
+        {
+            using TemporaryQmlFile file = TemporaryQmlFile.Create("import QtQuick\nItem {\n");
+            using TemporaryDirectory outputDirectory = TemporaryDirectory.Create();
+            string resourcePath = global::QmlSharp.Qt.Tools.QmlCachegen.CreateResourcePath(file.Path);
+            string staleOutputFile = global::QmlSharp.Qt.Tools.QmlCachegen.CreateOutputFilePath(
+                resourcePath,
+                outputDirectory.Path,
+                new QmlCachegenOptions());
+            File.WriteAllText(staleOutputFile, "stale output");
+            File.WriteAllText(staleOutputFile + ".aotstats", """{"entries":[{"codegenResult":0}]}""");
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(1, string.Empty, $"{file.Path}:2:1: error: Expected token \"}}\""));
+            global::QmlSharp.Qt.Tools.QmlCachegen cachegen = CreateCachegen(runner);
+
+            QmlCachegenResult result = await cachegen.CompileFileAsync(
+                file.Path,
+                new QmlCachegenOptions { OutputDir = outputDirectory.Path });
+
+            Assert.False(result.Success);
+            Assert.Empty(result.OutputFiles);
         }
 
         [Fact]
@@ -111,6 +186,32 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
             Assert.Equal(1, result.AotStats.FailedFunctions);
             Assert.Equal(50.0, result.AotStats.SuccessRate);
             Assert.Contains("--dump-aot-stats", runner.SingleCall.Args);
+        }
+
+        [Fact]
+        public async Task QC005B_CompileFile_IgnoresUnrelatedFilesInOutputDirectory()
+        {
+            using TemporaryQmlFile file = TemporaryQmlFile.Create("import QtQuick\nItem {}\n");
+            using TemporaryDirectory outputDirectory = TemporaryDirectory.Create();
+            string unrelatedHeader = Path.Join(outputDirectory.Path, "stale.h");
+            string unrelatedSource = Path.Join(outputDirectory.Path, "stale.cpp");
+            File.WriteAllText(unrelatedHeader, "stale header");
+            File.WriteAllText(unrelatedSource, "stale source");
+            MockToolRunner runner = new(call =>
+            {
+                File.WriteAllText(ValueAfter(call.Args, "-o") + ".aotstats", """{"entries":[]}""");
+                return CreateToolResult(0, string.Empty, string.Empty);
+            });
+            global::QmlSharp.Qt.Tools.QmlCachegen cachegen = CreateCachegen(runner);
+
+            QmlCachegenResult result = await cachegen.CompileFileAsync(
+                file.Path,
+                new QmlCachegenOptions { OutputDir = outputDirectory.Path });
+
+            Assert.DoesNotContain(unrelatedHeader, result.OutputFiles);
+            Assert.DoesNotContain(unrelatedSource, result.OutputFiles);
+            Assert.Contains(ValueAfter(runner.SingleCall.Args, "-o"), result.OutputFiles);
+            Assert.Contains(ValueAfter(runner.SingleCall.Args, "-o") + ".aotstats", result.OutputFiles);
         }
 
         [Fact]

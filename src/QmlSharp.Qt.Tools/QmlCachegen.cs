@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace QmlSharp.Qt.Tools
@@ -38,11 +40,13 @@ namespace QmlSharp.Qt.Tools
             string normalizedFilePath = Path.GetFullPath(filePath);
             QmlCachegenOptions effectiveOptions = options ?? new QmlCachegenOptions();
             string outputDirectory = GetOrCreateOutputDirectory(effectiveOptions.OutputDir);
-            string outputFile = CreateOutputFilePath(normalizedFilePath, outputDirectory, effectiveOptions);
+            string resourcePath = CreateResourcePath(filePath);
+            string outputFile = CreateOutputFilePath(resourcePath, outputDirectory, effectiveOptions);
             ToolInfo tool = await _toolchain.GetToolInfoAsync(ToolName, ct).ConfigureAwait(false);
             ImmutableArray<string> args = BuildArguments(
                 normalizedFilePath,
                 outputFile,
+                resourcePath,
                 effectiveOptions,
                 _toolchain.Installation?.ImportPaths ?? []);
 
@@ -50,7 +54,7 @@ namespace QmlSharp.Qt.Tools
                 .RunAsync(tool.Path, args, new ToolRunnerOptions(), ct)
                 .ConfigureAwait(false);
 
-            return CreateResult(toolResult, normalizedFilePath, outputFile, outputDirectory, effectiveOptions, filenameOverride: null);
+            return CreateResult(toolResult, normalizedFilePath, outputFile, outputDirectory, filenameOverride: null);
         }
 
         /// <inheritdoc />
@@ -116,11 +120,13 @@ namespace QmlSharp.Qt.Tools
         internal static ImmutableArray<string> BuildArguments(
             string filePath,
             string outputFile,
+            string resourcePath,
             QmlCachegenOptions options,
             ImmutableArray<string> toolchainImportPaths)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
             ArgumentException.ThrowIfNullOrWhiteSpace(outputFile);
+            ArgumentException.ThrowIfNullOrWhiteSpace(resourcePath);
             ArgumentNullException.ThrowIfNull(options);
 
             ImmutableArray<string>.Builder args = ImmutableArray.CreateBuilder<string>();
@@ -145,7 +151,7 @@ namespace QmlSharp.Qt.Tools
             }
 
             args.Add("--resource-path");
-            args.Add("/" + Path.GetFileName(filePath));
+            args.Add(resourcePath);
             args.Add("--dump-aot-stats");
             args.Add("--module-id");
             args.Add("QmlSharp");
@@ -161,11 +167,13 @@ namespace QmlSharp.Qt.Tools
         {
             QmlCachegenOptions effectiveOptions = options ?? new QmlCachegenOptions();
             string outputDirectory = GetOrCreateOutputDirectory(effectiveOptions.OutputDir);
-            string outputFile = CreateOutputFilePath(filePath, outputDirectory, effectiveOptions);
+            string resourcePath = CreateResourcePath(filePath);
+            string outputFile = CreateOutputFilePath(resourcePath, outputDirectory, effectiveOptions);
             ToolInfo tool = await _toolchain.GetToolInfoAsync(ToolName, ct).ConfigureAwait(false);
             ImmutableArray<string> args = BuildArguments(
                 filePath,
                 outputFile,
+                resourcePath,
                 effectiveOptions,
                 _toolchain.Installation?.ImportPaths ?? []);
 
@@ -173,7 +181,7 @@ namespace QmlSharp.Qt.Tools
                 .RunAsync(tool.Path, args, new ToolRunnerOptions(), ct)
                 .ConfigureAwait(false);
 
-            return CreateResult(toolResult, filePath, outputFile, outputDirectory, effectiveOptions, filenameOverride);
+            return CreateResult(toolResult, filePath, outputFile, outputDirectory, filenameOverride);
         }
 
         private QmlCachegenResult CreateResult(
@@ -181,7 +189,6 @@ namespace QmlSharp.Qt.Tools
             string inputFile,
             string outputFile,
             string outputDirectory,
-            QmlCachegenOptions options,
             string? filenameOverride)
         {
             ImmutableArray<QtDiagnostic> diagnostics = _diagnosticParser.ParseStderr(toolResult.Stderr, filenameOverride);
@@ -194,7 +201,7 @@ namespace QmlSharp.Qt.Tools
             return new QmlCachegenResult
             {
                 ToolResult = toolResult,
-                OutputFiles = DiscoverOutputFiles(toolResult, outputFile, outputDirectory, options),
+                OutputFiles = DiscoverOutputFiles(toolResult, outputFile, outputDirectory),
                 Diagnostics = diagnostics,
                 AotStats = ParseAotStats(outputFile),
             };
@@ -203,33 +210,31 @@ namespace QmlSharp.Qt.Tools
         private static ImmutableArray<string> DiscoverOutputFiles(
             ToolResult toolResult,
             string outputFile,
-            string outputDirectory,
-            QmlCachegenOptions options)
+            string outputDirectory)
         {
             ImmutableArray<string>.Builder files = ImmutableArray.CreateBuilder<string>();
-            if (toolResult.Success)
+            if (!toolResult.Success)
             {
-                files.Add(outputFile);
+                return [];
             }
 
+            files.Add(outputFile);
             if (Directory.Exists(outputDirectory))
             {
                 foreach (string file in Directory
                     .EnumerateFiles(outputDirectory)
-                    .Where(file => IsExpectedOutputFile(file, outputFile, options))
+                    .Where(file => IsExpectedOutputFile(file, outputFile))
+                    .Where(file => !files.Contains(file, GetPathComparer()))
                     .OrderBy(static file => file, GetPathComparer()))
                 {
-                    if (!files.Contains(file, GetPathComparer()))
-                    {
-                        files.Add(file);
-                    }
+                    files.Add(file);
                 }
             }
 
             return files.ToImmutable();
         }
 
-        private static bool IsExpectedOutputFile(string filePath, string outputFile, QmlCachegenOptions options)
+        private static bool IsExpectedOutputFile(string filePath, string outputFile)
         {
             if (GetPathComparer().Equals(filePath, outputFile))
             {
@@ -241,11 +246,7 @@ namespace QmlSharp.Qt.Tools
                 return true;
             }
 
-            string extension = Path.GetExtension(filePath);
-            return options.BytecodeOnly
-                ? string.Equals(extension, ".qmlc", StringComparison.OrdinalIgnoreCase)
-                : string.Equals(extension, ".cpp", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(extension, ".h", StringComparison.OrdinalIgnoreCase);
+            return false;
         }
 
         private static QmlAotStats? ParseAotStats(string outputFile)
@@ -438,13 +439,92 @@ namespace QmlSharp.Qt.Tools
             return directory;
         }
 
-        private static string CreateOutputFilePath(
-            string filePath,
+        internal static string CreateOutputFilePath(
+            string resourcePath,
             string outputDirectory,
             QmlCachegenOptions options)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(resourcePath);
+
             string extension = options.BytecodeOnly ? ".qmlc" : ".cpp";
-            return Path.Join(outputDirectory, Path.GetFileName(filePath) + extension);
+            string normalizedResourcePath = resourcePath.Trim().Replace('\\', '/').TrimStart('/');
+            string stem = CreateOutputStem(normalizedResourcePath);
+            string hash = CreateStableHash(normalizedResourcePath);
+            return Path.Join(outputDirectory, $"{stem}.{hash}{extension}");
+        }
+
+        internal static string CreateResourcePath(string filePath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
+            string normalizedFilePath = Path.GetFullPath(filePath);
+            string candidate = filePath.Trim();
+            if (Path.IsPathFullyQualified(candidate))
+            {
+                candidate = TryCreateCurrentDirectoryRelativePath(normalizedFilePath)
+                    ?? CreateOpaqueResourcePath(normalizedFilePath);
+            }
+
+            candidate = candidate
+                .Replace(Path.DirectorySeparatorChar, '/')
+                .Replace(Path.AltDirectorySeparatorChar, '/')
+                .TrimStart('/');
+
+            while (candidate.StartsWith("./", StringComparison.Ordinal))
+            {
+                candidate = candidate[2..];
+            }
+
+            if (candidate.Length == 0 || IsEscapedRelativePath(candidate))
+            {
+                candidate = CreateOpaqueResourcePath(normalizedFilePath);
+            }
+
+            return "/" + candidate;
+        }
+
+        private static string? TryCreateCurrentDirectoryRelativePath(string normalizedFilePath)
+        {
+            string relativePath = Path.GetRelativePath(Environment.CurrentDirectory, normalizedFilePath);
+            string normalizedRelativePath = relativePath
+                .Replace(Path.DirectorySeparatorChar, '/')
+                .Replace(Path.AltDirectorySeparatorChar, '/');
+
+            return Path.IsPathFullyQualified(relativePath) || IsEscapedRelativePath(normalizedRelativePath)
+                ? null
+                : normalizedRelativePath;
+        }
+
+        private static string CreateOpaqueResourcePath(string normalizedFilePath)
+        {
+            return "absolute/" + CreateStableHash(NormalizePathKey(normalizedFilePath)) + "/" + Path.GetFileName(normalizedFilePath);
+        }
+
+        private static bool IsEscapedRelativePath(string path)
+        {
+            return string.Equals(path, "..", StringComparison.Ordinal)
+                || path.StartsWith("../", StringComparison.Ordinal)
+                || path.StartsWith("..\\", StringComparison.Ordinal);
+        }
+
+        private static string CreateOutputStem(string normalizedResourcePath)
+        {
+            string stem = string.Concat(normalizedResourcePath.Select(static character =>
+                char.IsAsciiLetterOrDigit(character) || character is '.' or '-' or '_'
+                    ? character
+                    : '_'));
+            stem = stem.Trim('_');
+            if (stem.Length == 0)
+            {
+                return "qml";
+            }
+
+            return stem.Length > 96 ? stem[..96].TrimEnd('_') : stem;
+        }
+
+        private static string CreateStableHash(string value)
+        {
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..12].ToLowerInvariant();
         }
 
         private static string NormalizePathKey(string path)
