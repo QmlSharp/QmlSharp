@@ -9,6 +9,8 @@ namespace QmlSharp.Qt.Tools.Tests.Helpers
         public const string Diagnostic = "Diagnostic";
         public const string QmlFormat = "QmlFormat";
         public const string QmlLint = "QmlLint";
+        public const string QmlCachegen = "QmlCachegen";
+        public const string Qmltc = "Qmltc";
         public const string RequiresQt = "RequiresQt";
     }
 }
