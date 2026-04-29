@@ -72,15 +72,13 @@ namespace QmlSharp.Qt.Tools
         /// <summary>Convert a category enum value to the qmllint CLI category name.</summary>
         public static string ToCliName(this QmlLintCategory category)
         {
-            foreach (KeyValuePair<QmlLintCategory, string> pair in CategoryCliNames)
-            {
-                if (pair.Key == category)
-                {
-                    return pair.Value;
-                }
-            }
+            string? cliName = CategoryCliNames
+                .Where(pair => pair.Key == category)
+                .Select(pair => pair.Value)
+                .FirstOrDefault();
 
-            throw new ArgumentOutOfRangeException(nameof(category), category, "Unknown qmllint category.");
+            return cliName
+                ?? throw new ArgumentOutOfRangeException(nameof(category), category, "Unknown qmllint category.");
         }
 
         /// <summary>Try to convert a qmllint CLI category name back to an enum value.</summary>
@@ -98,27 +96,17 @@ namespace QmlSharp.Qt.Tools
         /// <summary>Gets all known Qt 6.11 qmllint CLI category names in enum order.</summary>
         public static ImmutableArray<string> GetCliNames()
         {
-            ImmutableArray<string>.Builder builder = ImmutableArray.CreateBuilder<string>(CategoryCliNames.Length);
-
-            foreach (KeyValuePair<QmlLintCategory, string> pair in CategoryCliNames)
-            {
-                builder.Add(pair.Value);
-            }
-
-            return builder.MoveToImmutable();
+            return CategoryCliNames
+                .Select(static pair => pair.Value)
+                .ToImmutableArray();
         }
 
         private static ImmutableDictionary<string, QmlLintCategory> CreateCategoryByCliName()
         {
-            ImmutableDictionary<string, QmlLintCategory>.Builder builder =
-                ImmutableDictionary.CreateBuilder<string, QmlLintCategory>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (KeyValuePair<QmlLintCategory, string> pair in CategoryCliNames)
-            {
-                builder[pair.Value] = pair.Key;
-            }
-
-            return builder.ToImmutable();
+            return CategoryCliNames.ToImmutableDictionary(
+                static pair => pair.Value,
+                static pair => pair.Key,
+                StringComparer.OrdinalIgnoreCase);
         }
     }
 }

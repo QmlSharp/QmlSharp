@@ -260,31 +260,40 @@ namespace QmlSharp.Qt.Tools
                     cursor++;
                 }
 
-                foreach (string severity in KnownSeverityStrings)
+                ParsedMessageLine? parsedLine = KnownSeverityStrings
+                    .Where(severity => StartsWithSeverity(line, cursor, severity))
+                    .Select(severity => TryCreateParsedMessageLine(line, index, cursor, severity))
+                    .OfType<ParsedMessageLine>()
+                    .FirstOrDefault();
+                if (parsedLine is not null)
                 {
-                    if (!StartsWithSeverity(line, cursor, severity))
-                    {
-                        continue;
-                    }
-
-                    int afterSeverity = cursor + severity.Length;
-                    if (afterSeverity >= line.Length || line[afterSeverity] != ':')
-                    {
-                        continue;
-                    }
-
-                    string prefix = line[..index].Trim();
-                    string message = line[(afterSeverity + 1)..].Trim();
-                    if (prefix.Length == 0 || message.Length == 0)
-                    {
-                        continue;
-                    }
-
-                    return new ParsedMessageLine(prefix, severity, message);
+                    return parsedLine;
                 }
             }
 
             return null;
+        }
+
+        private static ParsedMessageLine? TryCreateParsedMessageLine(
+            string line,
+            int separatorIndex,
+            int severityStartIndex,
+            string severity)
+        {
+            int afterSeverity = severityStartIndex + severity.Length;
+            if (afterSeverity >= line.Length || line[afterSeverity] != ':')
+            {
+                return null;
+            }
+
+            string prefix = line[..separatorIndex].Trim();
+            string message = line[(afterSeverity + 1)..].Trim();
+            if (prefix.Length == 0 || message.Length == 0)
+            {
+                return null;
+            }
+
+            return new ParsedMessageLine(prefix, severity, message);
         }
 
         private static ParsedLocation? ParseLocation(string prefix, string? filenameOverride)
@@ -374,28 +383,27 @@ namespace QmlSharp.Qt.Tools
                 return null;
             }
 
-            foreach (JsonElement suggestion in suggestions.EnumerateArray())
+            return suggestions
+                .EnumerateArray()
+                .Select(ReadSuggestionElement)
+                .FirstOrDefault(static suggestion => !string.IsNullOrWhiteSpace(suggestion));
+        }
+
+        private static string? ReadSuggestionElement(JsonElement suggestion)
+        {
+            if (suggestion.ValueKind == JsonValueKind.String)
             {
-                if (suggestion.ValueKind == JsonValueKind.String)
-                {
-                    return suggestion.GetString();
-                }
-
-                if (suggestion.ValueKind != JsonValueKind.Object)
-                {
-                    continue;
-                }
-
-                string? message = ReadString(suggestion, "message")
-                    ?? ReadString(suggestion, "description")
-                    ?? ReadString(suggestion, "replacement");
-                if (!string.IsNullOrWhiteSpace(message))
-                {
-                    return message;
-                }
+                return suggestion.GetString();
             }
 
-            return null;
+            if (suggestion.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            return ReadString(suggestion, "message")
+                ?? ReadString(suggestion, "description")
+                ?? ReadString(suggestion, "replacement");
         }
 
         private static bool TryGetArray(JsonElement element, string propertyName, out JsonElement array)
@@ -432,15 +440,8 @@ namespace QmlSharp.Qt.Tools
 
         private static bool IsKnownSeverity(string severity)
         {
-            foreach (string knownSeverity in KnownSeverityStrings)
-            {
-                if (string.Equals(severity, knownSeverity, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return KnownSeverityStrings.Any(knownSeverity =>
+                string.Equals(severity, knownSeverity, StringComparison.OrdinalIgnoreCase));
         }
 
         private static bool StartsWithSeverity(string line, int startIndex, string severity)
@@ -456,15 +457,7 @@ namespace QmlSharp.Qt.Tools
                 return false;
             }
 
-            foreach (char character in value)
-            {
-                if (!char.IsAsciiDigit(character))
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return value.All(char.IsAsciiDigit);
         }
 
         private static readonly ImmutableArray<string> KnownSeverityStrings =

@@ -54,7 +54,7 @@ namespace QmlSharp.Qt.Tools.Tests.Diagnostics
         }
 
         [Fact]
-        public void DP_003_ParseBracketStderrWithoutFilenameUsesOverride()
+        public void DP_003a_ParseBracketStderrWithoutFilenameUsesOverride()
         {
             ImmutableArray<QtDiagnostic> diagnostics = parser.ParseStderr(
                 "[Dom][QmlFile][Parsing] Error: Expected token `}`",
