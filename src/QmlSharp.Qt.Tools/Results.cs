@@ -22,6 +22,9 @@ namespace QmlSharp.Qt.Tools
 
         /// <summary>Detected platform name.</summary>
         public required string Platform { get; init; }
+
+        /// <summary>QML import paths discovered for this installation.</summary>
+        public ImmutableArray<string> ImportPaths { get; init; } = [];
     }
 
     /// <summary>Qt semantic version.</summary>
