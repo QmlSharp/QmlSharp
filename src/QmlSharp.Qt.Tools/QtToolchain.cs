@@ -523,12 +523,10 @@ namespace QmlSharp.Qt.Tools
             foreach (string normalized in paths
                 .Select(NormalizePath)
                 .Where(static normalized => normalized is not null)
-                .Select(static normalized => normalized!))
+                .Select(static normalized => normalized!)
+                .Where(seen.Add))
             {
-                if (seen.Add(normalized))
-                {
-                    builder.Add(normalized);
-                }
+                builder.Add(normalized);
             }
         }
 
