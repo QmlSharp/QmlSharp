@@ -161,8 +161,8 @@ namespace QmlSharp.Qt.Tools
         /// <summary>Human-readable summary.</summary>
         public string? Summary { get; init; }
 
-        /// <summary>True when the underlying tool succeeded.</summary>
-        public bool Success => ToolResult.Success;
+        /// <summary>True when qmllint completed and reported no errors or warnings.</summary>
+        public bool Success => ToolResult.Success && ErrorCount == 0 && WarningCount == 0;
     }
 
     /// <summary>Result of qmlcachegen.</summary>
@@ -363,8 +363,7 @@ namespace QmlSharp.Qt.Tools
         public ImmutableArray<QtDiagnostic> Diagnostics { get; init; } = [];
 
         /// <summary>Per-level timing information.</summary>
-        public ImmutableDictionary<QualityGateLevel, long> LevelDurationMs { get; init; }
-            = ImmutableDictionary<QualityGateLevel, long>.Empty;
+        public ImmutableDictionary<QualityGateLevel, long> LevelDurationMs { get; init; } = [];
 
         /// <summary>Total duration in milliseconds.</summary>
         public required long TotalDurationMs { get; init; }

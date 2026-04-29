@@ -636,7 +636,7 @@ namespace QmlSharp.Registry.Tests.Building
         {
             return OperatingSystem.IsMacOS()
                 && string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase)
-                    ? TimeSpan.FromSeconds(4)
+                    ? TimeSpan.FromSeconds(5)
                     : TimeSpan.FromSeconds(3);
         }
 
