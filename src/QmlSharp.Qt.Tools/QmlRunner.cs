@@ -195,7 +195,7 @@ namespace QmlSharp.Qt.Tools
             string? qtAppType = appType switch
             {
                 QmlAppType.Auto => null,
-                QmlAppType.Window => "widget",
+                QmlAppType.Window => "gui",
                 QmlAppType.Item => "gui",
                 _ => throw new ArgumentOutOfRangeException(nameof(appType), appType, "Unknown QML app type."),
             };
@@ -277,14 +277,8 @@ namespace QmlSharp.Qt.Tools
             ImmutableArray<QtDiagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<QtDiagnostic>(
                 parsed.Length + runtimePatternDiagnostics.Length);
             diagnostics.AddRange(parsed);
-
-            foreach (QtDiagnostic diagnostic in runtimePatternDiagnostics)
-            {
-                if (!ContainsEquivalentDiagnostic(parsed, diagnostic))
-                {
-                    diagnostics.Add(diagnostic);
-                }
-            }
+            diagnostics.AddRange(runtimePatternDiagnostics.Where(
+                diagnostic => !ContainsEquivalentDiagnostic(parsed, diagnostic)));
 
             return diagnostics.ToImmutable();
         }
@@ -301,9 +295,8 @@ namespace QmlSharp.Qt.Tools
 
             ImmutableArray<QtDiagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<QtDiagnostic>();
             string[] lines = stderr.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-            foreach (string rawLine in lines)
+            foreach (string line in lines.Select(static rawLine => rawLine.Trim()))
             {
-                string line = rawLine.Trim();
                 if (line.Length == 0 || !IsRuntimeErrorLine(line))
                 {
                     continue;

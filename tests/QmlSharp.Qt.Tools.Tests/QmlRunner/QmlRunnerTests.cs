@@ -101,7 +101,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlRunner
         }
 
         [Fact]
-        public async Task QR005_RunFile_WithWindowAppType_MapsToWidgetAppTypeArgument()
+        public async Task QR005_RunFile_WithWindowAppType_MapsToGuiAppTypeArgument()
         {
             using TemporaryQmlFile file = TemporaryQmlFile.Create("import QtQuick\nWindow {}\n");
             MockToolRunner runner = new();
@@ -117,7 +117,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlRunner
                     Timeout = TimeSpan.FromSeconds(2),
                 });
 
-            AssertOptionValue(runner.SingleCall.Args, "--apptype", "widget");
+            AssertOptionValue(runner.SingleCall.Args, "--apptype", "gui");
         }
 
         [Fact]
