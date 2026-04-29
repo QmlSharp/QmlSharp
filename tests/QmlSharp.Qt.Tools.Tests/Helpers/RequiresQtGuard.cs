@@ -17,7 +17,8 @@ namespace QmlSharp.Qt.Tools.Tests.Helpers
             IEnumerable<string> pathEntries,
             Func<string, bool> fileExists)
         {
-            string? qtDir = getEnvironmentVariable(QtToolsTestEnvironment.QtDirVariableName);
+            string? qtDir = NormalizeEnvironmentPath(
+                getEnvironmentVariable(QtToolsTestEnvironment.QtDirVariableName));
 
             if (!string.IsNullOrWhiteSpace(qtDir))
             {
@@ -42,6 +43,16 @@ namespace QmlSharp.Qt.Tools.Tests.Helpers
                 qtDir,
                 null,
                 QtToolsTestEnvironment.QtSdkUnavailableReason);
+        }
+
+        private static string? NormalizeEnvironmentPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return null;
+            }
+
+            return path.Trim();
         }
 
         private static string GetExecutableName(string toolName)

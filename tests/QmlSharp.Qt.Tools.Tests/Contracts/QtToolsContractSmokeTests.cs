@@ -79,6 +79,7 @@ namespace QmlSharp.Qt.Tools.Tests.Contracts
             Assert.Null(registrar.ForeignTypesFile);
             Assert.Null(registrar.ModuleImportUri);
             Assert.Null(registrar.MajorVersion);
+            Assert.Null(registrar.Namespace);
             Assert.Null(registrar.OutputFile);
 
             Assert.Equal(TimeSpan.FromSeconds(30), runner.Timeout);

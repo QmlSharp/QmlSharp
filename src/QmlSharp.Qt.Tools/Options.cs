@@ -188,6 +188,9 @@ namespace QmlSharp.Qt.Tools
         /// <summary>Module major version.</summary>
         public int? MajorVersion { get; init; }
 
+        /// <summary>C++ namespace for generated registration source.</summary>
+        public string? Namespace { get; init; }
+
         /// <summary>Output file path.</summary>
         public string? OutputFile { get; init; }
     }

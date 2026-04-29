@@ -22,6 +22,36 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
         }
 
         [Fact]
+        public void RequiresQtGuard_WhenQtDirIsWhitespaceAndToolIsOnPath_ReturnsNormalizedQtDir()
+        {
+            string pathEntry = Path.Join("qt-root", "bin");
+            QtAvailability availability = RequiresQtGuard.Check(
+                static name => name == QtToolsTestEnvironment.QtDirVariableName ? "   " : null,
+                [pathEntry],
+                static _ => true);
+
+            Assert.True(availability.IsAvailable);
+            Assert.Null(availability.QtDir);
+            Assert.NotNull(availability.ToolPath);
+        }
+
+        [Fact]
+        public void RequiresQtGuard_WhenQtDirHasPaddingAndToolExists_UsesTrimmedQtDir()
+        {
+            const string qtRoot = "qt-root";
+            QtAvailability availability = RequiresQtGuard.Check(
+                static name => name == QtToolsTestEnvironment.QtDirVariableName
+                    ? $"  {qtRoot}  "
+                    : null,
+                [],
+                static _ => true);
+
+            Assert.True(availability.IsAvailable);
+            Assert.Equal(qtRoot, availability.QtDir);
+            Assert.Contains(qtRoot, availability.ToolPath, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void RequiresQtFact_SkipsCleanlyWhenQtDirAndPathAreUnavailable()
         {
             string? originalQtDir = Environment.GetEnvironmentVariable(QtToolsTestEnvironment.QtDirVariableName);
