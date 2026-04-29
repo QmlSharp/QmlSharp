@@ -220,14 +220,14 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
                 throw new FileNotFoundException("PATH is not set, so dotnet could not be resolved.");
             }
 
-            foreach (string candidate in path
+            string? candidate = path
                 .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-                .Select(directory => Path.Join(directory, executableName)))
+                .Select(directory => Path.Join(directory, executableName))
+                .Where(File.Exists)
+                .FirstOrDefault();
+            if (candidate is not null)
             {
-                if (File.Exists(candidate))
-                {
-                    return candidate;
-                }
+                return candidate;
             }
 
             throw new FileNotFoundException("Could not resolve dotnet from PATH.");
