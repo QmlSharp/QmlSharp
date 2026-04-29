@@ -491,15 +491,14 @@ namespace QmlSharp.Qt.Tools
             }
 
             ImmutableArray<string>.Builder builder = ImmutableArray.CreateBuilder<string>();
-            foreach (JsonElement element in importPathsElement
+            foreach (string value in importPathsElement
                 .EnumerateArray()
-                .Where(static element => element.ValueKind == JsonValueKind.String))
+                .Where(static element => element.ValueKind == JsonValueKind.String)
+                .Select(static element => NormalizePath(element.GetString()))
+                .Where(static value => value is not null)
+                .Select(static value => value!))
             {
-                string? value = NormalizePath(element.GetString());
-                if (value is not null)
-                {
-                    builder.Add(value);
-                }
+                builder.Add(value);
             }
 
             return builder.ToImmutable();
@@ -521,9 +520,12 @@ namespace QmlSharp.Qt.Tools
             ImmutableArray<string>.Builder builder,
             HashSet<string> seen)
         {
-            foreach (string? normalized in paths.Select(NormalizePath))
+            foreach (string normalized in paths
+                .Select(NormalizePath)
+                .Where(static normalized => normalized is not null)
+                .Select(static normalized => normalized!))
             {
-                if (normalized is not null && seen.Add(normalized))
+                if (seen.Add(normalized))
                 {
                     builder.Add(normalized);
                 }
