@@ -71,6 +71,21 @@ namespace QmlSharp.Qt.Tools.Tests.QmlDom
         }
 
         [Fact]
+        public async Task QD004B_DumpFile_WithWhitespaceOnlyFilterFields_OmitsFilterOption()
+        {
+            using TemporaryQmlFile file = TemporaryQmlFile.Create("import QtQuick\nItem {}\n");
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(0, """{"currentItem":{"isValid":true}}""", string.Empty));
+            global::QmlSharp.Qt.Tools.QmlDom dom = CreateDom(runner);
+
+            _ = await dom.DumpFileAsync(
+                file.Path,
+                new QmlDomOptions { FilterFields = [" ", "\t"] });
+
+            Assert.DoesNotContain("--filter-fields", runner.SingleCall.Args);
+        }
+
+        [Fact]
         public async Task QD005_DumpFile_WithNoDependencies_MapsToQtDependenciesNone()
         {
             using TemporaryQmlFile file = TemporaryQmlFile.Create("import QtQuick\nItem {}\n");

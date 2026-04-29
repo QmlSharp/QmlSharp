@@ -74,10 +74,16 @@ namespace QmlSharp.Qt.Tools
             ImmutableArray<string>.Builder args = ImmutableArray.CreateBuilder<string>();
             args.Add(options.AstMode ? "--dump-ast" : "-d");
 
-            if (!options.FilterFields.IsDefaultOrEmpty)
+            ImmutableArray<string> filterFields = options.FilterFields.IsDefaultOrEmpty
+                ? []
+                : options.FilterFields
+                    .Where(static field => !string.IsNullOrWhiteSpace(field))
+                    .Select(static field => field.Trim())
+                    .ToImmutableArray();
+            if (!filterFields.IsDefaultOrEmpty)
             {
                 args.Add("--filter-fields");
-                args.Add(string.Join(",", options.FilterFields.Where(static field => !string.IsNullOrWhiteSpace(field))));
+                args.Add(string.Join(",", filterFields));
             }
 
             if (options.NoDependencies)

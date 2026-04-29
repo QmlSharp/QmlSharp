@@ -56,6 +56,24 @@ namespace QmlSharp.Qt.Tools.Tests.QmlImportScanner
         }
 
         [Fact]
+        public async Task IS002B_ScanFiles_WithRootPathOption_PassesRootPath()
+        {
+            using TemporaryDirectory root = TemporaryDirectory.Create();
+            string filePath = Path.Join(root.Path, "Main.qml");
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(0, "[]", string.Empty));
+            global::QmlSharp.Qt.Tools.QmlImportScanner scanner = CreateScanner(runner);
+
+            _ = await scanner.ScanFilesAsync(
+                [filePath],
+                new QmlImportScanOptions { RootPath = root.Path });
+
+            AssertOptionValue(runner.SingleCall.Args, "-rootPath", root.Path);
+            Assert.Contains("-qmlFiles", runner.SingleCall.Args);
+            Assert.Contains(filePath, runner.SingleCall.Args);
+        }
+
+        [Fact]
         public async Task IS003_ScanString_UsesTemporaryInputAndCleansItUp()
         {
             MockToolRunner runner = new();
@@ -69,6 +87,22 @@ namespace QmlSharp.Qt.Tools.Tests.QmlImportScanner
             Assert.Equal("-qmlFiles", runner.SingleCall.Args[0]);
             Assert.EndsWith(".qml", tempInput, StringComparison.OrdinalIgnoreCase);
             Assert.False(File.Exists(tempInput));
+        }
+
+        [Fact]
+        public async Task IS003B_ScanString_WithRootPathOption_PassesRootPathToFileScan()
+        {
+            using TemporaryDirectory root = TemporaryDirectory.Create();
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(0, "[]", string.Empty));
+            global::QmlSharp.Qt.Tools.QmlImportScanner scanner = CreateScanner(runner);
+
+            _ = await scanner.ScanStringAsync(
+                "import QtQuick\nItem {}\n",
+                new QmlImportScanOptions { RootPath = root.Path });
+
+            AssertOptionValue(runner.SingleCall.Args, "-rootPath", root.Path);
+            Assert.Contains("-qmlFiles", runner.SingleCall.Args);
         }
 
         [Fact]

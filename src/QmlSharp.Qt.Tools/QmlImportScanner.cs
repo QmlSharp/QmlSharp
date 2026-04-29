@@ -122,6 +122,12 @@ namespace QmlSharp.Qt.Tools
             ArgumentNullException.ThrowIfNull(options);
 
             ImmutableArray<string>.Builder args = ImmutableArray.CreateBuilder<string>();
+            if (!string.IsNullOrWhiteSpace(options.RootPath))
+            {
+                args.Add("-rootPath");
+                args.Add(Path.GetFullPath(options.RootPath));
+            }
+
             args.Add("-qmlFiles");
             foreach (string filePath in filePaths)
             {
