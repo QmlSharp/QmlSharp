@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using QmlSharp.Qt.Tools.Tests.Helpers;
 
-namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
+namespace QmlSharp.Qt.Tools.Tests.QmlFormat
 {
     [Trait("Category", TestCategories.QmlFormat)]
     public sealed class QmlFormatTests
@@ -12,7 +12,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
             using TemporaryQmlFile file = TemporaryQmlFile.Create("import QtQuick\nItem{width:100}\n");
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "import QtQuick\n\nItem {\n    width: 100\n}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatFileAsync(file.Path);
 
@@ -28,7 +28,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
             using TemporaryQmlFile file = TemporaryQmlFile.Create("import QtQuick\nItem {\n");
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(1, string.Empty, $"{file.Path}:2:1: error: Expected token \"}}\""));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatFileAsync(file.Path);
 
@@ -45,7 +45,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         {
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "import QtQuick\n\nItem {}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatStringAsync("import QtQuick\nItem {}\n");
 
@@ -60,7 +60,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         {
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {\n  width: 100\n}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatStringAsync(
                 "Item{width:100}",
@@ -76,7 +76,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         {
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {\n\twidth: 100\n}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatStringAsync(
                 "Item{width:100}",
@@ -91,7 +91,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         {
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Rectangle {\n    id: root\n    width: 100\n}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatStringAsync(
                 "Rectangle { width: 100; id: root }",
@@ -106,7 +106,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         {
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "import QtQuick\nimport QtQuick.Controls\n\nItem {}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatStringAsync(
                 "import QtQuick.Controls\nimport QtQuick\nItem {}\n",
@@ -121,7 +121,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         {
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {\n    width: 100;\n}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatStringAsync(
                 "Item{width:100}",
@@ -136,7 +136,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         {
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {\n    width: 100\n}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatStringAsync(
                 "Item{width:100;}",
@@ -151,7 +151,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         {
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatStringAsync(
                 "Item {}\r\n",
@@ -166,7 +166,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         {
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {\n    property string value: \"long\"\n}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             _ = await formatter.FormatStringAsync(
                 "Item{property string value:\"long\"}",
@@ -181,7 +181,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
             using TemporaryQmlFile file = TemporaryQmlFile.Create("Item{width:100}");
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {\n    width: 100\n}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             _ = await formatter.FormatFileAsync(file.Path, new QmlFormatOptions { IgnoreSettings = true });
 
@@ -196,7 +196,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {\n    width: 100\n}\n", string.Empty));
             runner.Enqueue(CreateToolResult(1, string.Empty, "second.qml:1:1: error: bad"));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             ImmutableArray<QmlFormatResult> results = await formatter.FormatBatchAsync([first.Path, second.Path]);
 
@@ -213,7 +213,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
             using TemporaryQmlFile file = TemporaryQmlFile.Create("Item {\n    width: 100\n}\n");
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {\r\n    width: 100\r\n}\r\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatFileAsync(file.Path);
 
@@ -227,7 +227,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
             using TemporaryQmlFile file = TemporaryQmlFile.Create("Item {}\n");
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             _ = await formatter.FormatFileAsync(file.Path);
 
@@ -240,7 +240,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
             using TemporaryQmlFile file = TemporaryQmlFile.Create("Item {\n");
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(0, "Item {}\n", string.Empty));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatFileAsync(file.Path, new QmlFormatOptions { Force = true });
 
@@ -257,7 +257,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
                 File.WriteAllText(call.Args[^1], "Item {\n    width: 100\n}\n");
                 return CreateToolResult(0, string.Empty, string.Empty);
             });
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatFileAsync(file.Path, new QmlFormatOptions { InPlace = true });
 
@@ -271,7 +271,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         {
             MockToolRunner runner = new();
             runner.Enqueue(CreateToolResult(2, string.Empty, "qmlformat parse failed"));
-            QmlFormat formatter = CreateFormatter(runner);
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
 
             QmlFormatResult result = await formatter.FormatStringAsync("Item {");
 
@@ -285,7 +285,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlFormat_FormatsRealFixture()
         {
-            QmlFormat formatter = new();
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = new();
             string fixture = FixturePath("needs-formatting.qml");
 
             QmlFormatResult result = await formatter.FormatFileAsync(fixture);
@@ -300,7 +300,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlFormat_ReturnsDiagnosticsForSyntaxError()
         {
-            QmlFormat formatter = new();
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = new();
             string fixture = FixturePath("syntax-error.qml");
 
             QmlFormatResult result = await formatter.FormatFileAsync(fixture);
@@ -314,7 +314,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlFormat_FormatsStringAndCleansTempInput()
         {
-            QmlFormat formatter = new();
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = new();
 
             QmlFormatResult result = await formatter.FormatStringAsync("import QtQuick\nItem{width:100}\n");
 
@@ -324,9 +324,9 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
             Assert.True(result.HasChanges);
         }
 
-        private static QmlFormat CreateFormatter(MockToolRunner runner)
+        private static global::QmlSharp.Qt.Tools.QmlFormat CreateFormatter(MockToolRunner runner)
         {
-            return new QmlFormat(
+            return new global::QmlSharp.Qt.Tools.QmlFormat(
                 new MockQtToolchain("qmlformat", Path.Join(Path.GetTempPath(), "qmlformat-test.exe")),
                 runner,
                 new QtDiagnosticParser());
@@ -486,11 +486,15 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormatWrapper
                         File.Delete(Path);
                     }
                 }
-                catch (IOException)
+                catch (IOException ex)
                 {
+                    System.Diagnostics.Trace.TraceWarning(
+                        $"Failed to delete temporary QML file '{Path}' due to I/O error: {ex.Message}");
                 }
-                catch (UnauthorizedAccessException)
+                catch (UnauthorizedAccessException ex)
                 {
+                    System.Diagnostics.Trace.TraceWarning(
+                        $"Failed to delete temporary QML file '{Path}' due to access error: {ex.Message}");
                 }
             }
         }

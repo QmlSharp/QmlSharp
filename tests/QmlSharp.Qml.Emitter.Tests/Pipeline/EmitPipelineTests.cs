@@ -320,7 +320,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
         [RequiresQtFact]
         [Trait("Category", TestCategories.RequiresQt)]
         [Trait("Category", TestCategories.Pipeline)]
-        public async Task PL_09_ProcessAsync_WithRealQmlFormat_FormatsAndLintsOutput()
+        public async Task PL_09_ProcessAsync_WithRealQmlFormat_FormatsOutput()
         {
             QmlDocument document = AstFixtureFactory.MinimalDocument();
             EmitPipelineConfig config = new()
