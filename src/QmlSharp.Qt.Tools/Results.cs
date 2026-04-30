@@ -365,10 +365,41 @@ namespace QmlSharp.Qt.Tools
         /// <summary>All diagnostics from all levels.</summary>
         public ImmutableArray<QtDiagnostic> Diagnostics { get; init; } = [];
 
+        /// <summary>Diagnostics grouped by the quality gate level that produced them.</summary>
+        public ImmutableDictionary<QualityGateLevel, ImmutableArray<QtDiagnostic>> LevelDiagnostics { get; init; } = [];
+
         /// <summary>Per-level timing information.</summary>
         public ImmutableDictionary<QualityGateLevel, long> LevelDurationMs { get; init; } = [];
 
         /// <summary>Total duration in milliseconds.</summary>
+        public required long TotalDurationMs { get; init; }
+
+        /// <summary>Per-file results for batch quality gate execution.</summary>
+        public ImmutableArray<QualityGateFileResult> FileResults { get; init; } = [];
+    }
+
+    /// <summary>Per-file result captured during a batch quality gate run.</summary>
+    public sealed record QualityGateFileResult
+    {
+        /// <summary>Input file path.</summary>
+        public required string FilePath { get; init; }
+
+        /// <summary>Whether this file passed the requested gate.</summary>
+        public required bool Passed { get; init; }
+
+        /// <summary>Last level executed for this file.</summary>
+        public required QualityGateLevel CompletedLevel { get; init; }
+
+        /// <summary>Level that failed for this file.</summary>
+        public QualityGateLevel? FailedAtLevel { get; init; }
+
+        /// <summary>Diagnostics for this file in level order.</summary>
+        public ImmutableArray<QtDiagnostic> Diagnostics { get; init; } = [];
+
+        /// <summary>Per-level duration for this file.</summary>
+        public ImmutableDictionary<QualityGateLevel, long> LevelDurationMs { get; init; } = [];
+
+        /// <summary>Total duration for this file.</summary>
         public required long TotalDurationMs { get; init; }
     }
 

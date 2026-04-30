@@ -16,6 +16,7 @@ namespace QmlSharp.Qt.Tools.Tests.Helpers
         public const string QmlRunner = "QmlRunner";
         public const string Rcc = "Rcc";
         public const string QmlTypeRegistrar = "QmlTypeRegistrar";
+        public const string QualityGate = "QualityGate";
         public const string RequiresQt = "RequiresQt";
     }
 }
