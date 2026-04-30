@@ -343,6 +343,9 @@ namespace QmlSharp.Qt.Tools
         /// <summary>Generated output file.</summary>
         public string? OutputFile { get; init; }
 
+        /// <summary>Type registrar diagnostics.</summary>
+        public ImmutableArray<QtDiagnostic> Diagnostics { get; init; } = [];
+
         /// <summary>True when the underlying tool succeeded.</summary>
         public bool Success => ToolResult.Success;
     }

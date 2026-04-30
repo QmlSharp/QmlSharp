@@ -14,6 +14,8 @@ namespace QmlSharp.Qt.Tools.Tests.Helpers
         public const string QmlImportScanner = "QmlImportScanner";
         public const string QmlDom = "QmlDom";
         public const string QmlRunner = "QmlRunner";
+        public const string Rcc = "Rcc";
+        public const string QmlTypeRegistrar = "QmlTypeRegistrar";
         public const string RequiresQt = "RequiresQt";
     }
 }
