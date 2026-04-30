@@ -61,7 +61,10 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
         {
             ProcessToolRunner runner = new();
             ProbeInvocation probe = CreateProbeInvocation("inspect", "--read-stdin");
-            string workingDirectory = Directory.CreateTempSubdirectory("qmlsharp-toolrunner-cwd-").FullName;
+            string workingDirectory = Path.Join(
+                Path.GetTempPath(),
+                "qmlsharp toolrunner cwd " + Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(workingDirectory);
             Dictionary<string, string> environment = new(StringComparer.Ordinal)
             {
                 ["TOOLRUNNER_PROBE"] = "env payload",
@@ -144,7 +147,7 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
         public async Task ToolRunner_ArgumentsWithSpacesAndShellMetacharacters_ArePassedAsOneArgument()
         {
             ProcessToolRunner runner = new();
-            string suspiciousArgument = "value with spaces && echo should-not-run";
+            string suspiciousArgument = "value with spaces && echo \"should-not-run\" ; $HOME";
             ProbeInvocation probe = CreateProbeInvocation("inspect", suspiciousArgument);
 
             ToolResult result = await runner.RunAsync(probe.ExecutablePath, probe.Arguments);
@@ -160,6 +163,72 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
             Assert.Equal("ARGC=1", stdoutLines[3]);
             Assert.Equal($"ARG0={suspiciousArgument}", stdoutLines[4]);
             Assert.Equal(string.Empty, result.Stderr);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.ToolRunner)]
+        public async Task ToolRunner_Timeout_KillsEntireProcessTree()
+        {
+            ProcessToolRunner runner = new();
+            string markerPath = Path.Join(
+                Path.GetTempPath(),
+                "qmlsharp-toolrunner-child-" + Guid.NewGuid().ToString("N") + ".txt");
+            ProbeInvocation probe = CreateProbeInvocation("spawn-child-sleep", markerPath, "1500");
+
+            try
+            {
+                _ = await Assert.ThrowsAsync<QtToolTimeoutError>(() =>
+                    runner.RunAsync(
+                        probe.ExecutablePath,
+                        probe.Arguments,
+                        new ToolRunnerOptions { Timeout = TimeSpan.FromMilliseconds(200) }));
+
+                await Task.Delay(TimeSpan.FromSeconds(2));
+
+                Assert.False(File.Exists(markerPath));
+            }
+            finally
+            {
+                if (File.Exists(markerPath))
+                {
+                    File.Delete(markerPath);
+                }
+            }
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.ToolRunner)]
+        public async Task ToolRunner_OutputCapture_IsBoundedAndMarksTruncation()
+        {
+            ProcessToolRunner runner = new();
+            ProbeInvocation probe = CreateProbeInvocation("large-output", "4096");
+
+            ToolResult result = await runner.RunAsync(
+                probe.ExecutablePath,
+                probe.Arguments,
+                new ToolRunnerOptions { MaxCapturedOutputChars = 128 });
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.True(result.Stdout.Length <= 128);
+            Assert.True(result.Stderr.Length <= 128);
+            Assert.Contains("output truncated", result.Stdout, StringComparison.Ordinal);
+            Assert.Contains("output truncated", result.Stderr, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.ToolRunner)]
+        public async Task ToolRunner_InvalidOutputCaptureLimit_Throws()
+        {
+            ProcessToolRunner runner = new();
+            ProbeInvocation probe = CreateProbeInvocation("inspect");
+
+            ArgumentOutOfRangeException error = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+                runner.RunAsync(
+                    probe.ExecutablePath,
+                    probe.Arguments,
+                    new ToolRunnerOptions { MaxCapturedOutputChars = 0 }));
+
+            Assert.Contains("MaxCapturedOutputChars", error.Message, StringComparison.Ordinal);
         }
 
         private static ProbeInvocation CreateProbeInvocation(params string[] probeArguments)

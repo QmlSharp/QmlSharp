@@ -123,6 +123,23 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
         }
 
         [Fact]
+        public async Task CompileFile_WithDefaultOutputDirectoryAndFailure_CleansTransientOutputDirectory()
+        {
+            using TemporaryQmlFile file = TemporaryQmlFile.Create("import QtQuick\nItem {\n");
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(1, string.Empty, "cachegen failed"));
+            global::QmlSharp.Qt.Tools.QmlCachegen cachegen = CreateCachegen(runner);
+
+            QmlCachegenResult result = await cachegen.CompileFileAsync(file.Path);
+
+            string outputFile = ValueAfter(runner.SingleCall.Args, "-o");
+            string? outputDirectory = Path.GetDirectoryName(outputFile);
+            Assert.False(result.Success);
+            Assert.NotNull(outputDirectory);
+            Assert.False(Directory.Exists(outputDirectory));
+        }
+
+        [Fact]
         public async Task QC003_CompileString_UsesTemporaryInputAndCleansItUp()
         {
             using TemporaryDirectory outputDirectory = TemporaryDirectory.Create();
@@ -138,6 +155,43 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
             Assert.True(result.Success);
             Assert.False(File.Exists(tempInput));
             Assert.EndsWith(".qml", tempInput, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task CompileString_WhenToolTimesOut_CleansInputAndTransientOutputDirectory()
+        {
+            MockToolRunner runner = new();
+            runner.Enqueue(new QtToolTimeoutError("qmlcachegen", TimeSpan.FromSeconds(1), string.Empty, "timeout"));
+            global::QmlSharp.Qt.Tools.QmlCachegen cachegen = CreateCachegen(runner);
+
+            _ = await Assert.ThrowsAsync<QtToolTimeoutError>(() =>
+                cachegen.CompileStringAsync("import QtQuick\nItem {}\n"));
+
+            string outputFile = ValueAfter(runner.SingleCall.Args, "-o");
+            string tempInput = runner.SingleCall.Args[^1];
+            string? outputDirectory = Path.GetDirectoryName(outputFile);
+            Assert.False(File.Exists(tempInput));
+            Assert.NotNull(outputDirectory);
+            Assert.False(Directory.Exists(outputDirectory));
+        }
+
+        [Fact]
+        public async Task CompileString_WhenCanceled_CleansInputAndTransientOutputDirectory()
+        {
+            MockToolRunner runner = new();
+            using CancellationTokenSource cts = new();
+            runner.Enqueue(new OperationCanceledException(cts.Token));
+            global::QmlSharp.Qt.Tools.QmlCachegen cachegen = CreateCachegen(runner);
+
+            _ = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+                cachegen.CompileStringAsync("import QtQuick\nItem {}\n", ct: cts.Token));
+
+            string outputFile = ValueAfter(runner.SingleCall.Args, "-o");
+            string tempInput = runner.SingleCall.Args[^1];
+            string? outputDirectory = Path.GetDirectoryName(outputFile);
+            Assert.False(File.Exists(tempInput));
+            Assert.NotNull(outputDirectory);
+            Assert.False(Directory.Exists(outputDirectory));
         }
 
         [Fact]
@@ -509,7 +563,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
 
         private sealed class MockToolRunner : IToolRunner
         {
-            private readonly Queue<ToolResult> _results = [];
+            private readonly Queue<object> _results = [];
             private readonly Func<RecordedCall, ToolResult>? _callback;
 
             public MockToolRunner()
@@ -530,6 +584,11 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
                 _results.Enqueue(result);
             }
 
+            public void Enqueue(Exception exception)
+            {
+                _results.Enqueue(exception);
+            }
+
             public Task<ToolResult> RunAsync(
                 string toolPath,
                 ImmutableArray<string> args,
@@ -544,7 +603,13 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
                     return Task.FromResult(_callback(call));
                 }
 
-                return Task.FromResult(_results.Dequeue());
+                object result = _results.Dequeue();
+                if (result is Exception exception)
+                {
+                    return Task.FromException<ToolResult>(exception);
+                }
+
+                return Task.FromResult((ToolResult)result);
             }
         }
 

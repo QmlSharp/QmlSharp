@@ -227,6 +227,46 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
         }
 
         [Fact]
+        [Trait("Category", TestCategories.Performance)]
+        public async Task Performance_DiscoverAsync_CachedResultAvoidsRepeatedFilesystemAndEnvironmentWork()
+        {
+            using TemporaryQtInstallation qt = TemporaryQtInstallation.Create(includeAllTools: true);
+            int environmentReads = 0;
+            int directoryChecks = 0;
+            int fileChecks = 0;
+            QtToolchain toolchain = new(
+                name =>
+                {
+                    environmentReads++;
+                    return name == QtToolsTestEnvironment.QtDirVariableName ? qt.RootDir : null;
+                },
+                path =>
+                {
+                    directoryChecks++;
+                    return Directory.Exists(path);
+                },
+                path =>
+                {
+                    fileChecks++;
+                    return File.Exists(path);
+                },
+                () => qt.RootDir);
+
+            QtInstallation first = await toolchain.DiscoverAsync();
+            int environmentReadsAfterWarmup = environmentReads;
+            int directoryChecksAfterWarmup = directoryChecks;
+            int fileChecksAfterWarmup = fileChecks;
+
+            QtInstallation second = await toolchain.DiscoverAsync(
+                new QtToolchainConfig { QtDir = Path.Join(Path.GetTempPath(), "should-not-be-read") });
+
+            Assert.Same(first, second);
+            Assert.Equal(environmentReadsAfterWarmup, environmentReads);
+            Assert.Equal(directoryChecksAfterWarmup, directoryChecks);
+            Assert.Equal(fileChecksAfterWarmup, fileChecks);
+        }
+
+        [Fact]
         public async Task DiscoverAsync_ReadsProjectConfigFile()
         {
             using TemporaryQtInstallation qt = TemporaryQtInstallation.Create(includeAllTools: true);

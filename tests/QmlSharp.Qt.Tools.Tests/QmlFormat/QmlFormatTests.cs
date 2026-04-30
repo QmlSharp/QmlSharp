@@ -56,6 +56,48 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormat
         }
 
         [Fact]
+        public async Task FormatString_WhenToolFails_CleansTemporaryFile()
+        {
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(2, string.Empty, "qmlformat failed"));
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
+
+            QmlFormatResult result = await formatter.FormatStringAsync("Item {");
+
+            string tempPath = runner.SingleCall.Args[^1];
+            Assert.False(result.Success);
+            Assert.False(File.Exists(tempPath));
+        }
+
+        [Fact]
+        public async Task FormatString_WhenToolTimesOut_CleansTemporaryFile()
+        {
+            MockToolRunner runner = new();
+            runner.Enqueue(new QtToolTimeoutError("qmlformat", TimeSpan.FromSeconds(1), string.Empty, "timeout"));
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
+
+            _ = await Assert.ThrowsAsync<QtToolTimeoutError>(() => formatter.FormatStringAsync("Item {}"));
+
+            string tempPath = runner.SingleCall.Args[^1];
+            Assert.False(File.Exists(tempPath));
+        }
+
+        [Fact]
+        public async Task FormatString_WhenCanceled_CleansTemporaryFile()
+        {
+            MockToolRunner runner = new();
+            using CancellationTokenSource cts = new();
+            runner.Enqueue(new OperationCanceledException(cts.Token));
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
+
+            _ = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+                formatter.FormatStringAsync("Item {}", ct: cts.Token));
+
+            string tempPath = runner.SingleCall.Args[^1];
+            Assert.False(File.Exists(tempPath));
+        }
+
+        [Fact]
         public async Task QF004_FormatString_WithIndentWidthTwo_PassesIndentWidthArgument()
         {
             MockToolRunner runner = new();
@@ -186,6 +228,36 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormat
             _ = await formatter.FormatFileAsync(file.Path, new QmlFormatOptions { IgnoreSettings = true });
 
             Assert.Contains("--ignore-settings", runner.SingleCall.Args);
+        }
+
+        [Fact]
+        public async Task FormatFile_WhenPathContainsSpaces_PassesPathAsSingleArgument()
+        {
+            string directory = Path.Join(
+                Path.GetTempPath(),
+                "qmlsharp qmlformat path " + Guid.NewGuid().ToString("N"));
+            string filePath = Path.Join(directory, "file with spaces.qml");
+            _ = Directory.CreateDirectory(directory);
+            File.WriteAllText(filePath, "Item{width:100}");
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(0, "Item {\n    width: 100\n}\n", string.Empty));
+            global::QmlSharp.Qt.Tools.QmlFormat formatter = CreateFormatter(runner);
+
+            try
+            {
+                QmlFormatResult result = await formatter.FormatFileAsync(filePath);
+
+                Assert.True(result.Success);
+                Assert.Equal(Path.GetFullPath(filePath), runner.SingleCall.Args[^1]);
+                Assert.Contains(" ", runner.SingleCall.Args[^1], StringComparison.Ordinal);
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, recursive: true);
+                }
+            }
         }
 
         [Fact]
@@ -415,7 +487,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormat
 
         private sealed class MockToolRunner : IToolRunner
         {
-            private readonly Queue<ToolResult> _results = [];
+            private readonly Queue<object> _results = [];
             private readonly Func<RecordedCall, ToolResult>? _callback;
 
             public MockToolRunner()
@@ -436,6 +508,11 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormat
                 _results.Enqueue(result);
             }
 
+            public void Enqueue(Exception exception)
+            {
+                _results.Enqueue(exception);
+            }
+
             public Task<ToolResult> RunAsync(
                 string toolPath,
                 ImmutableArray<string> args,
@@ -450,7 +527,13 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormat
                     return Task.FromResult(_callback(call));
                 }
 
-                return Task.FromResult(_results.Dequeue());
+                object result = _results.Dequeue();
+                if (result is Exception exception)
+                {
+                    return Task.FromException<ToolResult>(exception);
+                }
+
+                return Task.FromResult((ToolResult)result);
             }
         }
 

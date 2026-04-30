@@ -39,22 +39,46 @@ namespace QmlSharp.Qt.Tools
 
             string normalizedFilePath = Path.GetFullPath(filePath);
             QmlCachegenOptions effectiveOptions = options ?? new QmlCachegenOptions();
-            string outputDirectory = GetOrCreateOutputDirectory(effectiveOptions.OutputDir);
+            GeneratedOutputDirectory outputDirectory = GetOrCreateOutputDirectory(effectiveOptions.OutputDir);
             string resourcePath = CreateResourcePath(filePath);
-            string outputFile = CreateOutputFilePath(resourcePath, outputDirectory, effectiveOptions);
-            ToolInfo tool = await _toolchain.GetToolInfoAsync(ToolName, ct).ConfigureAwait(false);
-            ImmutableArray<string> args = BuildArguments(
-                normalizedFilePath,
-                outputFile,
-                resourcePath,
-                effectiveOptions,
-                _toolchain.Installation?.ImportPaths ?? []);
+            string outputFile = CreateOutputFilePath(resourcePath, outputDirectory.Path, effectiveOptions);
 
-            ToolResult toolResult = await _toolRunner
-                .RunAsync(tool.Path, args, new ToolRunnerOptions(), ct)
-                .ConfigureAwait(false);
+            try
+            {
+                ToolInfo tool = await _toolchain.GetToolInfoAsync(ToolName, ct).ConfigureAwait(false);
+                ImmutableArray<string> args = BuildArguments(
+                    normalizedFilePath,
+                    outputFile,
+                    resourcePath,
+                    effectiveOptions,
+                    _toolchain.Installation?.ImportPaths ?? []);
 
-            return CreateResult(toolResult, normalizedFilePath, outputFile, outputDirectory, filenameOverride: null);
+                ToolResult toolResult = await _toolRunner
+                    .RunAsync(tool.Path, args, new ToolRunnerOptions(), ct)
+                    .ConfigureAwait(false);
+
+                QmlCachegenResult result = CreateResult(
+                    toolResult,
+                    normalizedFilePath,
+                    outputFile,
+                    outputDirectory.Path,
+                    filenameOverride: null);
+                if (!result.Success && outputDirectory.OwnsDirectory)
+                {
+                    TryDeleteDirectory(outputDirectory.Path);
+                }
+
+                return result;
+            }
+            catch
+            {
+                if (outputDirectory.OwnsDirectory)
+                {
+                    TryDeleteDirectory(outputDirectory.Path);
+                }
+
+                throw;
+            }
         }
 
         /// <inheritdoc />
@@ -166,22 +190,46 @@ namespace QmlSharp.Qt.Tools
             CancellationToken ct)
         {
             QmlCachegenOptions effectiveOptions = options ?? new QmlCachegenOptions();
-            string outputDirectory = GetOrCreateOutputDirectory(effectiveOptions.OutputDir);
+            GeneratedOutputDirectory outputDirectory = GetOrCreateOutputDirectory(effectiveOptions.OutputDir);
             string resourcePath = CreateResourcePath(filePath);
-            string outputFile = CreateOutputFilePath(resourcePath, outputDirectory, effectiveOptions);
-            ToolInfo tool = await _toolchain.GetToolInfoAsync(ToolName, ct).ConfigureAwait(false);
-            ImmutableArray<string> args = BuildArguments(
-                filePath,
-                outputFile,
-                resourcePath,
-                effectiveOptions,
-                _toolchain.Installation?.ImportPaths ?? []);
+            string outputFile = CreateOutputFilePath(resourcePath, outputDirectory.Path, effectiveOptions);
 
-            ToolResult toolResult = await _toolRunner
-                .RunAsync(tool.Path, args, new ToolRunnerOptions(), ct)
-                .ConfigureAwait(false);
+            try
+            {
+                ToolInfo tool = await _toolchain.GetToolInfoAsync(ToolName, ct).ConfigureAwait(false);
+                ImmutableArray<string> args = BuildArguments(
+                    filePath,
+                    outputFile,
+                    resourcePath,
+                    effectiveOptions,
+                    _toolchain.Installation?.ImportPaths ?? []);
 
-            return CreateResult(toolResult, filePath, outputFile, outputDirectory, filenameOverride);
+                ToolResult toolResult = await _toolRunner
+                    .RunAsync(tool.Path, args, new ToolRunnerOptions(), ct)
+                    .ConfigureAwait(false);
+
+                QmlCachegenResult result = CreateResult(
+                    toolResult,
+                    filePath,
+                    outputFile,
+                    outputDirectory.Path,
+                    filenameOverride);
+                if (!result.Success && outputDirectory.OwnsDirectory)
+                {
+                    TryDeleteDirectory(outputDirectory.Path);
+                }
+
+                return result;
+            }
+            catch
+            {
+                if (outputDirectory.OwnsDirectory)
+                {
+                    TryDeleteDirectory(outputDirectory.Path);
+                }
+
+                throw;
+            }
         }
 
         private QmlCachegenResult CreateResult(
@@ -430,13 +478,14 @@ namespace QmlSharp.Qt.Tools
                 .FirstOrDefault(static line => line.Length > 0);
         }
 
-        private static string GetOrCreateOutputDirectory(string? outputDir)
+        private static GeneratedOutputDirectory GetOrCreateOutputDirectory(string? outputDir)
         {
-            string directory = string.IsNullOrWhiteSpace(outputDir)
+            bool ownsDirectory = string.IsNullOrWhiteSpace(outputDir);
+            string directory = ownsDirectory
                 ? Path.Join(Path.GetTempPath(), "qmlsharp-qmlcachegen-out-" + Guid.NewGuid().ToString("N"))
-                : Path.GetFullPath(outputDir);
+                : Path.GetFullPath(outputDir!);
             _ = Directory.CreateDirectory(directory);
-            return directory;
+            return new GeneratedOutputDirectory(directory, ownsDirectory);
         }
 
         internal static string CreateOutputFilePath(
@@ -578,11 +627,32 @@ namespace QmlSharp.Qt.Tools
             }
         }
 
+        private static void TryDeleteDirectory(string path)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: true);
+                }
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup for transient default qmlcachegen outputs.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Best-effort cleanup for transient default qmlcachegen outputs.
+            }
+        }
+
         private sealed class AotAccumulator
         {
             public int TotalFunctions { get; set; }
 
             public int CompiledFunctions { get; set; }
         }
+
+        private sealed record GeneratedOutputDirectory(string Path, bool OwnsDirectory);
     }
 }

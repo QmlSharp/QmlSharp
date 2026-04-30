@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 
 namespace QmlSharp.Qt.Tools.ProcessProbe
 {
@@ -25,6 +27,15 @@ namespace QmlSharp.Qt.Tools.ProcessProbe
 
                 case "exit":
                     return Exit(commandArgs);
+
+                case "spawn-child-sleep":
+                    return await SpawnChildSleepAsync(commandArgs).ConfigureAwait(false);
+
+                case "delayed-write":
+                    return await DelayedWriteAsync(commandArgs).ConfigureAwait(false);
+
+                case "large-output":
+                    return LargeOutput(commandArgs);
 
                 default:
                     Console.Error.WriteLine($"unknown command: {command}");
@@ -69,6 +80,75 @@ namespace QmlSharp.Qt.Tools.ProcessProbe
             Console.WriteLine("stdout-exit");
             Console.Error.WriteLine("stderr-exit");
             return exitCode;
+        }
+
+        private static async Task<int> SpawnChildSleepAsync(string[] args)
+        {
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine("spawn-child-sleep requires marker path and delay milliseconds");
+                return 64;
+            }
+
+            string markerPath = args[0];
+            string delayMilliseconds = args[1];
+            using Process child = Process.Start(CreateChildStartInfo("delayed-write", markerPath, delayMilliseconds))
+                ?? throw new InvalidOperationException("Failed to start child process.");
+            Console.WriteLine("stdout-before-wait");
+            Console.Error.WriteLine("stderr-before-wait");
+            Console.WriteLine($"child-pid={child.Id}");
+            await Console.Out.FlushAsync().ConfigureAwait(false);
+            await Console.Error.FlushAsync().ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+            return 0;
+        }
+
+        private static async Task<int> DelayedWriteAsync(string[] args)
+        {
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine("delayed-write requires marker path and delay milliseconds");
+                return 64;
+            }
+
+            string markerPath = args[0];
+            int milliseconds = int.Parse(args[1], CultureInfo.InvariantCulture);
+            await Task.Delay(milliseconds).ConfigureAwait(false);
+            await File.WriteAllTextAsync(markerPath, "child survived").ConfigureAwait(false);
+            return 0;
+        }
+
+        private static int LargeOutput(string[] args)
+        {
+            int length = args.Length > 0 ? int.Parse(args[0], CultureInfo.InvariantCulture) : 100_000;
+            Console.Write(new string('o', length));
+            Console.Error.Write(new string('e', length));
+            return 0;
+        }
+
+        private static ProcessStartInfo CreateChildStartInfo(params string[] args)
+        {
+            string processPath = Environment.ProcessPath
+                ?? throw new InvalidOperationException("Process path is unavailable.");
+            string assemblyPath = Assembly.GetExecutingAssembly().Location;
+            ProcessStartInfo startInfo = new()
+            {
+                FileName = processPath,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            if (Path.GetFileNameWithoutExtension(processPath).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            {
+                startInfo.ArgumentList.Add(assemblyPath);
+            }
+
+            foreach (string arg in args)
+            {
+                startInfo.ArgumentList.Add(arg);
+            }
+
+            return startInfo;
         }
     }
 }
