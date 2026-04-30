@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Dsl</AssemblyName>
+    <RootNamespace>QmlSharp.Dsl</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QmlSharp.Core\QmlSharp.Core.csproj" />
+    <ProjectReference Include="..\QmlSharp.Qml.Ast\QmlSharp.Qml.Ast.csproj" />
+  </ItemGroup>
+</Project>

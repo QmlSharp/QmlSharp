@@ -6,6 +6,8 @@
   </Configurations>
   <Folder Name="/src/">
     <Project Path="src/QmlSharp.Core/QmlSharp.Core.csproj" />
+    <Project Path="src/QmlSharp.Dsl.Generator/QmlSharp.Dsl.Generator.csproj" />
+    <Project Path="src/QmlSharp.Dsl/QmlSharp.Dsl.csproj" />
     <Project Path="src/QmlSharp.Qml.Ast/QmlSharp.Qml.Ast.csproj" />
     <Project Path="src/QmlSharp.Qml.Emitter/QmlSharp.Qml.Emitter.csproj" />
     <Project Path="src/QmlSharp.Qt.Tools/QmlSharp.Qt.Tools.csproj" />
@@ -16,6 +18,8 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/QmlSharp.Qt.Tools.ProcessProbe/QmlSharp.Qt.Tools.ProcessProbe.csproj" />
+    <Project Path="tests/QmlSharp.Dsl.Generator.Tests/QmlSharp.Dsl.Generator.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Dsl.Tests/QmlSharp.Dsl.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qml.Ast.Tests/QmlSharp.Qml.Ast.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qml.Emitter.Tests/QmlSharp.Qml.Emitter.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qt.Tools.Tests/QmlSharp.Qt.Tools.Tests.csproj" />
