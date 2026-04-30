@@ -61,7 +61,8 @@ code.
 
 Module step audits, parity notes, and final-gate traceability live in PR descriptions or
 linked GitHub issues. The implementation repository does not keep a committed root `docs/`
-tree for these records.
+tree for these records. Later implementation reviews should treat the relevant step audit
+PR body or linked issue as the review contract for that wave.
 
 ## Local quality workflow
 
