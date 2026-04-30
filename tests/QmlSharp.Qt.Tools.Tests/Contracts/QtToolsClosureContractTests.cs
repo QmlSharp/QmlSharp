@@ -253,7 +253,7 @@ namespace QmlSharp.Qt.Tools.Tests.Contracts
             Assert.Equal(96, InvokeStatic<string>(cachegenType, "CreateOutputStem", new string('a', 120)).Length);
 
             Type diagnosticParserType = typeof(QtDiagnosticParser);
-            Assert.Equal(DiagnosticSeverity.Warning, InvokeStatic<DiagnosticSeverity>(diagnosticParserType, "MapSeverity", (string?)null));
+            Assert.Equal(DiagnosticSeverity.Warning, InvokeStatic<DiagnosticSeverity>(diagnosticParserType, "MapSeverity", new object?[] { null }));
             Assert.Equal(DiagnosticSeverity.Warning, InvokeStatic<DiagnosticSeverity>(diagnosticParserType, "MapSeverity", " "));
             Assert.Equal(DiagnosticSeverity.Error, InvokeStatic<DiagnosticSeverity>(diagnosticParserType, "MapSeverity", "fatal"));
             Assert.Equal(DiagnosticSeverity.Error, InvokeStatic<DiagnosticSeverity>(diagnosticParserType, "MapSeverity", "critical"));
@@ -267,7 +267,7 @@ namespace QmlSharp.Qt.Tools.Tests.Contracts
             Assert.False(InvokeStatic<bool>(diagnosticParserType, "IsDecimal", string.Empty));
 
             Type formatType = typeof(global::QmlSharp.Qt.Tools.QmlFormat);
-            Assert.Null(InvokeStatic<string?>(formatType, "MapSemicolonRule", (string?)null));
+            Assert.Null(InvokeStatic<string?>(formatType, "MapSemicolonRule", new object?[] { null }));
             Assert.Null(InvokeStatic<string?>(formatType, "MapSemicolonRule", "preserve"));
             Assert.Equal("always", InvokeStatic<string?>(formatType, "MapSemicolonRule", "add"));
             Assert.Equal("always", InvokeStatic<string?>(formatType, "MapSemicolonRule", "always"));
