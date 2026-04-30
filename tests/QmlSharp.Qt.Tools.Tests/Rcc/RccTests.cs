@@ -127,6 +127,21 @@ namespace QmlSharp.Qt.Tools.Tests.Rcc
         }
 
         [Fact]
+        public async Task CompileAsync_WithBinaryAndPythonOutput_ThrowsWithoutRunningRcc()
+        {
+            MockToolRunner runner = new();
+            global::QmlSharp.Qt.Tools.Rcc rcc = CreateRcc(runner);
+
+            ArgumentException error = await Assert.ThrowsAsync<ArgumentException>(() =>
+                rcc.CompileAsync(
+                    FixturePath("resources", "test.qrc"),
+                    new RccOptions { BinaryMode = true, PythonOutput = true }));
+
+            Assert.Equal("options", error.ParamName);
+            Assert.Empty(runner.RecordedCalls);
+        }
+
+        [Fact]
         public async Task CompileAsync_NonZeroExitWithoutParseableStderr_ReturnsFallbackDiagnostic()
         {
             MockToolRunner runner = new();

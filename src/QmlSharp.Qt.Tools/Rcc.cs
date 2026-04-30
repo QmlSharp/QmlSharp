@@ -119,6 +119,13 @@ namespace QmlSharp.Qt.Tools
             ArgumentException.ThrowIfNullOrWhiteSpace(qrcFilePath);
             ArgumentNullException.ThrowIfNull(options);
 
+            if (options.BinaryMode && options.PythonOutput)
+            {
+                throw new ArgumentException(
+                    "RccOptions.BinaryMode and RccOptions.PythonOutput cannot both be enabled.",
+                    nameof(options));
+            }
+
             ImmutableArray<string>.Builder args = ImmutableArray.CreateBuilder<string>();
 
             if (!string.IsNullOrWhiteSpace(outputFile))
@@ -155,9 +162,8 @@ namespace QmlSharp.Qt.Tools
             }
 
             ImmutableArray<RccMapping>.Builder mappings = ImmutableArray.CreateBuilder<RccMapping>();
-            foreach (string line in SplitLines(stdout))
+            foreach (string trimmedLine in SplitLines(stdout).Select(static line => line.Trim()))
             {
-                string trimmedLine = line.Trim();
                 if (trimmedLine.Length == 0)
                 {
                     continue;
