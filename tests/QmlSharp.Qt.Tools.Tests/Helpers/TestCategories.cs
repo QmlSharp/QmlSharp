@@ -13,6 +13,7 @@ namespace QmlSharp.Qt.Tools.Tests.Helpers
         public const string Qmltc = "Qmltc";
         public const string QmlImportScanner = "QmlImportScanner";
         public const string QmlDom = "QmlDom";
+        public const string QmlRunner = "QmlRunner";
         public const string RequiresQt = "RequiresQt";
     }
 }
