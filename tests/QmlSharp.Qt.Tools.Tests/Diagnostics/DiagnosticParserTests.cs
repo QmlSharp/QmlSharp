@@ -182,7 +182,107 @@ namespace QmlSharp.Qt.Tools.Tests.Diagnostics
         {
             Assert.Empty(parser.ParseJson("{ not json"));
             Assert.Empty(parser.ParseJson("""{"unexpected":true}"""));
+            Assert.Empty(parser.ParseJson("42"));
             Assert.Empty(parser.ParseStderr("this is not a diagnostic"));
+        }
+
+        [Fact]
+        public void DiagnosticParser_ParsesTopLevelDiagnosticArraysAndScalarFields()
+        {
+            string json = """
+                [
+                  {
+                    "diagnostics": [
+                      {
+                        "file": "diagnostics.qml",
+                        "line": "7",
+                        "column": "3",
+                        "level": "information",
+                        "text": "from diagnostics",
+                        "code": 42,
+                        "suggestion": "use an id"
+                      }
+                    ]
+                  },
+                  {
+                    "warnings": [
+                      {
+                        "path": "warnings.qml",
+                        "severity": "critical",
+                        "description": "from warnings",
+                        "id": true
+                      }
+                    ]
+                  }
+                ]
+                """;
+
+            ImmutableArray<QtDiagnostic> diagnostics = parser.ParseJson(json);
+
+            Assert.Equal(2, diagnostics.Length);
+            Assert.Equal("diagnostics.qml", diagnostics[0].File);
+            Assert.Equal(7, diagnostics[0].Line);
+            Assert.Equal(3, diagnostics[0].Column);
+            Assert.Equal(DiagnosticSeverity.Info, diagnostics[0].Severity);
+            Assert.Equal("42", diagnostics[0].Category);
+            Assert.Equal("use an id", diagnostics[0].Suggestion);
+            Assert.Equal(DiagnosticSeverity.Error, diagnostics[1].Severity);
+            Assert.Equal(bool.TrueString, diagnostics[1].Category);
+        }
+
+        [Fact]
+        public void DiagnosticParser_ParsesFileMessagesAndSuggestionVariants()
+        {
+            string json = """
+                {
+                  "files": [
+                    {
+                      "path": "messages.qml",
+                      "messages": [
+                        {
+                          "message": "string suggestion",
+                          "type": "note",
+                          "suggestions": ["apply string suggestion"]
+                        },
+                        {
+                          "message": "object suggestion",
+                          "type": "off",
+                          "suggestions": [
+                            123,
+                            { "replacement": "replacement text" }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """;
+
+            ImmutableArray<QtDiagnostic> diagnostics = parser.ParseJson(json);
+
+            Assert.Equal(2, diagnostics.Length);
+            Assert.All(diagnostics, static diagnostic => Assert.Equal("messages.qml", diagnostic.File));
+            Assert.Equal(DiagnosticSeverity.Hint, diagnostics[0].Severity);
+            Assert.Equal("apply string suggestion", diagnostics[0].Suggestion);
+            Assert.Equal(DiagnosticSeverity.Disabled, diagnostics[1].Severity);
+            Assert.Equal("replacement text", diagnostics[1].Suggestion);
+        }
+
+        [Fact]
+        public void DiagnosticParser_AppendsIndentedStderrContinuationToPreviousDiagnostic()
+        {
+            string stderr = string.Join(
+                "\n",
+                "main.qml:1:1: warning: first line",
+                "  continuation line",
+                "[Dom] warning: bracketed diagnostic",
+                "  bracket continuation");
+
+            ImmutableArray<QtDiagnostic> diagnostics = parser.ParseStderr(stderr);
+
+            Assert.Equal(2, diagnostics.Length);
+            Assert.Equal("first line" + Environment.NewLine + "continuation line", diagnostics[0].Message);
+            Assert.Equal("bracketed diagnostic" + Environment.NewLine + "bracket continuation", diagnostics[1].Message);
         }
 
         [Theory]

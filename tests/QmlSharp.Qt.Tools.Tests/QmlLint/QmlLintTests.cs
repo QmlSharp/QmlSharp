@@ -391,6 +391,90 @@ namespace QmlSharp.Qt.Tools.Tests.QmlLint
         }
 
         [Fact]
+        public async Task LintFile_WhenToolFailsWithoutDiagnostics_CreatesFallbackDiagnostic()
+        {
+            using TemporaryQmlFile file = TemporaryQmlFile.Create("Item {}\n");
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(2, "stdout fallback", "stderr fallback"));
+            global::QmlSharp.Qt.Tools.QmlLint linter = CreateLinter(runner);
+
+            QmlLintResult result = await linter.LintFileAsync(file.Path);
+
+            QtDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(Path.GetFullPath(file.Path), diagnostic.File);
+            Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Equal("stderr fallback", diagnostic.Message);
+            Assert.False(result.Success);
+        }
+
+        [Fact]
+        public async Task LintBatch_WhenJsonIsInvalid_FallsBackToPerFileExecution()
+        {
+            using TemporaryQmlFile first = TemporaryQmlFile.Create("Item {}\n");
+            using TemporaryQmlFile second = TemporaryQmlFile.Create("Item {}\n");
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(1, "{ not json", string.Empty));
+            runner.Enqueue(CreateToolResult(0, CreateJson(first.Path, success: true, []), string.Empty));
+            runner.Enqueue(CreateToolResult(0, CreateJson(second.Path, success: true, []), string.Empty));
+            global::QmlSharp.Qt.Tools.QmlLint linter = CreateLinter(runner);
+
+            ImmutableArray<QmlLintResult> results = await linter.LintBatchAsync([first.Path, second.Path]);
+
+            Assert.Equal(2, results.Length);
+            Assert.All(results, static result => Assert.True(result.Success));
+            Assert.Equal(3, runner.RecordedCalls.Count);
+            Assert.Equal([Path.GetFullPath(first.Path), Path.GetFullPath(second.Path)], runner.RecordedCalls[0].Args.TakeLast(2).ToArray());
+            Assert.Equal(Path.GetFullPath(first.Path), Assert.Single(runner.RecordedCalls[1].Args.TakeLast(1)));
+            Assert.Equal(Path.GetFullPath(second.Path), Assert.Single(runner.RecordedCalls[2].Args.TakeLast(1)));
+        }
+
+        [Fact]
+        public async Task ListPlugins_UsesStderrWhenQtReportsPluginListThere()
+        {
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(
+                0,
+                "ignored stdout",
+                "Plugin list:\n- heading\nQtQmlModels enabled\nQtQuick enabled\nQtQuick duplicate\n"));
+            global::QmlSharp.Qt.Tools.QmlLint linter = CreateLinter(runner);
+
+            ImmutableArray<string> plugins = await linter.ListPluginsAsync();
+
+            Assert.Equal(["QtQmlModels", "QtQuick"], plugins.ToArray());
+        }
+
+        [Fact]
+        public void BuildArguments_WithBlankFilePath_Throws()
+        {
+            ArgumentException error = Assert.Throws<ArgumentException>(() =>
+                global::QmlSharp.Qt.Tools.QmlLint.BuildArguments(
+                    ["  "],
+                    new QmlLintOptions(),
+                    moduleMode: false,
+                    toolchainImportPaths: []));
+
+            Assert.Equal("filePaths", error.ParamName);
+        }
+
+        [Fact]
+        public void BuildArguments_WithUnknownWarningSeverity_DefaultsToWarning()
+        {
+            ImmutableArray<string> args = global::QmlSharp.Qt.Tools.QmlLint.BuildArguments(
+                ["Main.qml"],
+                new QmlLintOptions
+                {
+                    WarningLevels = new Dictionary<QmlLintCategory, DiagnosticSeverity>
+                    {
+                        [QmlLintCategory.UnusedImports] = (DiagnosticSeverity)999,
+                    }.ToImmutableDictionary(),
+                },
+                moduleMode: false,
+                toolchainImportPaths: []);
+
+            AssertOptionValue(args, "--unused-imports", "warning");
+        }
+
+        [Fact]
         public async Task QL004B_LintString_WithJsonDisabled_RewritesStderrDiagnosticsToStringPath()
         {
             MockToolRunner runner = new(static call =>

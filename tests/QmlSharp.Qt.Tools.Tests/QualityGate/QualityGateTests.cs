@@ -295,6 +295,90 @@ namespace QmlSharp.Qt.Tools.Tests.QualityGate
             _ = Assert.Single(tools.Cachegen.FileCalls);
         }
 
+        [Fact]
+        public async Task RunString_WhenSyntaxFails_RewritesTempDiagnosticsToStringInput()
+        {
+            FakeTools tools = FakeTools.Create();
+            tools.Format.Enqueue(filePath => FormatResult(
+                success: false,
+                durationMs: 2,
+                diagnostics: [Diagnostic(filePath, "syntax failed")]));
+            global::QmlSharp.Qt.Tools.QualityGate gate = tools.CreateGate();
+
+            QualityGateResult result = await gate.RunStringAsync("import QtQuick\nItem {\n", QualityGateLevel.Syntax);
+
+            Assert.False(result.Passed);
+            QtDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("<string>", diagnostic.File);
+            Assert.Equal("<string>", Assert.Single(result.LevelDiagnostics[QualityGateLevel.Syntax]).File);
+            Assert.False(File.Exists(Assert.Single(tools.Format.FileCalls)));
+        }
+
+        [Fact]
+        public async Task RunBatch_WithEmptyInput_ReturnsSuccessfulNoOpResult()
+        {
+            FakeTools tools = FakeTools.Create();
+            global::QmlSharp.Qt.Tools.QualityGate gate = tools.CreateGate();
+
+            QualityGateResult result = await gate.RunBatchAsync([], QualityGateLevel.Full);
+
+            Assert.True(result.Passed);
+            Assert.Equal(QualityGateLevel.Full, result.CompletedLevel);
+            Assert.Equal(0, result.TotalDurationMs);
+            Assert.Empty(result.FileResults);
+            Assert.Empty(tools.Format.FileCalls);
+        }
+
+        [Fact]
+        public async Task RunBatch_WithBlankFilePath_ThrowsBeforeToolExecution()
+        {
+            FakeTools tools = FakeTools.Create();
+            global::QmlSharp.Qt.Tools.QualityGate gate = tools.CreateGate();
+
+            ArgumentException error = await Assert.ThrowsAsync<ArgumentException>(
+                () => gate.RunBatchAsync(["  "], QualityGateLevel.Syntax));
+
+            Assert.Equal("filePaths", error.ParamName);
+            Assert.Empty(tools.Format.FileCalls);
+        }
+
+        [Fact]
+        public async Task RunAsync_WithUnknownLevel_ThrowsBeforeToolExecution()
+        {
+            using TemporaryQmlFile file = TemporaryQmlFile.Create("Item {}\n");
+            FakeTools tools = FakeTools.Create();
+            global::QmlSharp.Qt.Tools.QualityGate gate = tools.CreateGate();
+
+            ArgumentOutOfRangeException error = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => gate.RunAsync(file.Path, (QualityGateLevel)999));
+
+            Assert.Equal("level", error.ParamName);
+            Assert.Empty(tools.Format.FileCalls);
+        }
+
+        [Fact]
+        public void Constructor_WithNullWrapper_ThrowsArgumentNullException()
+        {
+            FakeTools tools = FakeTools.Create();
+
+            Assert.Equal(
+                "qmlFormat",
+                Assert.Throws<ArgumentNullException>(() =>
+                    new global::QmlSharp.Qt.Tools.QualityGate(null!, tools.Lint, tools.Cachegen, tools.Runner)).ParamName);
+            Assert.Equal(
+                "qmlLint",
+                Assert.Throws<ArgumentNullException>(() =>
+                    new global::QmlSharp.Qt.Tools.QualityGate(tools.Format, null!, tools.Cachegen, tools.Runner)).ParamName);
+            Assert.Equal(
+                "qmlCachegen",
+                Assert.Throws<ArgumentNullException>(() =>
+                    new global::QmlSharp.Qt.Tools.QualityGate(tools.Format, tools.Lint, null!, tools.Runner)).ParamName);
+            Assert.Equal(
+                "qmlRunner",
+                Assert.Throws<ArgumentNullException>(() =>
+                    new global::QmlSharp.Qt.Tools.QualityGate(tools.Format, tools.Lint, tools.Cachegen, null!)).ParamName);
+        }
+
         [RequiresQtFact("qmlformat")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QualityGate_SyntaxLevel_RunsRealTool()
@@ -469,13 +553,18 @@ namespace QmlSharp.Qt.Tools.Tests.QualityGate
 
         private sealed class FakeQmlFormat : IQmlFormat
         {
-            private readonly Queue<QmlFormatResult> _results = [];
+            private readonly Queue<Func<string, QmlFormatResult>> _results = [];
 
             public List<string> FileCalls { get; } = [];
 
             public void Enqueue(QmlFormatResult result)
             {
-                _results.Enqueue(result);
+                _results.Enqueue(_ => result);
+            }
+
+            public void Enqueue(Func<string, QmlFormatResult> resultFactory)
+            {
+                _results.Enqueue(resultFactory);
             }
 
             public Task<QmlFormatResult> FormatFileAsync(
@@ -484,7 +573,7 @@ namespace QmlSharp.Qt.Tools.Tests.QualityGate
                 CancellationToken ct = default)
             {
                 FileCalls.Add(filePath);
-                return Task.FromResult(_results.Dequeue());
+                return Task.FromResult(_results.Dequeue()(filePath));
             }
 
             public Task<QmlFormatResult> FormatStringAsync(
