@@ -153,6 +153,9 @@ namespace QmlSharp.Qt.Tools
         /// <summary>QML application type.</summary>
         public QmlAppType AppType { get; init; } = QmlAppType.Auto;
 
+        /// <summary>Additional QML import paths.</summary>
+        public ImmutableArray<string> ImportPaths { get; init; } = [];
+
         /// <summary>Timeout for the running process.</summary>
         public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(5);
 

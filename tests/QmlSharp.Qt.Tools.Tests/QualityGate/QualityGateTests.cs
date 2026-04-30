@@ -127,6 +127,28 @@ namespace QmlSharp.Qt.Tools.Tests.QualityGate
         }
 
         [Fact]
+        public async Task QG006B_FullLevel_PassesImportPathsToRunner()
+        {
+            using TemporaryQmlFile file = TemporaryQmlFile.Create("import ProjectModule\nItem {}\n");
+            FakeTools tools = FakeTools.Create();
+            tools.Format.Enqueue(FormatResult(success: true, durationMs: 2));
+            tools.Lint.Enqueue(LintResult(durationMs: 3));
+            tools.Cachegen.Enqueue(CachegenResult(success: true, durationMs: 4));
+            tools.Runner.Enqueue(RunResult(passed: true, durationMs: 5));
+            global::QmlSharp.Qt.Tools.QualityGate gate = tools.CreateGate();
+
+            QualityGateResult result = await gate.RunAsync(
+                file.Path,
+                QualityGateLevel.Full,
+                new QualityGateOptions { ImportPaths = [@"C:\project-qml"] });
+
+            Assert.True(result.Passed);
+            Assert.Equal(@"C:\project-qml", Assert.Single(tools.Lint.OptionsCalls).ImportPaths.Single());
+            Assert.Equal(@"C:\project-qml", Assert.Single(tools.Cachegen.OptionsCalls).ImportPaths.Single());
+            Assert.Equal(@"C:\project-qml", Assert.Single(tools.Runner.OptionsCalls).ImportPaths.Single());
+        }
+
+        [Fact]
         public async Task QG007_RunString_UsesOneTemporaryFileAndCleansItUp()
         {
             FakeTools tools = FakeTools.Create();
@@ -586,6 +608,8 @@ namespace QmlSharp.Qt.Tools.Tests.QualityGate
 
             public List<string> FileCalls { get; } = [];
 
+            public List<QmlRunOptions> OptionsCalls { get; } = [];
+
             public void Enqueue(QmlRunResult result)
             {
                 _results.Enqueue(result);
@@ -597,6 +621,7 @@ namespace QmlSharp.Qt.Tools.Tests.QualityGate
                 CancellationToken ct = default)
             {
                 FileCalls.Add(filePath);
+                OptionsCalls.Add(options ?? new QmlRunOptions());
                 return Task.FromResult(_results.Dequeue());
             }
 

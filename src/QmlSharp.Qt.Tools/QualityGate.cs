@@ -170,7 +170,7 @@ namespace QmlSharp.Qt.Tools
                 QualityGateLevel.Syntax => await RunSyntaxAsync(filePath, ct).ConfigureAwait(false),
                 QualityGateLevel.Lint => await RunLintAsync(filePath, options, ct).ConfigureAwait(false),
                 QualityGateLevel.Compile => await RunCompileAsync(filePath, options, ct).ConfigureAwait(false),
-                QualityGateLevel.Full => await RunFullAsync(filePath, ct).ConfigureAwait(false),
+                QualityGateLevel.Full => await RunFullAsync(filePath, options, ct).ConfigureAwait(false),
                 _ => throw new ArgumentOutOfRangeException(nameof(level), level, "Unknown quality gate level."),
             };
         }
@@ -222,9 +222,14 @@ namespace QmlSharp.Qt.Tools
             }
         }
 
-        private async Task<StageResult> RunFullAsync(string filePath, CancellationToken ct)
+        private async Task<StageResult> RunFullAsync(
+            string filePath,
+            QualityGateOptions options,
+            CancellationToken ct)
         {
-            QmlRunResult result = await _qmlRunner.RunFileAsync(filePath, ct: ct).ConfigureAwait(false);
+            QmlRunResult result = await _qmlRunner
+                .RunFileAsync(filePath, new QmlRunOptions { ImportPaths = options.ImportPaths }, ct)
+                .ConfigureAwait(false);
             return new StageResult(result.Passed, result.RuntimeErrors, NormalizeDuration(result.ToolResult.DurationMs));
         }
 

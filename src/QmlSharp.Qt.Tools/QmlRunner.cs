@@ -119,6 +119,7 @@ namespace QmlSharp.Qt.Tools
 
             ImmutableArray<string>.Builder args = ImmutableArray.CreateBuilder<string>();
             AddImportPaths(args, toolchainImportPaths);
+            AddImportPaths(args, options.ImportPaths);
             AddAppType(args, options.AppType);
 
             if (!string.IsNullOrWhiteSpace(options.Platform))

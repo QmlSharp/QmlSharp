@@ -203,6 +203,27 @@ namespace QmlSharp.Qt.Tools.Tests.QmlRunner
             AssertOptionValue(runner.SingleCall.Args, "-I", importPath);
         }
 
+        [Fact]
+        public async Task RunFile_WithOptionImportPaths_PassesImportDirectoryArguments()
+        {
+            using TemporaryQmlFile file = TemporaryQmlFile.Create("import QtQuick\nItem {}\n");
+            string importPath = Path.Join(Path.GetTempPath(), "qmlsharp-option-imports");
+            MockToolRunner runner = new();
+            runner.Enqueue(CreateToolResult(0, string.Empty, string.Empty));
+            global::QmlSharp.Qt.Tools.QmlRunner qmlRunner = CreateRunner(runner);
+
+            _ = await qmlRunner.RunFileAsync(
+                file.Path,
+                new QmlRunOptions
+                {
+                    ImportPaths = [importPath],
+                    StableRunPeriod = TimeSpan.FromSeconds(2),
+                    Timeout = TimeSpan.FromSeconds(2),
+                });
+
+            AssertOptionValue(runner.SingleCall.Args, "-I", importPath);
+        }
+
         [RequiresQtFact]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlRunner_SmokeRunsWindowOffscreen()
