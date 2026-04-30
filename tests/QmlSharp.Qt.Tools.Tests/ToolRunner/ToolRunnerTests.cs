@@ -217,6 +217,25 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
 
         [Fact]
         [Trait("Category", TestCategories.ToolRunner)]
+        public async Task ToolRunner_OutputCapture_AtExactLimit_IsNotMarkedAsTruncated()
+        {
+            ProcessToolRunner runner = new();
+            ProbeInvocation probe = CreateProbeInvocation("large-output", "128");
+
+            ToolResult result = await runner.RunAsync(
+                probe.ExecutablePath,
+                probe.Arguments,
+                new ToolRunnerOptions { MaxCapturedOutputChars = 128 });
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(new string('o', 128), result.Stdout);
+            Assert.Equal(new string('e', 128), result.Stderr);
+            Assert.DoesNotContain("output truncated", result.Stdout, StringComparison.Ordinal);
+            Assert.DoesNotContain("output truncated", result.Stderr, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.ToolRunner)]
         public async Task ToolRunner_InvalidOutputCaptureLimit_Throws()
         {
             ProcessToolRunner runner = new();

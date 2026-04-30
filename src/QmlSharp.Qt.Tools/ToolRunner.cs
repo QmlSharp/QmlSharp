@@ -238,7 +238,7 @@ namespace QmlSharp.Qt.Tools
                     builder.Append(buffer, 0, count);
                 }
 
-                if (read > remaining || builder.Length >= maxCapturedOutputChars)
+                if (read > remaining)
                 {
                     truncated = true;
                 }
