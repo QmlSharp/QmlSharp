@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
+using System.Text;
 using QmlSharp.Qt.Tools.Tests.Helpers;
 
 namespace QmlSharp.Qt.Tools.Tests.Diagnostics
@@ -230,6 +232,41 @@ namespace QmlSharp.Qt.Tools.Tests.Diagnostics
             QtDiagnostic diagnostic = Assert.Single(diagnostics);
             Assert.Equal("future-category", diagnostic.Category);
             Assert.False(QmlLintCategoryExtensions.TryParseCliName(diagnostic.Category, out QmlLintCategory _));
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Performance)]
+        public void Performance_ParseJson_HandlesLargeDiagnosticPayloadWithLinearBudget()
+        {
+            string json = CreateLargeQmlLintJson(diagnosticCount: 1_000);
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            ImmutableArray<QtDiagnostic> diagnostics = parser.ParseJson(json);
+
+            stopwatch.Stop();
+            Assert.Equal(1_000, diagnostics.Length);
+            Assert.True(
+                stopwatch.Elapsed < TimeSpan.FromSeconds(2),
+                $"Expected parser to handle 1,000 diagnostics within a generous CI budget, actual: {stopwatch.Elapsed}.");
+        }
+
+        private static string CreateLargeQmlLintJson(int diagnosticCount)
+        {
+            StringBuilder builder = new();
+            _ = builder.Append("""{"files":[{"filename":"large.qml","warnings":[""");
+            for (int index = 0; index < diagnosticCount; index++)
+            {
+                if (index > 0)
+                {
+                    _ = builder.Append(',');
+                }
+
+                _ = builder.Append(
+                    $$"""{"line":{{index + 1}},"column":1,"type":"warning","message":"warning {{index}}","id":"unqualified"}""");
+            }
+
+            _ = builder.Append("]}]}");
+            return builder.ToString();
         }
 
         private static string ReadFixture(string fileName)

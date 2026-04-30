@@ -201,6 +201,9 @@ namespace QmlSharp.Qt.Tools
     /// <summary>Options for tool runner process execution.</summary>
     public sealed record ToolRunnerOptions
     {
+        /// <summary>Maximum stdout or stderr characters retained per stream.</summary>
+        public int MaxCapturedOutputChars { get; init; } = 1_048_576;
+
         /// <summary>Timeout for the process.</summary>
         public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(30);
 

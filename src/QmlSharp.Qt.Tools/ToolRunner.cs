@@ -1,10 +1,13 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace QmlSharp.Qt.Tools
 {
     /// <summary>Default process-backed implementation of <see cref="IToolRunner"/>.</summary>
     public sealed class ToolRunner : IToolRunner
     {
+        private const string OutputTruncatedMarker = "\n[... output truncated by QmlSharp.Qt.Tools ...]";
+
         /// <inheritdoc />
         public async Task<ToolResult> RunAsync(
             string toolPath,
@@ -21,6 +24,14 @@ namespace QmlSharp.Qt.Tools
                     nameof(options),
                     effectiveOptions.Timeout,
                     "ToolRunnerOptions.Timeout must be positive or Timeout.InfiniteTimeSpan.");
+            }
+
+            if (effectiveOptions.MaxCapturedOutputChars <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(options),
+                    effectiveOptions.MaxCapturedOutputChars,
+                    "ToolRunnerOptions.MaxCapturedOutputChars must be positive.");
             }
 
             if (!File.Exists(toolPath))
@@ -45,8 +56,12 @@ namespace QmlSharp.Qt.Tools
                 throw new InvalidOperationException($"Failed to start Qt tool process '{toolPath}'.");
             }
 
-            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
-            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+            Task<string> stdoutTask = ReadCapturedOutputAsync(
+                process.StandardOutput,
+                options.MaxCapturedOutputChars);
+            Task<string> stderrTask = ReadCapturedOutputAsync(
+                process.StandardError,
+                options.MaxCapturedOutputChars);
             Task waitTask = process.WaitForExitAsync();
 
             try
@@ -153,8 +168,8 @@ namespace QmlSharp.Qt.Tools
             await WaitForKilledProcessAsync(process).ConfigureAwait(false);
             stopwatch.Stop();
             return new CapturedOutput(
-                await ReadCapturedOutputAsync(stdoutTask).ConfigureAwait(false),
-                await ReadCapturedOutputAsync(stderrTask).ConfigureAwait(false));
+                await ReadCapturedOutputTaskAsync(stdoutTask).ConfigureAwait(false),
+                await ReadCapturedOutputTaskAsync(stderrTask).ConfigureAwait(false));
         }
 
         private static async Task WaitForKilledProcessAsync(Process process)
@@ -184,7 +199,7 @@ namespace QmlSharp.Qt.Tools
             }
         }
 
-        private static async Task<string> ReadCapturedOutputAsync(Task<string> outputTask)
+        private static async Task<string> ReadCapturedOutputTaskAsync(Task<string> outputTask)
         {
             try
             {
@@ -194,6 +209,67 @@ namespace QmlSharp.Qt.Tools
             {
                 return string.Empty;
             }
+            catch (IOException)
+            {
+                return string.Empty;
+            }
+        }
+
+        private static async Task<string> ReadCapturedOutputAsync(
+            StreamReader reader,
+            int maxCapturedOutputChars)
+        {
+            char[] buffer = new char[Math.Min(4096, maxCapturedOutputChars)];
+            StringBuilder builder = new(capacity: Math.Min(4096, maxCapturedOutputChars));
+            bool truncated = false;
+
+            while (true)
+            {
+                int read = await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                int remaining = maxCapturedOutputChars - builder.Length;
+                if (remaining > 0)
+                {
+                    int count = Math.Min(read, remaining);
+                    builder.Append(buffer, 0, count);
+                }
+
+                if (read > remaining)
+                {
+                    truncated = true;
+                }
+            }
+
+            return CreateCapturedOutputString(builder, truncated, maxCapturedOutputChars);
+        }
+
+        private static string CreateCapturedOutputString(
+            StringBuilder builder,
+            bool truncated,
+            int maxCapturedOutputChars)
+        {
+            if (!truncated)
+            {
+                return builder.ToString();
+            }
+
+            if (maxCapturedOutputChars <= OutputTruncatedMarker.Length)
+            {
+                return builder.ToString(0, Math.Min(builder.Length, maxCapturedOutputChars));
+            }
+
+            int retainedLength = maxCapturedOutputChars - OutputTruncatedMarker.Length;
+            if (builder.Length > retainedLength)
+            {
+                builder.Length = retainedLength;
+            }
+
+            builder.Append(OutputTruncatedMarker);
+            return builder.ToString();
         }
 
         private static string FormatCommand(string toolPath, ImmutableArray<string> args)
