@@ -63,7 +63,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
             return CreateQuery(
                 modules:
                 [
-                    CreateModule("QtQml", "QtObject", "QtObject"),
+                    CreateModule("QtQml", "QObject", "QtObject"),
                     CreateModule(
                         "QtQuick",
                         "QQuickItem",
@@ -77,7 +77,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
                 ],
                 types:
                 [
-                    CreateQObjectType("QtObject", "QtObject", "QtQml", null, isCreatable: true),
+                    CreateQObjectType("QObject", "QtObject", "QtQml", null, isCreatable: true),
                     CreateItemType(),
                     CreateRectangleType(),
                     CreateTextType(),

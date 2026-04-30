@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using QmlSharp.Core;
 using QmlSharp.Dsl.Tests.Fixtures;
 
@@ -20,6 +21,13 @@ namespace QmlSharp.Dsl.Tests.Runtime
             Assert.Equal(50, size.Height);
             Assert.Equal(4, rect.Height);
             Assert.Equal(3, vector.Z);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Smoke)]
+        public void QmlColor_IsManagedValueContract_NotNativeLayoutContract()
+        {
+            Assert.Empty(typeof(QmlColor).GetCustomAttributes(typeof(StructLayoutAttribute), inherit: false));
         }
     }
 }

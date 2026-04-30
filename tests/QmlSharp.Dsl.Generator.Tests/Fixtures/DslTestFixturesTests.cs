@@ -22,9 +22,14 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
         [Trait("Category", TestCategories.Smoke)]
         public void FixtureFactories_ProduceNamedScenarioContexts()
         {
+            IRegistryQuery p0Registry = DslTestFixtures.CreateP0Fixture();
+
             Assert.NotNull(DslTestFixtures.CreateQtQuickFixture().FindModule("QtQuick"));
             Assert.NotNull(DslTestFixtures.CreateQtQuickControlsFixture().FindModule("QtQuick.Controls"));
-            Assert.NotNull(DslTestFixtures.CreateP0Fixture().FindModule("QtQuick.Layouts"));
+            Assert.NotNull(p0Registry.FindModule("QtQuick.Layouts"));
+            Assert.Equal("QObject", p0Registry.FindTypeByQmlName("QtQml", "QtObject")?.QualifiedName);
+            Assert.True(p0Registry.InheritsFrom("QQuickItem", "QObject"));
+            Assert.True(p0Registry.InheritsFrom("QQuickButton", "QObject"));
             Assert.NotNull(DslTestFixtures.CreateCircularInheritanceFixture().FindModule("QtQuick.Circular"));
             Assert.NotEmpty(DslTestFixtures.CreateAttachedTypesFixture().GetAttachedTypes());
             Assert.Contains("CounterViewModel", DslTestFixtures.CreateCounterViewModelSchema(), StringComparison.Ordinal);

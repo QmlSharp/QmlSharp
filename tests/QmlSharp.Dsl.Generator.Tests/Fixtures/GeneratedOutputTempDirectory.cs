@@ -11,7 +11,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
 
         public static GeneratedOutputTempDirectory Create()
         {
-            string path = System.IO.Path.Combine(
+            string path = System.IO.Path.Join(
                 System.IO.Path.GetTempPath(),
                 $"qmlsharp-dsl-{Guid.NewGuid():N}");
             _ = Directory.CreateDirectory(path);

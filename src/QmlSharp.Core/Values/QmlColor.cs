@@ -1,9 +1,6 @@
-using System.Runtime.InteropServices;
-
 namespace QmlSharp.Core
 {
     /// <summary>QML color value that can be expressed as a string or RGBA components.</summary>
-    [StructLayout(LayoutKind.Auto)]
     public readonly record struct QmlColor
     {
         public string? StringValue { get; init; }
