@@ -224,7 +224,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlRunner
             AssertOptionValue(runner.SingleCall.Args, "-I", importPath);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qml")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlRunner_SmokeRunsWindowOffscreen()
         {
@@ -244,7 +244,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlRunner
             Assert.Empty(result.RuntimeErrors);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qml")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlRunner_RunsStringThatQuitsCleanly()
         {
@@ -263,7 +263,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlRunner
             Assert.Empty(result.RuntimeErrors);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qml")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlRunner_ListsConfigurations()
         {

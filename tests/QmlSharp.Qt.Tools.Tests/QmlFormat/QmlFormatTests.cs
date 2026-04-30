@@ -281,7 +281,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormat
             Assert.Equal("qmlformat parse failed", diagnostic.Message);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlformat")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlFormat_FormatsRealFixture()
         {
@@ -296,7 +296,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormat
             Assert.True(result.HasChanges);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlformat")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlFormat_ReturnsDiagnosticsForSyntaxError()
         {
@@ -310,7 +310,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlFormat
             Assert.All(result.Diagnostics, static diagnostic => Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity));
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlformat")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlFormat_FormatsStringAndCleansTempInput()
         {

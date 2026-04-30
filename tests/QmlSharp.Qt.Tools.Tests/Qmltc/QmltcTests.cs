@@ -141,7 +141,7 @@ namespace QmlSharp.Qt.Tools.Tests.Qmltc
             Assert.Equal("qmltc failed", diagnostic.Message);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmltc")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_Qmltc_CompilesValidRealFixture()
         {
@@ -165,7 +165,7 @@ namespace QmlSharp.Qt.Tools.Tests.Qmltc
             Assert.True(File.Exists(source));
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmltc")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_Qmltc_ReturnsDiagnosticsForSyntaxError()
         {

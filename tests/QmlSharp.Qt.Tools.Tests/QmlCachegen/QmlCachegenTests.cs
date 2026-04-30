@@ -342,7 +342,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
             Assert.Equal("cachegen failed", diagnostic.Message);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlcachegen")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlCachegen_CompilesValidRealFixture()
         {
@@ -357,7 +357,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
             Assert.NotEmpty(result.OutputFiles);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlcachegen")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlCachegen_ReturnsDiagnosticsForSyntaxError()
         {
@@ -372,7 +372,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlCachegen
             Assert.NotEmpty(result.Diagnostics);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlcachegen")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlCachegen_CompilesString()
         {

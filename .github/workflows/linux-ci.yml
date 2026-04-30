@@ -143,7 +143,9 @@ jobs:
         run: dotnet test QmlSharp.slnx --configuration Debug --no-build --verbosity normal
 
       - name: Check .NET formatting
-        run: dotnet format QmlSharp.slnx --verify-no-changes --verbosity minimal
+        run: |
+          export MSBUILDDISABLENODEREUSE=1
+          dotnet format QmlSharp.slnx --verify-no-changes --no-restore --verbosity minimal
 
       - name: Configure (CMake)
         env:

@@ -115,7 +115,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlTypeRegistrar
             Assert.Equal("Error: invalid metatypes JSON", diagnostic.Message);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmltyperegistrar")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlTypeRegistrar_RegistersRealMetatypesFixture()
         {
@@ -138,7 +138,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlTypeRegistrar
             Assert.True(File.Exists(outputFile));
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmltyperegistrar")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlTypeRegistrar_InvalidMetatypesJsonFailsGracefully()
         {

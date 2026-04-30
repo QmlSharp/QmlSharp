@@ -411,7 +411,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlLint
             Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmllint")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlLint_LintsValidRealFixture()
         {
@@ -423,7 +423,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlLint
             Assert.Empty(result.Diagnostics);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmllint")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlLint_ReturnsSyntaxDiagnosticsForRealFixture()
         {
@@ -436,7 +436,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlLint
             Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Category == "syntax");
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmllint")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlLint_LintsStringAndRewritesDiagnostics()
         {
@@ -449,7 +449,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlLint
             Assert.All(result.Diagnostics, static diagnostic => Assert.Equal("<string>", diagnostic.File));
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmllint")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlLint_ListPluginsDoesNotThrow()
         {

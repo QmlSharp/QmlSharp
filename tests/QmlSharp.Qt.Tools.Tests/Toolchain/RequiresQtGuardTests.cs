@@ -17,6 +17,15 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
             Assert.Null(availability.QtDir);
             Assert.Null(availability.ToolPath);
             Assert.Contains("QT_DIR", availability.SkipReason, StringComparison.Ordinal);
+            Assert.Contains("PATH fallback", availability.SkipReason, StringComparison.Ordinal);
+            Assert.DoesNotContain("QMLSHARP_QT_DIR", availability.SkipReason, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void RequiresQtPolicy_UsesStableTraitNameAndCategoryValue()
+        {
+            Assert.Equal("Category", QtToolsTestEnvironment.RequiresQtTraitName);
+            Assert.Equal("RequiresQt", TestCategories.RequiresQt);
         }
 
         [Fact]
@@ -47,10 +56,45 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
         }
 
         [Fact]
+        public void RequiresQtGuard_WhenQtDirIsMissingAndPathHasQtBin_UsesPathFallback()
+        {
+            string binDirectory = Path.Join(Path.GetTempPath(), "qmlsharp-qt-bin");
+            string toolPath = Path.Join(binDirectory, GetExecutableName("qmlformat"));
+            QtAvailability availability = RequiresQtGuard.Check(
+                static name => name == QtToolsTestEnvironment.PathVariableName
+                    ? Path.Join(Path.GetTempPath(), "qmlsharp-qt-bin")
+                    : null,
+                path => path == toolPath);
+
+            Assert.True(availability.IsAvailable);
+            Assert.Equal(Directory.GetParent(binDirectory)?.FullName, availability.QtDir);
+            Assert.Equal(toolPath, availability.ToolPath);
+        }
+
+        [Fact]
+        public void RequiresQtGuard_WhenRequiredToolIsMissingFromPath_FallsThroughToSkipReason()
+        {
+            string binDirectory = Path.Join(Path.GetTempPath(), "qmlsharp-partial-qt-bin");
+            string qmlformatPath = Path.Join(binDirectory, GetExecutableName("qmlformat"));
+            QtAvailability availability = RequiresQtGuard.Check(
+                static name => name == QtToolsTestEnvironment.PathVariableName
+                    ? Path.Join(Path.GetTempPath(), "qmlsharp-partial-qt-bin")
+                    : null,
+                path => path == qmlformatPath,
+                "qmlformat",
+                "qmllint");
+
+            Assert.False(availability.IsAvailable);
+            Assert.Equal(QtToolsTestEnvironment.QtSdkUnavailableReason, availability.SkipReason);
+        }
+
+        [Fact]
         public void RequiresQtFact_SkipsCleanlyWhenQtDirAndPathAreUnavailable()
         {
             string? originalQtDir = Environment.GetEnvironmentVariable(QtToolsTestEnvironment.QtDirVariableName);
+            string? originalPath = Environment.GetEnvironmentVariable(QtToolsTestEnvironment.PathVariableName);
             Environment.SetEnvironmentVariable(QtToolsTestEnvironment.QtDirVariableName, null);
+            Environment.SetEnvironmentVariable(QtToolsTestEnvironment.PathVariableName, null);
 
             try
             {
@@ -61,7 +105,18 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
             finally
             {
                 Environment.SetEnvironmentVariable(QtToolsTestEnvironment.QtDirVariableName, originalQtDir);
+                Environment.SetEnvironmentVariable(QtToolsTestEnvironment.PathVariableName, originalPath);
             }
+        }
+
+        private static string GetExecutableName(string toolName)
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                return toolName + ".exe";
+            }
+
+            return toolName;
         }
     }
 }
