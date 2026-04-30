@@ -34,21 +34,18 @@ namespace QmlSharp.Qt.Tools.Tests.Helpers
             string? path = getEnvironmentVariable(QtToolsTestEnvironment.PathVariableName);
             if (!string.IsNullOrWhiteSpace(path))
             {
-                foreach (string binDirectory in path
+                QtAvailability? pathAvailability = path
                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Select(NormalizeEnvironmentPath)
                     .Where(static value => value is not null)
-                    .Select(static value => value!))
+                    .Select(static value => value!)
+                    .Select(binDirectory => TryCreatePathAvailability(binDirectory, fileExists, requiredTools))
+                    .Where(static availability => availability is not null)
+                    .Select(static availability => availability!)
+                    .FirstOrDefault();
+                if (pathAvailability is not null)
                 {
-                    if (TryFindRequiredToolsInBinDirectory(
-                        binDirectory,
-                        fileExists,
-                        requiredTools,
-                        out string? toolPath))
-                    {
-                        string? rootDir = Directory.GetParent(binDirectory)?.FullName;
-                        return new QtAvailability(true, rootDir, toolPath, string.Empty);
-                    }
+                    return pathAvailability;
                 }
             }
 
@@ -57,6 +54,24 @@ namespace QmlSharp.Qt.Tools.Tests.Helpers
                 qtDir,
                 null,
                 QtToolsTestEnvironment.QtSdkUnavailableReason);
+        }
+
+        private static QtAvailability? TryCreatePathAvailability(
+            string binDirectory,
+            Func<string, bool> fileExists,
+            string[] requiredTools)
+        {
+            if (!TryFindRequiredToolsInBinDirectory(
+                binDirectory,
+                fileExists,
+                requiredTools,
+                out string? toolPath))
+            {
+                return null;
+            }
+
+            string? rootDir = Directory.GetParent(binDirectory)?.FullName;
+            return new QtAvailability(true, rootDir, toolPath, string.Empty);
         }
 
         private static string? NormalizeEnvironmentPath(string? path)
