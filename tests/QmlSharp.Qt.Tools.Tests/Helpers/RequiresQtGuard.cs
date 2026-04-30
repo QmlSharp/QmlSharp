@@ -19,16 +19,14 @@ namespace QmlSharp.Qt.Tools.Tests.Helpers
             string? qtDir = NormalizeEnvironmentPath(
                 getEnvironmentVariable(QtToolsTestEnvironment.QtDirVariableName));
 
-            if (!string.IsNullOrWhiteSpace(qtDir))
-            {
-                if (TryFindRequiredToolsInBinDirectory(
+            if (!string.IsNullOrWhiteSpace(qtDir)
+                && TryFindRequiredToolsInBinDirectory(
                     Path.Join(qtDir, "bin"),
                     fileExists,
                     requiredTools,
                     out string? toolPath))
-                {
-                    return new QtAvailability(true, qtDir, toolPath, string.Empty);
-                }
+            {
+                return new QtAvailability(true, qtDir, toolPath, string.Empty);
             }
 
             string? path = getEnvironmentVariable(QtToolsTestEnvironment.PathVariableName);

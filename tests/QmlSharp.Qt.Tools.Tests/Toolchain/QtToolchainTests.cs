@@ -323,6 +323,61 @@ namespace QmlSharp.Qt.Tools.Tests.Toolchain
             Assert.Equal(qt.RootDir, installation.RootDir);
         }
 
+        [Theory]
+        [InlineData("""{ "qtDir": 42 }""", "missing string qtDir")]
+        [InlineData("""{ "qtDir": "   " }""", "qtDir is empty")]
+        [InlineData("""{ not json }""", "invalid JSON")]
+        public async Task DiscoverAsync_RecordsUnusableProjectConfigFileReason(string configJson, string expectedReason)
+        {
+            using TemporaryDirectory project = TemporaryDirectory.Create("qmlsharp-project-");
+            string configDirectory = Path.Join(project.Path, ".qmlsharp");
+            _ = Directory.CreateDirectory(configDirectory);
+            string configPath = Path.Join(configDirectory, "config.json");
+            await File.WriteAllTextAsync(configPath, configJson);
+            QtToolchain toolchain = new(
+                name => name == "PATH" ? string.Empty : null,
+                static _ => false,
+                File.Exists,
+                () => project.Path);
+
+            QtInstallationNotFoundError error = await Assert.ThrowsAsync<QtInstallationNotFoundError>(
+                () => toolchain.DiscoverAsync(new QtToolchainConfig { Cwd = project.Path }));
+
+            Assert.Contains(error.AttemptedSteps, step =>
+                step.Contains(configPath, StringComparison.Ordinal)
+                && step.Contains(expectedReason, StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public async Task DiscoverAsync_RecordsPathEntriesThatDoNotContainQmlformat()
+        {
+            using TemporaryDirectory pathDirectory = TemporaryDirectory.Create("qmlsharp-path-");
+            QtToolchain toolchain = new(
+                name => name switch
+                {
+                    "PATH" => pathDirectory.Path,
+                    _ => null,
+                },
+                static _ => false,
+                static _ => false,
+                () => pathDirectory.Path);
+
+            QtInstallationNotFoundError error = await Assert.ThrowsAsync<QtInstallationNotFoundError>(
+                () => toolchain.DiscoverAsync());
+
+            Assert.Contains(error.AttemptedSteps, step =>
+                step.Contains("PATH:", StringComparison.Ordinal)
+                && step.Contains("qmlformat not found", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void QtVersion_ToString_ReturnsSemanticVersionString()
+        {
+            QtVersion version = new() { Major = 6, Minor = 11, Patch = 0 };
+
+            Assert.Equal("6.11.0", version.ToString());
+        }
+
         [RequiresQtFact]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_DiscoverAndCheckTools_WithRealQtInstallation()
