@@ -156,7 +156,7 @@ namespace QmlSharp.Qt.Tools.Tests.Rcc
             Assert.Equal("rcc failed", diagnostic.Message);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("rcc")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_Rcc_CompilesAndListsRealResourceFixture()
         {

@@ -134,7 +134,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlDom
             Assert.Equal("""{"ok":true}""", output);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmldom")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlDom_DumpsRealFixtureDom()
         {
@@ -148,7 +148,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlDom
             Assert.True(document.RootElement.TryGetProperty("currentItem", out JsonElement _));
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmldom")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlDom_DumpsRealFixtureAst()
         {
@@ -162,7 +162,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlDom
             Assert.Contains("UiProgram", result.JsonOutput, StringComparison.Ordinal);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmldom")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlDom_DumpsString()
         {
@@ -174,7 +174,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlDom
             Assert.NotNull(result.JsonOutput);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmldom")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlDom_DumpsWithNoDependencies()
         {

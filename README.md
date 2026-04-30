@@ -24,7 +24,8 @@ dotnet build QmlSharp.slnx
 dotnet test QmlSharp.slnx
 cmake --preset windows-debug
 cmake --build --preset debug
-dotnet format QmlSharp.slnx --verify-no-changes
+$env:MSBUILDDISABLENODEREUSE = "1"
+dotnet format QmlSharp.slnx --verify-no-changes --no-restore --verbosity minimal
 ```
 
 `cmake --preset windows-debug` and `cmake --build --preset debug` are intentionally Qt-free in
@@ -32,6 +33,29 @@ Step 01.00. Real Qt discovery starts in later native-host and build-system steps
 
 On Windows, run the native preset commands from a Visual Studio developer shell or by calling
 `vcvars64.bat` first so `clang-cl` and `FBuild.exe` are available in `PATH`.
+
+## RequiresQt test policy
+
+Real Qt SDK integration tests use the stable xUnit trait `[Trait("Category", "RequiresQt")]`.
+They discover Qt through `QT_DIR` first and then a Qt `bin` directory on `PATH`; the
+legacy `QMLSHARP_QT_DIR` name is not a QmlSharp discovery contract.
+
+To run the mocked/default test set without real Qt:
+
+```powershell
+dotnet test QmlSharp.slnx --configuration Debug --filter "Category!=RequiresQt"
+```
+
+To run only real Qt tests on a machine with Qt installed:
+
+```powershell
+$env:QT_DIR = "C:\Qt\6.11.0\msvc2022_64"
+dotnet test QmlSharp.slnx --configuration Debug --filter "Category=RequiresQt"
+```
+
+CI jobs that install Qt 6.11.0 may run the full test suite or the `Category=RequiresQt`
+filter explicitly. CI jobs without Qt can use `Category!=RequiresQt` without changing test
+code.
 
 ## Local quality workflow
 

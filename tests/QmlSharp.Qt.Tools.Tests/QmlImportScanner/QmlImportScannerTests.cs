@@ -206,7 +206,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlImportScanner
             Assert.Empty(runner.RecordedCalls);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlimportscanner")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlImportScanner_ScansValidRealFixture()
         {
@@ -218,7 +218,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlImportScanner
             Assert.Contains(result.Imports, static entry => entry.Name == "QtQuick");
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlimportscanner")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlImportScanner_ScansDirectory()
         {
@@ -233,7 +233,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlImportScanner
             Assert.Contains(result.Imports, static entry => entry.Name == "QtQuick");
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlimportscanner")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QmlImportScanner_ScansString()
         {

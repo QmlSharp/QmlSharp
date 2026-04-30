@@ -1,3 +1,4 @@
+using QmlSharp.Qml.Ast.Builders;
 using QmlSharp.Qml.Emitter.Tests.Helpers;
 
 namespace QmlSharp.Qml.Emitter.Tests.Pipeline
@@ -317,7 +318,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
             Assert.Equal("Rectangle {}\n", results[2].Result.Text);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlformat")]
         [Trait("Category", TestCategories.RequiresQt)]
         [Trait("Category", TestCategories.Pipeline)]
         public async Task PL_09_ProcessAsync_WithRealQmlFormat_FormatsOutput()
@@ -340,12 +341,30 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
             Assert.Empty(result.FormatResult.Diagnostics);
         }
 
-        [Fact(Skip = "Requires 04-qt-tools real qmllint integration in implementation wave 04.")]
+        [RequiresQtFact("qmllint")]
         [Trait("Category", TestCategories.RequiresQt)]
         [Trait("Category", TestCategories.Pipeline)]
-        public Task PL_10_ProcessAsync_WithRealQmlLint_ReturnsValidForValidQml()
+        public async Task PL_10_ProcessAsync_WithRealQmlLint_ReturnsValidForValidQml()
         {
-            return Task.CompletedTask;
+            QmlDocument document = new QmlDocumentBuilder()
+                .AddModuleImport("QtQuick")
+                .SetRootObject("Item", _ => { })
+                .Build();
+            EmitPipelineConfig config = new()
+            {
+                EnableFormat = false,
+                EnableLint = true,
+            };
+            QtQmlLintPipelineAdapter linter = new(new QmlSharp.Qt.Tools.QmlLint());
+            EmitPipeline pipeline = new(new QmlEmitter(), config, linter: linter);
+
+            PipelineResult result = await pipeline.ProcessAsync(document);
+
+            Assert.True(result.Succeeded);
+            Assert.True(result.Valid);
+            Assert.NotNull(result.LintResult);
+            Assert.True(result.LintResult.Valid);
+            Assert.Empty(result.LintResult.Diagnostics);
         }
 
         private sealed class QtQmlFormatPipelineAdapter : IEmitPipelineFormatter
@@ -363,6 +382,57 @@ namespace QmlSharp.Qml.Emitter.Tests.Pipeline
                 return new FormatStageResult
                 {
                     Text = result.FormattedSource ?? text,
+                    DurationMs = result.ToolResult.DurationMs,
+                    Diagnostics = ConvertDiagnostics(result.Diagnostics),
+                };
+            }
+
+            private static ImmutableArray<PipelineDiagnostic> ConvertDiagnostics(ImmutableArray<QmlSharp.Qt.Tools.QtDiagnostic> diagnostics)
+            {
+                ImmutableArray<PipelineDiagnostic>.Builder builder = ImmutableArray.CreateBuilder<PipelineDiagnostic>(diagnostics.Length);
+                for (int index = 0; index < diagnostics.Length; index++)
+                {
+                    QmlSharp.Qt.Tools.QtDiagnostic diagnostic = diagnostics[index];
+                    builder.Add(new PipelineDiagnostic
+                    {
+                        Code = diagnostic.Category,
+                        Severity = ConvertSeverity(diagnostic.Severity),
+                        Message = diagnostic.Message,
+                        File = diagnostic.File,
+                        Line = diagnostic.Line,
+                        Column = diagnostic.Column,
+                    });
+                }
+
+                return builder.MoveToImmutable();
+            }
+
+            private static PipelineDiagnosticSeverity ConvertSeverity(QmlSharp.Qt.Tools.DiagnosticSeverity severity)
+            {
+                return severity switch
+                {
+                    QmlSharp.Qt.Tools.DiagnosticSeverity.Error => PipelineDiagnosticSeverity.Error,
+                    QmlSharp.Qt.Tools.DiagnosticSeverity.Warning => PipelineDiagnosticSeverity.Warning,
+                    _ => PipelineDiagnosticSeverity.Info,
+                };
+            }
+        }
+
+        private sealed class QtQmlLintPipelineAdapter : IEmitPipelineLinter
+        {
+            private readonly QmlSharp.Qt.Tools.IQmlLint _linter;
+
+            public QtQmlLintPipelineAdapter(QmlSharp.Qt.Tools.IQmlLint linter)
+            {
+                _linter = linter;
+            }
+
+            public async Task<LintStageResult> LintAsync(string documentName, string text, CancellationToken ct = default)
+            {
+                QmlSharp.Qt.Tools.QmlLintResult result = await _linter.LintStringAsync(text, ct: ct);
+                return new LintStageResult
+                {
+                    Valid = result.Success && result.ErrorCount == 0,
                     DurationMs = result.ToolResult.DurationMs,
                     Diagnostics = ConvertDiagnostics(result.Diagnostics),
                 };

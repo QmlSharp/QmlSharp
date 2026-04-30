@@ -295,7 +295,7 @@ namespace QmlSharp.Qt.Tools.Tests.QualityGate
             _ = Assert.Single(tools.Cachegen.FileCalls);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlformat")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QualityGate_SyntaxLevel_RunsRealTool()
         {
@@ -307,7 +307,7 @@ namespace QmlSharp.Qt.Tools.Tests.QualityGate
             Assert.Equal(QualityGateLevel.Syntax, result.CompletedLevel);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlformat", "qmllint")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QualityGate_LintLevel_RunsRealTools()
         {
@@ -319,7 +319,7 @@ namespace QmlSharp.Qt.Tools.Tests.QualityGate
             Assert.Equal(QualityGateLevel.Lint, result.CompletedLevel);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlformat", "qmllint", "qmlcachegen")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QualityGate_CompileLevel_RunsRealTools()
         {
@@ -331,7 +331,7 @@ namespace QmlSharp.Qt.Tools.Tests.QualityGate
             Assert.Equal(QualityGateLevel.Compile, result.CompletedLevel);
         }
 
-        [RequiresQtFact]
+        [RequiresQtFact("qmlformat", "qmllint", "qmlcachegen", "qml")]
         [Trait("Category", TestCategories.RequiresQt)]
         public async Task RequiresQt_QualityGate_FullLevel_RunsRealTools()
         {
