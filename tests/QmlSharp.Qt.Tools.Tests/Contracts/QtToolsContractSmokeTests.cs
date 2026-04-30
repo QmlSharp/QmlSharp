@@ -68,6 +68,7 @@ namespace QmlSharp.Qt.Tools.Tests.Contracts
 
             Assert.Equal("offscreen", run.Platform);
             Assert.Equal(QmlAppType.Auto, run.AppType);
+            Assert.Empty(run.ImportPaths);
             Assert.Equal(TimeSpan.FromSeconds(5), run.Timeout);
             Assert.Equal(TimeSpan.FromSeconds(2), run.StableRunPeriod);
 
