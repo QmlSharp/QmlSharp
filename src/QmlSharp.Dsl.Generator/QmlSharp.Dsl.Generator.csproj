@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Dsl.Generator</AssemblyName>
+    <RootNamespace>QmlSharp.Dsl.Generator</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QmlSharp.Qml.Ast\QmlSharp.Qml.Ast.csproj" />
+    <ProjectReference Include="..\QmlSharp.Registry\QmlSharp.Registry.csproj" />
+  </ItemGroup>
+</Project>
