@@ -57,6 +57,13 @@ CI jobs that install Qt 6.11.0 may run the full test suite or the `Category=Requ
 filter explicitly. CI jobs without Qt can use `Category!=RequiresQt` without changing test
 code.
 
+## Implementation traceability
+
+Module step audits, parity notes, and final-gate traceability live in PR descriptions or
+linked GitHub issues. The implementation repository does not keep a committed root `docs/`
+tree for these records. Later implementation reviews should treat the relevant step audit
+PR body or linked issue as the review contract for that wave.
+
 ## Local quality workflow
 
 ```powershell
