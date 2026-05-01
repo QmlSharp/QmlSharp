@@ -95,12 +95,14 @@ namespace QmlSharp.Dsl.Generator
             JsonElement properties = ReadOptionalArray(root, "properties");
             ImmutableArray<ViewModelStateInfo>.Builder states = ImmutableArray.CreateBuilder<ViewModelStateInfo>();
 
+            int propertyIndex = 0;
             foreach (JsonElement property in properties.EnumerateArray())
             {
-                string qmlName = ReadRequiredString(property, "name");
-                string qmlType = ReadRequiredString(property, "type");
+                string propertyPath = $"properties[{propertyIndex}]";
+                string qmlName = ReadRequiredString(property, "name", propertyPath);
+                string qmlType = ReadRequiredString(property, "type", propertyPath);
                 string csharpType = MapSchemaType(qmlType, $"properties.{qmlName}.type");
-                bool isReadOnly = ReadOptionalBoolean(property, "readOnly");
+                bool isReadOnly = ReadOptionalBoolean(property, "readOnly", propertyPath);
 
                 states.Add(new ViewModelStateInfo(
                     FieldName: MemberNameUtilities.ToPascalCase(qmlName),
@@ -108,6 +110,7 @@ namespace QmlSharp.Dsl.Generator
                     CSharpType: csharpType,
                     QmlType: qmlType,
                     IsReadOnly: isReadOnly));
+                propertyIndex++;
             }
 
             return states
@@ -120,14 +123,17 @@ namespace QmlSharp.Dsl.Generator
             JsonElement commands = ReadOptionalArray(root, "commands");
             ImmutableArray<ViewModelCommandInfo>.Builder commandInfos = ImmutableArray.CreateBuilder<ViewModelCommandInfo>();
 
+            int commandIndex = 0;
             foreach (JsonElement command in commands.EnumerateArray())
             {
-                string qmlName = ReadRequiredString(command, "name");
+                string commandPath = $"commands[{commandIndex}]";
+                string qmlName = ReadRequiredString(command, "name", commandPath);
                 commandInfos.Add(new ViewModelCommandInfo(
                     MethodName: MemberNameUtilities.ToPascalCase(qmlName),
                     QmlMethodName: qmlName,
-                    Parameters: ReadParameters(command, $"commands.{qmlName}.parameters"),
-                    IsAsync: ReadOptionalBoolean(command, "isAsync") || ReadOptionalBoolean(command, "async")));
+                    Parameters: ReadParameters(command, $"commands.{qmlName}.parameters", commandPath),
+                    IsAsync: ReadOptionalBoolean(command, "isAsync", commandPath) || ReadOptionalBoolean(command, "async", commandPath)));
+                commandIndex++;
             }
 
             return commandInfos
@@ -140,14 +146,17 @@ namespace QmlSharp.Dsl.Generator
             JsonElement effects = ReadOptionalArray(root, "effects");
             ImmutableArray<ViewModelEffectInfo>.Builder effectInfos = ImmutableArray.CreateBuilder<ViewModelEffectInfo>();
 
+            int effectIndex = 0;
             foreach (JsonElement effect in effects.EnumerateArray())
             {
-                string qmlName = ReadRequiredString(effect, "name");
-                ImmutableArray<GeneratedParameter> parameters = ReadEffectParameters(effect, qmlName);
+                string effectPath = $"effects[{effectIndex}]";
+                string qmlName = ReadRequiredString(effect, "name", effectPath);
+                ImmutableArray<GeneratedParameter> parameters = ReadEffectParameters(effect, qmlName, effectPath);
                 effectInfos.Add(new ViewModelEffectInfo(
                     FieldName: MemberNameUtilities.ToPascalCase(qmlName),
                     QmlSignalName: qmlName,
                     Parameters: parameters));
+                effectIndex++;
             }
 
             return effectInfos
@@ -155,8 +164,10 @@ namespace QmlSharp.Dsl.Generator
                 .ToImmutableArray();
         }
 
-        private ImmutableArray<GeneratedParameter> ReadEffectParameters(JsonElement effect, string effectName)
+        private ImmutableArray<GeneratedParameter> ReadEffectParameters(JsonElement effect, string effectName, string effectPath)
         {
+            ThrowIfNotObject(effect, effectPath);
+
             if (effect.TryGetProperty("parameters", out JsonElement parametersElement))
             {
                 if (parametersElement.ValueKind != JsonValueKind.Array)
@@ -194,8 +205,10 @@ namespace QmlSharp.Dsl.Generator
             ];
         }
 
-        private ImmutableArray<GeneratedParameter> ReadParameters(JsonElement owner, string fieldPath)
+        private ImmutableArray<GeneratedParameter> ReadParameters(JsonElement owner, string fieldPath, string ownerPath)
         {
+            ThrowIfNotObject(owner, ownerPath);
+
             if (!owner.TryGetProperty("parameters", out JsonElement parametersElement))
             {
                 return ImmutableArray<GeneratedParameter>.Empty;
@@ -215,8 +228,9 @@ namespace QmlSharp.Dsl.Generator
             int parameterIndex = 0;
             foreach (JsonElement parameter in parametersElement.EnumerateArray())
             {
-                string parameterName = ReadRequiredString(parameter, "name");
-                string qmlType = ReadRequiredString(parameter, "type");
+                string parameterPath = $"{fieldPath}[{parameterIndex}]";
+                string parameterName = ReadRequiredString(parameter, "name", parameterPath);
+                string qmlType = ReadRequiredString(parameter, "type", parameterPath);
                 parameters.Add(new GeneratedParameter(
                     Name: parameterName,
                     CSharpType: MapSchemaType(qmlType, $"{fieldPath}[{parameterIndex}].type"),
@@ -249,29 +263,35 @@ namespace QmlSharp.Dsl.Generator
             }
         }
 
-        private static string ReadRequiredString(JsonElement owner, string propertyName)
+        private static string ReadRequiredString(JsonElement owner, string propertyName, string ownerPath = "")
         {
+            ThrowIfNotObject(owner, ownerPath);
+
+            string fieldPath = CombineFieldPath(ownerPath, propertyName);
             if (!owner.TryGetProperty(propertyName, out JsonElement property))
             {
-                throw new ViewModelSchemaException($"Schema field '{propertyName}' is required.", propertyName);
+                throw new ViewModelSchemaException($"Schema field '{propertyName}' is required.", fieldPath);
             }
 
             if (property.ValueKind != JsonValueKind.String)
             {
-                throw new ViewModelSchemaException($"Schema field '{propertyName}' must be a string.", propertyName);
+                throw new ViewModelSchemaException($"Schema field '{propertyName}' must be a string.", fieldPath);
             }
 
             string? value = property.GetString();
             if (string.IsNullOrWhiteSpace(value))
             {
-                throw new ViewModelSchemaException($"Schema field '{propertyName}' must not be empty.", propertyName);
+                throw new ViewModelSchemaException($"Schema field '{propertyName}' must not be empty.", fieldPath);
             }
 
             return value;
         }
 
-        private static JsonElement ReadOptionalArray(JsonElement owner, string propertyName)
+        private static JsonElement ReadOptionalArray(JsonElement owner, string propertyName, string ownerPath = "")
         {
+            ThrowIfNotObject(owner, ownerPath);
+
+            string fieldPath = CombineFieldPath(ownerPath, propertyName);
             if (!owner.TryGetProperty(propertyName, out JsonElement property))
             {
                 return EmptyArrayElement.Value;
@@ -279,14 +299,17 @@ namespace QmlSharp.Dsl.Generator
 
             if (property.ValueKind != JsonValueKind.Array)
             {
-                throw new ViewModelSchemaException($"Schema field '{propertyName}' must be an array.", propertyName);
+                throw new ViewModelSchemaException($"Schema field '{propertyName}' must be an array.", fieldPath);
             }
 
             return property;
         }
 
-        private static bool ReadOptionalBoolean(JsonElement owner, string propertyName)
+        private static bool ReadOptionalBoolean(JsonElement owner, string propertyName, string ownerPath = "")
         {
+            ThrowIfNotObject(owner, ownerPath);
+
+            string fieldPath = CombineFieldPath(ownerPath, propertyName);
             if (!owner.TryGetProperty(propertyName, out JsonElement property))
             {
                 return false;
@@ -294,10 +317,23 @@ namespace QmlSharp.Dsl.Generator
 
             if (property.ValueKind != JsonValueKind.True && property.ValueKind != JsonValueKind.False)
             {
-                throw new ViewModelSchemaException($"Schema field '{propertyName}' must be a boolean.", propertyName);
+                throw new ViewModelSchemaException($"Schema field '{propertyName}' must be a boolean.", fieldPath);
             }
 
             return property.GetBoolean();
+        }
+
+        private static void ThrowIfNotObject(JsonElement owner, string fieldPath)
+        {
+            if (owner.ValueKind != JsonValueKind.Object)
+            {
+                throw new ViewModelSchemaException("Schema field must be a JSON object.", string.IsNullOrWhiteSpace(fieldPath) ? "schema" : fieldPath);
+            }
+        }
+
+        private static string CombineFieldPath(string ownerPath, string propertyName)
+        {
+            return string.IsNullOrWhiteSpace(ownerPath) ? propertyName : $"{ownerPath}.{propertyName}";
         }
 
         private static class EmptyArrayElement

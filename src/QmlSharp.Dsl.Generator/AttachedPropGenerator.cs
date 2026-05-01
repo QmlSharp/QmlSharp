@@ -31,11 +31,11 @@ namespace QmlSharp.Dsl.Generator
             ArgumentNullException.ThrowIfNull(registry);
 
             Dictionary<string, QmlType> attachedTypes = new(StringComparer.Ordinal);
-            foreach (QmlType ownerType in registry.FindTypes(type => !string.IsNullOrWhiteSpace(type.AttachedType))
+            foreach (QmlType attachedType in registry.FindTypes(type => !string.IsNullOrWhiteSpace(type.AttachedType))
                          .OrderBy(type => type.AttachedType, StringComparer.Ordinal)
-                         .ThenBy(type => type.QualifiedName, StringComparer.Ordinal))
+                         .ThenBy(type => type.QualifiedName, StringComparer.Ordinal)
+                         .Select(ownerType => ResolveAttachedType(ownerType, registry)))
             {
-                QmlType attachedType = ResolveAttachedType(ownerType, registry);
                 attachedTypes[attachedType.QualifiedName] = attachedType;
             }
 
@@ -181,13 +181,12 @@ namespace QmlSharp.Dsl.Generator
             }
 
             string[] prefixes = ["QQuick", "Qml", "Q"];
-            foreach (string prefix in prefixes)
+            string? matchingPrefix = prefixes
+                .Where(prefix => typeName.StartsWith(prefix, StringComparison.Ordinal) && typeName.Length > prefix.Length)
+                .FirstOrDefault();
+            if (matchingPrefix is not null)
             {
-                if (typeName.StartsWith(prefix, StringComparison.Ordinal) && typeName.Length > prefix.Length)
-                {
-                    typeName = typeName[prefix.Length..];
-                    break;
-                }
+                typeName = typeName[matchingPrefix.Length..];
             }
 
             return MemberNameUtilities.ToPascalCase(typeName);

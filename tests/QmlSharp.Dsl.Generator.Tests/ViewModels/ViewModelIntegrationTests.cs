@@ -4,6 +4,49 @@ namespace QmlSharp.Dsl.Generator.Tests.ViewModels
 {
     public sealed class ViewModelIntegrationTests
     {
+        public static IEnumerable<object[]> NonObjectSchemaArrayEntryCases()
+        {
+            yield return
+            [
+                """{ "className": "BrokenViewModel", "properties": ["bad"] }""",
+                "properties[0]",
+            ];
+            yield return
+            [
+                """{ "className": "BrokenViewModel", "commands": ["bad"] }""",
+                "commands[0]",
+            ];
+            yield return
+            [
+                """{ "className": "BrokenViewModel", "effects": ["bad"] }""",
+                "effects[0]",
+            ];
+            yield return
+            [
+                """
+                {
+                  "className": "BrokenViewModel",
+                  "commands": [
+                    { "name": "broken", "parameters": ["bad"] }
+                  ]
+                }
+                """,
+                "commands.broken.parameters[0]",
+            ];
+            yield return
+            [
+                """
+                {
+                  "className": "BrokenViewModel",
+                  "effects": [
+                    { "name": "broken", "parameters": ["bad"] }
+                  ]
+                }
+                """,
+                "effects.broken.parameters[0]",
+            ];
+        }
+
         [Fact]
         public void AnalyzeSchema_VM01_StateProperties_ReturnsStateMetadata()
         {
@@ -178,6 +221,18 @@ namespace QmlSharp.Dsl.Generator.Tests.ViewModels
                     """));
 
             Assert.Equal("commands.broken.parameters", exception.FieldPath);
+        }
+
+        [Theory]
+        [MemberData(nameof(NonObjectSchemaArrayEntryCases))]
+        public void AnalyzeSchema_NonObjectSchemaArrayEntry_ThrowsSchemaException(string schema, string fieldPath)
+        {
+            ViewModelIntegration integration = new();
+
+            ViewModelSchemaException exception = Assert.Throws<ViewModelSchemaException>(() =>
+                integration.AnalyzeSchema(schema));
+
+            Assert.Equal(fieldPath, exception.FieldPath);
         }
 
         [Fact]
