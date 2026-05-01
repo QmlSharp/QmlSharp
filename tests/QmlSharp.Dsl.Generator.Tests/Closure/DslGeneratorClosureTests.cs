@@ -15,9 +15,10 @@ namespace QmlSharp.Dsl.Generator.Tests.Closure
         public void TestSpecIds_AllEnumeratedDslGeneratorIds_MapToImplementedTests()
         {
             IReadOnlyDictionary<string, string> idToTestMethod = CreateTestSpecMap();
-            HashSet<string> implementedMethods = GetImplementedTestMethodNames();
+            HashSet<string> implementedMethods = GetImplementedTestMethodKeys();
 
             string[] missingMethods = idToTestMethod
+                .Select(static pair => new KeyValuePair<string, string>(pair.Key, CreateMappedTestMethodKey(pair.Key, pair.Value)))
                 .Where(pair => !implementedMethods.Contains(pair.Value))
                 .Select(static pair => $"{pair.Key} -> {pair.Value}")
                 .Order(StringComparer.Ordinal)
@@ -103,11 +104,11 @@ namespace QmlSharp.Dsl.Generator.Tests.Closure
         [Trait("Category", TestCategories.Contract)]
         public void GoldenFiles_AllDslClosureGoldens_ArePresentAndNonEmpty()
         {
-            string goldenRoot = Path.Combine(AppContext.BaseDirectory, "testdata", "golden");
+            string goldenRoot = Path.Join(AppContext.BaseDirectory, "testdata", "golden");
 
             foreach (string fileName in new[] { "Button.cs", "Rectangle.cs", "Text.cs" })
             {
-                string path = Path.Combine(goldenRoot, fileName);
+                string path = Path.Join(goldenRoot, fileName);
 
                 Assert.True(File.Exists(path), $"Missing golden file: {fileName}");
                 Assert.True(new FileInfo(path).Length > 0, $"Golden file is empty: {fileName}");
@@ -121,10 +122,10 @@ namespace QmlSharp.Dsl.Generator.Tests.Closure
             string root = FindRepositoryRoot();
 
             AssertProjectReferences(
-                Path.Combine(root, "src", "QmlSharp.Dsl", "QmlSharp.Dsl.csproj"),
+                Path.Join(root, "src", "QmlSharp.Dsl", "QmlSharp.Dsl.csproj"),
                 ["QmlSharp.Core", "QmlSharp.Qml.Ast"]);
             AssertProjectReferences(
-                Path.Combine(root, "src", "QmlSharp.Dsl.Generator", "QmlSharp.Dsl.Generator.csproj"),
+                Path.Join(root, "src", "QmlSharp.Dsl.Generator", "QmlSharp.Dsl.Generator.csproj"),
                 ["QmlSharp.Qml.Ast", "QmlSharp.Registry"]);
         }
 
@@ -710,14 +711,41 @@ namespace QmlSharp.Dsl.Generator.Tests.Closure
             };
         }
 
-        private static HashSet<string> GetImplementedTestMethodNames()
+        private static HashSet<string> GetImplementedTestMethodKeys()
         {
             return typeof(DslGeneratorClosureTests).Assembly
                 .GetTypes()
                 .SelectMany(static type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
                 .Where(static method => method.GetCustomAttributes().Any(static attribute => attribute.GetType().Name is "FactAttribute" or "TheoryAttribute"))
-                .Select(static method => method.Name)
+                .Select(static method => $"{method.DeclaringType!.Name}.{method.Name}")
                 .ToHashSet(StringComparer.Ordinal);
+        }
+
+        private static string CreateMappedTestMethodKey(string testId, string methodName)
+        {
+            return $"{GetMappedTestTypeName(testId)}.{methodName}";
+        }
+
+        private static string GetMappedTestTypeName(string testId)
+        {
+            string prefix = testId.Split('-', 2)[0];
+            return prefix switch
+            {
+                "AP" => "AttachedPropGeneratorTests",
+                "CE" => testId.StartsWith("CE-G", StringComparison.Ordinal) ? "CodeEmitterGoldenTests" : "CodeEmitterTests",
+                "DP" => "DefaultPropertyHandlerTests",
+                "EG" => "EnumGeneratorTests",
+                "GP" => testId == "GP-12" ? "FullGenerationCoverageTests" : "GenerationPipelineTests",
+                "IR" => "InheritanceResolverTests",
+                "MG" => "MethodGeneratorTests",
+                "MP" => testId is "MP-01" or "MP-02" or "MP-03" ? "ModuleMapperTests" : "ModulePackagerTests",
+                "NR" => "NameRegistryTests",
+                "PG" => "PropGeneratorTests",
+                "SG" => "SignalGeneratorTests",
+                "TM" => "TypeMapperTests",
+                "VM" => "ViewModelIntegrationTests",
+                _ => throw new InvalidOperationException($"No closure test class mapping exists for test id '{testId}'."),
+            };
         }
 
         private static void AssertProjectReferences(string projectPath, string[] expectedProjectNames)
@@ -727,11 +755,18 @@ namespace QmlSharp.Dsl.Generator.Tests.Closure
                 .Descendants("ProjectReference")
                 .Select(static reference => reference.Attribute("Include")?.Value)
                 .Where(static include => include is not null)
-                .Select(static include => Path.GetFileNameWithoutExtension(include!))
+                .Select(static include => GetProjectReferenceName(include!))
                 .Order(StringComparer.Ordinal)
                 .ToArray();
 
             Assert.Equal(expectedProjectNames.Order(StringComparer.Ordinal).ToArray(), actual);
+        }
+
+        private static string GetProjectReferenceName(string include)
+        {
+            string[] segments = include.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            string fileName = segments.Length == 0 ? include : segments[^1];
+            return Path.GetFileNameWithoutExtension(fileName);
         }
 
         private static string FindRepositoryRoot()
@@ -740,7 +775,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Closure
 
             while (current is not null)
             {
-                if (File.Exists(Path.Combine(current.FullName, "QmlSharp.slnx")))
+                if (File.Exists(Path.Join(current.FullName, "QmlSharp.slnx")))
                 {
                     return current.FullName;
                 }
