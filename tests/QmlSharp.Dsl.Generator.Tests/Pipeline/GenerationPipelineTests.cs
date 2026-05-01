@@ -36,6 +36,40 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
         }
 
         [Fact]
+        public async Task Generate_ReexportModule_PackagesQualifiedModuleMembers()
+        {
+            IGenerationPipeline pipeline = new GenerationPipeline();
+            QmlType rectangle = CreateType("QQuickRectangle", "Rectangle", "QtQuick", null, isCreatable: true);
+            QmlModule reexportModule = CreateModule("QtQuick.Reexports", rectangle);
+            IRegistryQuery registry = new TestRegistryQuery([reexportModule], [rectangle], "6.11.0");
+
+            GenerationResult result = await pipeline.Generate(registry, DslTestFixtures.DefaultOptions);
+
+            GeneratedPackage package = Assert.Single(result.Packages);
+            Assert.Equal("QtQuick.Reexports", package.ModuleUri);
+            Assert.Equal("QmlSharp.QtQuick.Reexports", package.PackageName);
+            Assert.Contains(package.Files, file => file.RelativePath == "Rectangle.cs");
+            Assert.DoesNotContain(result.Warnings, warning => warning.Code == GenerationWarningCode.EmptyModule);
+        }
+
+        [Fact]
+        public async Task GenerateType_CrossModuleNameCollision_UsesPrecomputedQualifiedName()
+        {
+            IGenerationPipeline pipeline = new GenerationPipeline();
+            QmlType quickButton = CreateType("QQuickButton", "Button", "QtQuick", null, isCreatable: true);
+            QmlType controlsButton = CreateType("QQuickControlsButton", "Button", "QtQuick.Controls", null, isCreatable: true);
+            IRegistryQuery registry = new TestRegistryQuery(
+                [CreateModule("QtQuick", quickButton), CreateModule("QtQuick.Controls", controlsButton)],
+                [quickButton, controlsButton],
+                "6.11.0");
+
+            GeneratedTypeCode result = await pipeline.GenerateType(registry, "QQuickControlsButton", DslTestFixtures.DefaultOptions);
+
+            Assert.Equal("QtQuickControlsButton", result.FactoryName);
+            Assert.Equal("IQtQuickControlsButtonBuilder", result.BuilderInterfaceName);
+        }
+
+        [Fact]
         public async Task Generate_P0Modules_ReturnsFourPackages()
         {
             IGenerationPipeline pipeline = new GenerationPipeline();

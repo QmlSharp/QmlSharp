@@ -143,7 +143,8 @@ namespace QmlSharp.Dsl.Generator
                     type.ModuleUri);
             }
 
-            GeneratedTypeCode generatedType = GenerateTypeCore(type, run);
+            IReadOnlyDictionary<(string ModuleUri, string QmlName), string> generatedNames = PrecomputeGeneratedTypeNames(registry);
+            GeneratedTypeCode generatedType = GenerateTypeCore(type, run, generatedNames);
             ReportProgress(GenerationPhase.Done, 12, 12, $"Generated type {type.QualifiedName}.");
             return Task.FromResult(generatedType);
         }
@@ -266,8 +267,7 @@ namespace QmlSharp.Dsl.Generator
             foreach (QmlModule module in modules)
             {
                 ReportProgress(GenerationPhase.Packaging, 10, 12, module.Uri);
-                bool hasGeneratedTypes = generatedTypes.Values.Any(type =>
-                    string.Equals(type.ModuleUri, module.Uri, StringComparison.Ordinal));
+                bool hasGeneratedTypes = HasGeneratedTypesForModule(module, generatedTypes);
                 if (!hasGeneratedTypes)
                 {
                     run.Warn(
@@ -315,6 +315,18 @@ namespace QmlSharp.Dsl.Generator
                 run.Warn(MapWarningCode(exception), exception.Message, resolvedType.Type.QualifiedName, resolvedType.Type.ModuleUri);
                 return ImmutableArray<GeneratedAttachedType>.Empty;
             }
+        }
+
+        private static bool HasGeneratedTypesForModule(
+            QmlModule module,
+            IReadOnlyDictionary<string, GeneratedTypeCode> generatedTypes)
+        {
+            HashSet<string> moduleQualifiedNames = module.Types
+                .Select(static type => type.QualifiedName)
+                .ToHashSet(StringComparer.Ordinal);
+
+            return generatedTypes.Any(entry => moduleQualifiedNames.Contains(entry.Key)
+                || string.Equals(entry.Value.ModuleUri, module.Uri, StringComparison.Ordinal));
         }
 
         private static bool ShouldGenerateType(QmlType type, PipelineRun run)
