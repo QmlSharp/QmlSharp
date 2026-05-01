@@ -1,3 +1,4 @@
+using QmlSharp.Registry;
 using QmlSharp.Registry.Querying;
 
 namespace QmlSharp.Dsl.Generator.Tests.Fixtures
@@ -29,7 +30,9 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
             Assert.NotNull(p0Registry.FindModule("QtQuick.Layouts"));
             Assert.Equal("QObject", p0Registry.FindTypeByQmlName("QtQml", "QtObject")?.QualifiedName);
             Assert.True(p0Registry.InheritsFrom("QQuickItem", "QObject"));
-            Assert.True(p0Registry.InheritsFrom("QQuickButton", "QObject"));
+            QmlType? button = p0Registry.FindTypeByQmlName("QtQuick.Controls", "Button");
+            Assert.NotNull(button);
+            Assert.True(p0Registry.InheritsFrom(button.QualifiedName, "QObject"));
             Assert.NotNull(DslTestFixtures.CreateCircularInheritanceFixture().FindModule("QtQuick.Circular"));
             Assert.NotEmpty(DslTestFixtures.CreateAttachedTypesFixture().GetAttachedTypes());
             Assert.Contains("CounterViewModel", DslTestFixtures.CreateCounterViewModelSchema(), StringComparison.Ordinal);

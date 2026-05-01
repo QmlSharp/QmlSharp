@@ -12,35 +12,35 @@ using System.Collections.Immutable;
 /// <summary>
 /// Builder for the Border grouped property.
 /// </summary>
-public interface IBorderBuilder : IPropertyCollector
+public interface IRectangleBorderBuilder : IPropertyCollector
 {
     /// <summary>
     /// Sets border.color.
     /// </summary>
-    IBorderBuilder Color(QmlColor value);
-    IBorderBuilder ColorBind(string expr);
+    IRectangleBorderBuilder Color(QmlColor value);
+    IRectangleBorderBuilder ColorBind(string expr);
     /// <summary>
     /// Sets border.width.
     /// </summary>
-    IBorderBuilder Width(double value);
-    IBorderBuilder WidthBind(string expr);
+    IRectangleBorderBuilder Width(double value);
+    IRectangleBorderBuilder WidthBind(string expr);
 }
 
 /// <summary>
 /// Builder for Layout attached properties.
 /// </summary>
-public interface ILayoutBuilder : IPropertyCollector
+public interface ILayoutAttachedBuilder : IPropertyCollector
 {
     /// <summary>
     /// Sets fillHeight.
     /// </summary>
-    ILayoutBuilder FillHeight(bool value);
-    ILayoutBuilder FillHeightBind(string expr);
+    ILayoutAttachedBuilder FillHeight(bool value);
+    ILayoutAttachedBuilder FillHeightBind(string expr);
     /// <summary>
     /// Sets fillWidth.
     /// </summary>
-    ILayoutBuilder FillWidth(bool value);
-    ILayoutBuilder FillWidthBind(string expr);
+    ILayoutAttachedBuilder FillWidth(bool value);
+    ILayoutAttachedBuilder FillWidthBind(string expr);
 }
 
 /// <summary>
@@ -76,11 +76,11 @@ public interface IRectangleBuilder : IObjectBuilder
     /// <summary>
     /// Configures the Border grouped property.
     /// </summary>
-    IRectangleBuilder Border(Action<IBorderBuilder> setup);
+    IRectangleBuilder Border(Action<IRectangleBorderBuilder> setup);
     /// <summary>
     /// Configures Layout attached properties.
     /// </summary>
-    IRectangleBuilder Layout(Action<ILayoutBuilder> setup);
+    IRectangleBuilder Layout(Action<ILayoutAttachedBuilder> setup);
     /// <summary>
     /// Handles colorChanged.
     /// </summary>

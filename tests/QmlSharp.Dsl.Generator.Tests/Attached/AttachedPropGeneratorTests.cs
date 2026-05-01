@@ -16,7 +16,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Attached
             GeneratedAttachedType generated = generator.Generate(layoutAttached, CreateContext(registry, "QtQuick.Layouts"));
 
             Assert.Equal("Layout", generated.MethodName);
-            Assert.Equal("ILayoutBuilder", generated.BuilderInterfaceName);
+            Assert.Equal("ILayoutAttachedBuilder", generated.BuilderInterfaceName);
             Assert.Equal("QQuickLayoutAttached", generated.TypeName);
         }
 
@@ -30,7 +30,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Attached
             GeneratedAttachedType generated = generator.Generate(keysAttached, CreateContext(registry));
 
             Assert.Equal("Keys", generated.MethodName);
-            Assert.Equal("IKeysBuilder", generated.BuilderInterfaceName);
+            Assert.Equal("IKeysAttachedBuilder", generated.BuilderInterfaceName);
         }
 
         [Fact]
@@ -43,9 +43,9 @@ namespace QmlSharp.Dsl.Generator.Tests.Attached
             GeneratedAttachedType generated = generator.Generate(layoutAttached, CreateContext(registry, "QtQuick.Layouts"));
 
             Assert.Contains(generated.Properties, property => property.Name == "FillWidth"
-                && property.SetterSignature == "ILayoutBuilder FillWidth(bool value)");
+                && property.SetterSignature == "ILayoutAttachedBuilder FillWidth(bool value)");
             Assert.Contains(generated.Properties, property => property.Name == "FillHeight"
-                && property.BindSignature == "ILayoutBuilder FillHeightBind(string expr)");
+                && property.BindSignature == "ILayoutAttachedBuilder FillHeightBind(string expr)");
         }
 
         [Fact]
@@ -59,7 +59,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Attached
 
             GeneratedSignal pressed = Assert.Single(generated.Signals);
             Assert.Equal("OnPressed", pressed.HandlerName);
-            Assert.Equal("IKeysBuilder OnPressed(Action<object> handler)", pressed.HandlerSignature);
+            Assert.Equal("IKeysAttachedBuilder OnPressed(Action<object> handler)", pressed.HandlerSignature);
             GeneratedParameter parameter = Assert.Single(pressed.Parameters);
             Assert.Equal("@event", parameter.Name);
             Assert.Equal("object", parameter.CSharpType);
@@ -86,7 +86,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Attached
             GeneratedAttachedType generated = generator.Generate(attachedType, CreateContext(registry, "QtQuick.Layouts"));
 
             Assert.Equal("Layout", generated.MethodName);
-            Assert.Equal("ILayoutBuilder", generated.BuilderInterfaceName);
+            Assert.Equal("ILayoutAttachedBuilder", generated.BuilderInterfaceName);
         }
 
         [Fact]

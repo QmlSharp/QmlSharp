@@ -164,10 +164,10 @@ namespace QmlSharp.Dsl.Generator.Tests.Emitter
 
             string output = emitter.EmitTypeFile(DslTestFixtures.CreateGeneratedRectangleMetadata(), DefaultOptions);
 
-            Assert.Contains("public interface IBorderBuilder : IPropertyCollector", output, StringComparison.Ordinal);
-            Assert.Contains("IRectangleBuilder Border(Action<IBorderBuilder> setup);", output, StringComparison.Ordinal);
-            Assert.Contains("public interface ILayoutBuilder : IPropertyCollector", output, StringComparison.Ordinal);
-            Assert.Contains("IRectangleBuilder Layout(Action<ILayoutBuilder> setup);", output, StringComparison.Ordinal);
+            Assert.Contains("public interface IRectangleBorderBuilder : IPropertyCollector", output, StringComparison.Ordinal);
+            Assert.Contains("IRectangleBuilder Border(Action<IRectangleBorderBuilder> setup);", output, StringComparison.Ordinal);
+            Assert.Contains("public interface ILayoutAttachedBuilder : IPropertyCollector", output, StringComparison.Ordinal);
+            Assert.Contains("IRectangleBuilder Layout(Action<ILayoutAttachedBuilder> setup);", output, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -189,9 +189,9 @@ namespace QmlSharp.Dsl.Generator.Tests.Emitter
 
             string output = emitter.EmitTypeFile(metadata with { Properties = properties }, DefaultOptions);
 
-            Assert.Contains("IBorderBuilder Color(QmlColor value);", output, StringComparison.Ordinal);
-            Assert.DoesNotContain("IBorderBuilder Width(double value);", output, StringComparison.Ordinal);
-            Assert.DoesNotContain("IBorderBuilder WidthBind(string expr);", output, StringComparison.Ordinal);
+            Assert.Contains("IRectangleBorderBuilder Color(QmlColor value);", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("IRectangleBorderBuilder Width(double value);", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("IRectangleBorderBuilder WidthBind(string expr);", output, StringComparison.Ordinal);
             Assert.Contains("new PropertyMethodMetadata(\"Width\", \"width\", false, false)", output, StringComparison.Ordinal);
         }
 

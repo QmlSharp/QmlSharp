@@ -60,30 +60,32 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
 
         public static IRegistryQuery CreateP0Fixture()
         {
+            return CreateP0ScaleFixture();
+        }
+
+        public static IRegistryQuery CreateP0ScaleFixture()
+        {
+            ImmutableArray<QmlType> qtQmlTypes = CreateQtQmlP0Types();
+            ImmutableArray<QmlType> qtQuickTypes = CreateQtQuickP0Types();
+            ImmutableArray<QmlType> controlsTypes = CreateQtQuickControlsP0Types();
+            ImmutableArray<QmlType> layoutTypes = CreateQtQuickLayoutsP0Types();
+            QmlType keysAttached = CreateKeysAttachedType();
+            QmlType layoutAttached = CreateLayoutAttachedType();
+
             return CreateQuery(
                 modules:
                 [
-                    CreateModule("QtQml", "QObject", "QtObject"),
-                    CreateModule(
-                        "QtQuick",
-                        "QQuickItem",
-                        "Item",
-                        "QQuickRectangle",
-                        "Rectangle",
-                        "QQuickText",
-                        "Text"),
-                    CreateModule("QtQuick.Controls", "QQuickButton", "Button"),
-                    CreateModule("QtQuick.Layouts", "QQuickLayout", "Layout"),
+                    CreateModule("QtQml", qtQmlTypes),
+                    CreateModule("QtQuick", qtQuickTypes),
+                    CreateModule("QtQuick.Controls", controlsTypes, dependencies: ["QtQuick"]),
+                    CreateModule("QtQuick.Layouts", layoutTypes, dependencies: ["QtQuick"]),
                 ],
-                types:
-                [
-                    CreateQObjectType("QObject", "QtObject", "QtQml", null, isCreatable: true),
-                    CreateItemType(),
-                    CreateRectangleType(),
-                    CreateTextType(),
-                    CreateButtonType(),
-                    CreateLayoutType(),
-                ]);
+                types: qtQmlTypes
+                    .Concat(qtQuickTypes)
+                    .Concat(controlsTypes)
+                    .Concat(layoutTypes)
+                    .Concat([keysAttached, layoutAttached])
+                    .ToImmutableArray());
         }
 
         public static IRegistryQuery CreateCircularInheritanceFixture()
@@ -251,8 +253,8 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
                         [
                             new GeneratedProperty(
                                 Name: "FillWidth",
-                                SetterSignature: "ILayoutBuilder FillWidth(bool value)",
-                                BindSignature: "ILayoutBuilder FillWidthBind(string expr)",
+                                SetterSignature: "ILayoutAttachedBuilder FillWidth(bool value)",
+                                BindSignature: "ILayoutAttachedBuilder FillWidthBind(string expr)",
                                 XmlDoc: "<summary>Sets fillWidth.</summary>",
                                 DeclaredBy: layoutAttached,
                                 IsReadOnly: false,
@@ -260,8 +262,8 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
                                 CSharpType: "bool"),
                             new GeneratedProperty(
                                 Name: "FillHeight",
-                                SetterSignature: "ILayoutBuilder FillHeight(bool value)",
-                                BindSignature: "ILayoutBuilder FillHeightBind(string expr)",
+                                SetterSignature: "ILayoutAttachedBuilder FillHeight(bool value)",
+                                BindSignature: "ILayoutAttachedBuilder FillHeightBind(string expr)",
                                 XmlDoc: "<summary>Sets fillHeight.</summary>",
                                 DeclaredBy: layoutAttached,
                                 IsReadOnly: false,
@@ -269,7 +271,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
                                 CSharpType: "bool"),
                         ],
                         Signals: ImmutableArray<GeneratedSignal>.Empty,
-                        BuilderInterfaceName: "ILayoutBuilder"),
+                        BuilderInterfaceName: "ILayoutAttachedBuilder"),
                 ],
                 DefaultProperty: new DefaultPropertyInfo("data", "Item", IsList: true, GenerateChildMethod: true, GenerateChildrenMethod: true),
                 IsCreatable: true,
@@ -471,6 +473,345 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
                 Dependencies: ImmutableArray<string>.Empty,
                 Imports: ImmutableArray<string>.Empty,
                 Types: types.ToImmutable());
+        }
+
+        private static QmlModule CreateModule(
+            string uri,
+            ImmutableArray<QmlType> types,
+            ImmutableArray<string>? dependencies = null)
+        {
+            return new QmlModule(
+                Uri: uri,
+                Version: new QmlVersion(2, 15),
+                Dependencies: dependencies ?? ImmutableArray<string>.Empty,
+                Imports: ImmutableArray<string>.Empty,
+                Types: types
+                    .Where(static type => type.QmlName is not null)
+                    .OrderBy(static type => type.QmlName, StringComparer.Ordinal)
+                    .ThenBy(static type => type.QualifiedName, StringComparer.Ordinal)
+                    .Select(static type => new QmlModuleType(
+                        type.QualifiedName,
+                        type.QmlName!,
+                        new QmlVersion(2, 15)))
+                    .ToImmutableArray());
+        }
+
+        private static ImmutableArray<QmlType> CreateQtQmlP0Types()
+        {
+            string[] creatableNames =
+            [
+                "QtObject",
+                "Binding",
+                "Connections",
+                "Component",
+                "Timer",
+                "State",
+                "Transition",
+                "PropertyChanges",
+            ];
+            string[] nonCreatableNames =
+            [
+                "StateGroup",
+                "AnimationGroup",
+            ];
+
+            return CreateNamedTypes(
+                "QtQml",
+                "QQml",
+                "QObject",
+                creatableNames,
+                nonCreatableNames,
+                prototype: "QObject",
+                includeBaseProperties: false,
+                extraProperties: [CreateProperty("enabled", "bool"), CreateProperty("objectName", "string")],
+                extraSignals: [CreateSignal("completed")],
+                extraMethods: [CreateMethod("restart", "void")],
+                extraEnums: [CreateEnum("Status", "Ready", "Loading", "Error")],
+                rootTypes: [CreateQObjectType("QObject", "QtObject", "QtQml", null, isCreatable: true)]);
+        }
+
+        private static ImmutableArray<QmlType> CreateQtQuickP0Types()
+        {
+            string[] creatableNames =
+            [
+                "Rectangle", "Text", "Image", "MouseArea", "Flickable", "ListView", "GridView", "PathView",
+                "Repeater", "Loader", "Canvas", "AnimatedImage", "BorderImage", "ShaderEffect", "ItemDelegate",
+                "FocusScope", "Flow", "Grid", "Row", "Column", "TextInput", "TextEdit", "MultiPointTouchArea",
+                "PinchArea", "DragHandler", "TapHandler", "HoverHandler", "WheelHandler", "SpriteSequence",
+                "AnimatedSprite", "ParticleSystem", "Emitter", "ImageParticle", "Age", "Attractor", "Gravity",
+                "Wander", "ScaleAffector", "OpacityAnimator", "XAnimator", "YAnimator", "RotationAnimator",
+                "ScaleAnimator", "SequentialAnimation", "ParallelAnimation", "NumberAnimation", "ColorAnimation",
+                "SmoothedAnimation", "SpringAnimation", "PauseAnimation", "PropertyAnimation", "PathAnimation",
+                "ParentAnimation", "AnchorAnimation", "ScriptAction", "StateChangeScript", "Behavior",
+                "Gradient", "GradientStop", "Path", "PathLine", "PathQuad", "PathCubic", "PathArc",
+                "PathAttribute", "PathPercent", "PathSvg", "PathCurve", "PathMultiline", "PathMove",
+            ];
+            string[] nonCreatableNames =
+            [
+                "Item", "Animation", "TransitionBase", "PointerHandler", "ShapePath", "TextMetrics",
+                "FontMetrics", "Shortcut", "Accessible", "Palette",
+            ];
+
+            return CreateNamedTypes(
+                "QtQuick",
+                "QQuick",
+                "QQuickItem",
+                creatableNames,
+                nonCreatableNames,
+                prototype: "QQuickItem",
+                includeBaseProperties: true,
+                extraProperties:
+                [
+                    CreateProperty("width", "double"),
+                    CreateProperty("height", "double"),
+                    CreateProperty("visible", "bool"),
+                    CreateProperty("opacity", "double"),
+                    CreateProperty("color", "color"),
+                    CreateProperty("border.width", "double"),
+                    CreateProperty("border.color", "color"),
+                    CreateProperty("font.family", "string"),
+                    CreateProperty("font.pixelSize", "int"),
+                ],
+                extraSignals: [CreateSignal("visibleChanged"), CreateSignal("pressed", new QmlParameter("event", "var"))],
+                extraMethods: [CreateMethod("forceActiveFocus", "void"), CreateMethod("mapToItem", "point", new QmlParameter("x", "double"), new QmlParameter("y", "double"))],
+                extraEnums: [CreateEnum("HAlignment", "AlignLeft", "AlignRight", "AlignHCenter")],
+                attachedOwner: "QQuickItem",
+                attachedType: "QQuickKeysAttached",
+                rootTypes: [CreateItemType(attachedType: "QQuickKeysAttached")]);
+        }
+
+        private static ImmutableArray<QmlType> CreateQtQuickControlsP0Types()
+        {
+            string[] creatableNames =
+            [
+                "Button", "Label", "TextField", "TextArea", "CheckBox", "RadioButton", "Switch", "Slider",
+                "RangeSlider", "Dial", "ComboBox", "SpinBox", "ProgressBar", "BusyIndicator", "ScrollBar",
+                "ScrollView", "Pane", "Frame", "GroupBox", "Page", "PageIndicator", "StackView", "SwipeView",
+                "TabBar", "TabButton", "ToolBar", "ToolButton", "ToolSeparator", "Menu", "MenuItem",
+                "MenuSeparator", "Drawer", "Dialog", "DialogButtonBox", "Popup", "ToolTip", "ApplicationWindow",
+                "Action", "ActionGroup", "RoundButton", "DelayButton", "Tumbler", "Calendar", "TreeView",
+                "HorizontalHeaderView", "VerticalHeaderView",
+            ];
+            string[] nonCreatableNames =
+            [
+                "Control", "AbstractButton", "Container", "ControlSkin",
+            ];
+
+            return CreateNamedTypes(
+                "QtQuick.Controls",
+                "QQuickControl",
+                "QQuickItem",
+                creatableNames,
+                nonCreatableNames,
+                prototype: "QQuickItem",
+                includeBaseProperties: false,
+                extraProperties:
+                [
+                    CreateProperty("text", "string"),
+                    CreateProperty("checked", "bool"),
+                    CreateProperty("enabled", "bool"),
+                    CreateProperty("spacing", "double"),
+                    CreateProperty("font.family", "string"),
+                    CreateProperty("font.pixelSize", "int"),
+                ],
+                extraSignals: [CreateSignal("clicked"), CreateSignal("accepted")],
+                extraMethods: [CreateMethod("toggle", "void")],
+                extraEnums: [CreateEnum("Position", "Header", "Footer", "OnlyOne")]);
+        }
+
+        private static ImmutableArray<QmlType> CreateQtQuickLayoutsP0Types()
+        {
+            string[] creatableNames =
+            [
+                "Layout", "RowLayout", "ColumnLayout", "GridLayout", "StackLayout", "FlowLayout",
+            ];
+            string[] nonCreatableNames =
+            [
+                "LayoutItem",
+            ];
+
+            return CreateNamedTypes(
+                "QtQuick.Layouts",
+                "QQuick",
+                "QQuickItem",
+                creatableNames,
+                nonCreatableNames,
+                prototype: "QQuickItem",
+                includeBaseProperties: false,
+                extraProperties:
+                [
+                    CreateProperty("spacing", "double"),
+                    CreateProperty("columns", "int"),
+                    CreateProperty("rows", "int"),
+                ],
+                extraSignals: [CreateSignal("layoutChanged")],
+                extraMethods: [CreateMethod("invalidate", "void")],
+                extraEnums: [CreateEnum("LayoutDirection", "LeftToRight", "RightToLeft")],
+                attachedOwner: "QQuickLayout",
+                attachedType: "QQuickLayoutAttached");
+        }
+
+        private static ImmutableArray<QmlType> CreateNamedTypes(
+            string moduleUri,
+            string qualifiedPrefix,
+            string rootQualifiedName,
+            IReadOnlyList<string> creatableNames,
+            IReadOnlyList<string> nonCreatableNames,
+            string prototype,
+            bool includeBaseProperties,
+            ImmutableArray<QmlProperty> extraProperties,
+            ImmutableArray<QmlSignal> extraSignals,
+            ImmutableArray<QmlMethod> extraMethods,
+            ImmutableArray<QmlEnum> extraEnums,
+            string? attachedOwner = null,
+            string? attachedType = null,
+            ImmutableArray<QmlType>? rootTypes = null)
+        {
+            ImmutableArray<QmlType>.Builder types = ImmutableArray.CreateBuilder<QmlType>();
+            if (rootTypes.HasValue)
+            {
+                types.AddRange(rootTypes.Value);
+            }
+
+            foreach (string name in creatableNames.Order(StringComparer.Ordinal))
+            {
+                string qualifiedName = string.Equals(name, "QtObject", StringComparison.Ordinal)
+                    ? "QObject"
+                    : $"{qualifiedPrefix}{name}";
+                if (types.Any(type => string.Equals(type.QualifiedName, qualifiedName, StringComparison.Ordinal)))
+                {
+                    continue;
+                }
+
+                types.Add(CreateP0Type(
+                    qualifiedName,
+                    name,
+                    moduleUri,
+                    string.Equals(qualifiedName, rootQualifiedName, StringComparison.Ordinal) ? "QObject" : prototype,
+                    isCreatable: true,
+                    properties: SelectP0Properties(name, includeBaseProperties, extraProperties),
+                    signals: extraSignals,
+                    methods: extraMethods,
+                    enums: CreateTypeSpecificEnums(name, extraEnums),
+                    attachedType: string.Equals(qualifiedName, attachedOwner, StringComparison.Ordinal) ? attachedType : null,
+                    defaultProperty: IsVisualContainer(name) ? "data" : null));
+            }
+
+            foreach (string name in nonCreatableNames.Order(StringComparer.Ordinal))
+            {
+                string qualifiedName = string.Equals(name, "Item", StringComparison.Ordinal)
+                    ? rootQualifiedName
+                    : $"{qualifiedPrefix}{name}";
+                if (types.Any(type => string.Equals(type.QualifiedName, qualifiedName, StringComparison.Ordinal)))
+                {
+                    continue;
+                }
+
+                types.Add(CreateP0Type(
+                    qualifiedName,
+                    name,
+                    moduleUri,
+                    prototype,
+                    isCreatable: false,
+                    properties: SelectP0Properties(name, includeBaseProperties, extraProperties),
+                    signals: extraSignals,
+                    methods: extraMethods,
+                    enums: CreateTypeSpecificEnums(name, extraEnums),
+                    attachedType: string.Equals(qualifiedName, attachedOwner, StringComparison.Ordinal) ? attachedType : null,
+                    defaultProperty: IsVisualContainer(name) ? "data" : null));
+            }
+
+            return types
+                .OrderBy(static type => type.ModuleUri, StringComparer.Ordinal)
+                .ThenBy(static type => type.QmlName, StringComparer.Ordinal)
+                .ThenBy(static type => type.QualifiedName, StringComparer.Ordinal)
+                .ToImmutableArray();
+        }
+
+        private static ImmutableArray<QmlEnum> CreateTypeSpecificEnums(string typeName, ImmutableArray<QmlEnum> enums)
+        {
+            return enums
+                .Select(qmlEnum => qmlEnum with { Name = $"{typeName}{qmlEnum.Name}" })
+                .ToImmutableArray();
+        }
+
+        private static QmlType CreateP0Type(
+            string qualifiedName,
+            string qmlName,
+            string moduleUri,
+            string? prototype,
+            bool isCreatable,
+            ImmutableArray<QmlProperty> properties,
+            ImmutableArray<QmlSignal> signals,
+            ImmutableArray<QmlMethod> methods,
+            ImmutableArray<QmlEnum> enums,
+            string? attachedType,
+            string? defaultProperty)
+        {
+            return new QmlType(
+                QualifiedName: qualifiedName,
+                QmlName: qmlName,
+                ModuleUri: moduleUri,
+                AccessSemantics: AccessSemantics.Reference,
+                Prototype: prototype,
+                DefaultProperty: defaultProperty,
+                AttachedType: attachedType,
+                Extension: null,
+                IsSingleton: false,
+                IsCreatable: isCreatable,
+                Exports: CreateExports(moduleUri, qmlName),
+                Properties: properties,
+                Signals: signals,
+                Methods: methods,
+                Enums: enums,
+                Interfaces: ImmutableArray<string>.Empty);
+        }
+
+        private static ImmutableArray<QmlProperty> SelectP0Properties(
+            string typeName,
+            bool includeBaseProperties,
+            ImmutableArray<QmlProperty> commonProperties)
+        {
+            ImmutableArray<QmlProperty>.Builder properties = ImmutableArray.CreateBuilder<QmlProperty>();
+            properties.Add(CreateProperty("objectName", "string"));
+            if (includeBaseProperties || IsVisualContainer(typeName))
+            {
+                properties.Add(CreateProperty("width", "double"));
+                properties.Add(CreateProperty("height", "double"));
+            }
+
+            foreach (QmlProperty property in commonProperties)
+            {
+                if (!properties.Any(existing => string.Equals(existing.Name, property.Name, StringComparison.Ordinal)))
+                {
+                    properties.Add(property);
+                }
+            }
+
+            return properties.ToImmutable();
+        }
+
+        private static bool IsVisualContainer(string name)
+        {
+            return name.Contains("View", StringComparison.Ordinal)
+                || name.Contains("Layout", StringComparison.Ordinal)
+                || string.Equals(name, "Rectangle", StringComparison.Ordinal)
+                || string.Equals(name, "Item", StringComparison.Ordinal)
+                || string.Equals(name, "Pane", StringComparison.Ordinal)
+                || string.Equals(name, "Page", StringComparison.Ordinal)
+                || string.Equals(name, "ApplicationWindow", StringComparison.Ordinal);
+        }
+
+        private static QmlEnum CreateEnum(string name, params string[] values)
+        {
+            return new QmlEnum(
+                name,
+                IsFlag: false,
+                values
+                    .Select((value, index) => new QmlEnumValue(value, index))
+                    .ToImmutableArray(),
+                Alias: null,
+                IsScoped: true);
         }
 
         private static QmlType CreateQObjectType(
