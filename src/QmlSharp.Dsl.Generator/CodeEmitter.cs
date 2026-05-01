@@ -8,8 +8,6 @@ namespace QmlSharp.Dsl.Generator
     public sealed class CodeEmitter : ICodeEmitter
     {
         private const string Indent = "    ";
-        private const string DefaultPackageVersion = "0.1.0";
-
         public string EmitTypeFile(GeneratedTypeCode typeCode, CodeEmitOptions options)
         {
             ArgumentNullException.ThrowIfNull(typeCode);
@@ -94,7 +92,7 @@ namespace QmlSharp.Dsl.Generator
             writer.AppendLine("    <Nullable>enable</Nullable>");
             writer.AppendLine("    <ImplicitUsings>enable</ImplicitUsings>");
             writer.AppendLine($"    <PackageId>{EscapeXml(package.PackageName)}</PackageId>");
-            writer.AppendLine("    <Version>0.1.0</Version>");
+            writer.AppendLine($"    <Version>{EscapeXml(package.PackageVersion)}</Version>");
             writer.AppendLine("    <GenerateDocumentationFile>true</GenerateDocumentationFile>");
             writer.AppendLine("  </PropertyGroup>");
 
@@ -106,7 +104,7 @@ namespace QmlSharp.Dsl.Generator
                 writer.AppendLine("  <ItemGroup>");
                 foreach (string dependency in dependencies)
                 {
-                    writer.AppendLine($"    <PackageReference Include=\"{EscapeXml(dependency)}\" Version=\"{DefaultPackageVersion}\" />");
+                    writer.AppendLine($"    <PackageReference Include=\"{EscapeXml(dependency)}\" Version=\"{EscapeXml(package.PackageVersion)}\" />");
                 }
 
                 writer.AppendLine("  </ItemGroup>");

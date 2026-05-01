@@ -28,6 +28,8 @@ namespace QmlSharp.Dsl.Generator
 
         string ToModuleUri(string packageName);
 
+        string ToNamespace(string moduleUri);
+
         int GetPriority(string moduleUri);
 
         IReadOnlyDictionary<string, string> GetAllMappings();
@@ -37,6 +39,7 @@ namespace QmlSharp.Dsl.Generator
     public sealed record GeneratedPackage(
         string PackageName,
         string ModuleUri,
+        string PackageVersion,
         ImmutableArray<GeneratedFile> Files,
         int Types,
         ImmutableArray<string> Dependencies,

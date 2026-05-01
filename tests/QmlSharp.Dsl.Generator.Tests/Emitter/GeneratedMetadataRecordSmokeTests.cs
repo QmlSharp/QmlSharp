@@ -30,6 +30,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Emitter
                     new GeneratedPackage(
                         PackageName: "QmlSharp.QtQuick",
                         ModuleUri: "QtQuick",
+                        PackageVersion: "0.1.0",
                         Files:
                         [
                             new GeneratedFile("Rectangle.cs", "content", GeneratedFileKind.TypeFile),
