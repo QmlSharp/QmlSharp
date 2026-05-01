@@ -173,6 +173,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
         {
             QmlType rectangle = CreateRectangleType();
             QmlType item = CreateItemType();
+            QmlType layoutAttached = CreateLayoutAttachedType();
 
             return new GeneratedTypeCode(
                 QmlName: "Rectangle",
@@ -201,6 +202,24 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
                         IsReadOnly: false,
                         IsRequired: false,
                         CSharpType: "QmlColor"),
+                    new GeneratedProperty(
+                        Name: "BorderColor",
+                        SetterSignature: "IRectangleBuilder BorderColor(QmlColor value)",
+                        BindSignature: "IRectangleBuilder BorderColorBind(string expr)",
+                        XmlDoc: "<summary>Sets border.color.</summary>",
+                        DeclaredBy: rectangle,
+                        IsReadOnly: false,
+                        IsRequired: false,
+                        CSharpType: "QmlColor"),
+                    new GeneratedProperty(
+                        Name: "BorderWidth",
+                        SetterSignature: "IRectangleBuilder BorderWidth(double value)",
+                        BindSignature: "IRectangleBuilder BorderWidthBind(string expr)",
+                        XmlDoc: "<summary>Sets border.width.</summary>",
+                        DeclaredBy: rectangle,
+                        IsReadOnly: false,
+                        IsRequired: false,
+                        CSharpType: "double"),
                 ],
                 Signals:
                 [
@@ -214,8 +233,208 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
                 ],
                 Methods: ImmutableArray<GeneratedMethod>.Empty,
                 Enums: ImmutableArray<GeneratedEnum>.Empty,
-                AttachedTypes: ImmutableArray<GeneratedAttachedType>.Empty,
+                AttachedTypes:
+                [
+                    new GeneratedAttachedType(
+                        TypeName: "QQuickLayoutAttached",
+                        MethodName: "Layout",
+                        ResolvedType: new ResolvedType(
+                            layoutAttached,
+                            [layoutAttached],
+                            layoutAttached.Properties.Select(property => new ResolvedProperty(property, layoutAttached, false)).ToImmutableArray(),
+                            ImmutableArray<ResolvedSignal>.Empty,
+                            ImmutableArray<ResolvedMethod>.Empty,
+                            ImmutableArray<QmlEnum>.Empty,
+                            AttachedType: null,
+                            ExtensionType: null),
+                        Properties:
+                        [
+                            new GeneratedProperty(
+                                Name: "FillWidth",
+                                SetterSignature: "ILayoutBuilder FillWidth(bool value)",
+                                BindSignature: "ILayoutBuilder FillWidthBind(string expr)",
+                                XmlDoc: "<summary>Sets fillWidth.</summary>",
+                                DeclaredBy: layoutAttached,
+                                IsReadOnly: false,
+                                IsRequired: false,
+                                CSharpType: "bool"),
+                            new GeneratedProperty(
+                                Name: "FillHeight",
+                                SetterSignature: "ILayoutBuilder FillHeight(bool value)",
+                                BindSignature: "ILayoutBuilder FillHeightBind(string expr)",
+                                XmlDoc: "<summary>Sets fillHeight.</summary>",
+                                DeclaredBy: layoutAttached,
+                                IsReadOnly: false,
+                                IsRequired: false,
+                                CSharpType: "bool"),
+                        ],
+                        Signals: ImmutableArray<GeneratedSignal>.Empty,
+                        BuilderInterfaceName: "ILayoutBuilder"),
+                ],
                 DefaultProperty: new DefaultPropertyInfo("data", "Item", IsList: true, GenerateChildMethod: true, GenerateChildrenMethod: true),
+                IsCreatable: true,
+                IsDeprecated: false);
+        }
+
+        public static GeneratedTypeCode CreateGeneratedTextMetadata()
+        {
+            QmlType text = CreateTextType();
+            QmlType item = CreateItemType();
+
+            return new GeneratedTypeCode(
+                QmlName: "Text",
+                ModuleUri: "QtQuick",
+                FactoryName: "Text",
+                PropsInterfaceName: "ITextProps",
+                BuilderInterfaceName: "ITextBuilder",
+                FactoryMethodCode: "public static ITextBuilder Text() => ObjectFactory.Create<ITextBuilder>(\"Text\");",
+                Properties:
+                [
+                    new GeneratedProperty(
+                        Name: "LineCount",
+                        SetterSignature: string.Empty,
+                        BindSignature: null,
+                        XmlDoc: "<summary>Gets lineCount.</summary>",
+                        DeclaredBy: text,
+                        IsReadOnly: true,
+                        IsRequired: false,
+                        CSharpType: "int"),
+                    new GeneratedProperty(
+                        Name: "Text",
+                        SetterSignature: "ITextBuilder Text(string value)",
+                        BindSignature: "ITextBuilder TextBind(string expr)",
+                        XmlDoc: "<summary>Sets text.</summary>",
+                        DeclaredBy: text,
+                        IsReadOnly: false,
+                        IsRequired: false,
+                        CSharpType: "string"),
+                    new GeneratedProperty(
+                        Name: "Width",
+                        SetterSignature: "ITextBuilder Width(double value)",
+                        BindSignature: "ITextBuilder WidthBind(string expr)",
+                        XmlDoc: "<summary>Sets width.</summary>",
+                        DeclaredBy: item,
+                        IsReadOnly: false,
+                        IsRequired: false,
+                        CSharpType: "double"),
+                    new GeneratedProperty(
+                        Name: "WrapMode",
+                        SetterSignature: "ITextBuilder WrapMode(TextWrapMode value)",
+                        BindSignature: "ITextBuilder WrapModeBind(string expr)",
+                        XmlDoc: "<summary>Sets wrapMode.</summary>",
+                        DeclaredBy: text,
+                        IsReadOnly: false,
+                        IsRequired: false,
+                        CSharpType: "TextWrapMode"),
+                ],
+                Signals:
+                [
+                    new GeneratedSignal(
+                        SignalName: "textChanged",
+                        HandlerName: "OnTextChanged",
+                        HandlerSignature: "ITextBuilder OnTextChanged(Action handler)",
+                        XmlDoc: "<summary>Handles textChanged.</summary>",
+                        DeclaredBy: text,
+                        Parameters: ImmutableArray<GeneratedParameter>.Empty),
+                ],
+                Methods:
+                [
+                    new GeneratedMethod(
+                        Name: "Append",
+                        Signature: "ITextBuilder Append(string value)",
+                        Parameters: [new GeneratedParameter("value", "string", "string")],
+                        ReturnType: "void",
+                        XmlDoc: "<summary>Invokes append.</summary>",
+                        DeclaredBy: text,
+                        IsConstructor: false),
+                ],
+                Enums:
+                [
+                    new GeneratedEnum(
+                        Name: "TextWrapMode",
+                        Alias: null,
+                        IsFlag: false,
+                        IsScoped: true,
+                        Members:
+                        [
+                            new GeneratedEnumMember("NoWrap", 0),
+                            new GeneratedEnumMember("WordWrap", 1),
+                        ],
+                        Code: "public enum TextWrapMode\n{\n    NoWrap = 0,\n    WordWrap = 1\n}",
+                        OwnerType: text),
+                ],
+                AttachedTypes: ImmutableArray<GeneratedAttachedType>.Empty,
+                DefaultProperty: null,
+                IsCreatable: true,
+                IsDeprecated: false);
+        }
+
+        public static GeneratedTypeCode CreateGeneratedButtonMetadata()
+        {
+            QmlType button = CreateButtonType();
+            QmlType item = CreateItemType();
+
+            return new GeneratedTypeCode(
+                QmlName: "Button",
+                ModuleUri: "QtQuick.Controls",
+                FactoryName: "Button",
+                PropsInterfaceName: "IButtonProps",
+                BuilderInterfaceName: "IButtonBuilder",
+                FactoryMethodCode: "public static IButtonBuilder Button() => ObjectFactory.Create<IButtonBuilder>(\"Button\");",
+                Properties:
+                [
+                    new GeneratedProperty(
+                        Name: "Checked",
+                        SetterSignature: "IButtonBuilder Checked(bool value)",
+                        BindSignature: "IButtonBuilder CheckedBind(string expr)",
+                        XmlDoc: "<summary>Sets checked.</summary>",
+                        DeclaredBy: button,
+                        IsReadOnly: false,
+                        IsRequired: false,
+                        CSharpType: "bool"),
+                    new GeneratedProperty(
+                        Name: "Text",
+                        SetterSignature: "IButtonBuilder Text(string value)",
+                        BindSignature: "IButtonBuilder TextBind(string expr)",
+                        XmlDoc: "<summary>Sets text.</summary>",
+                        DeclaredBy: button,
+                        IsReadOnly: false,
+                        IsRequired: false,
+                        CSharpType: "string"),
+                    new GeneratedProperty(
+                        Name: "Width",
+                        SetterSignature: "IButtonBuilder Width(double value)",
+                        BindSignature: "IButtonBuilder WidthBind(string expr)",
+                        XmlDoc: "<summary>Sets width.</summary>",
+                        DeclaredBy: item,
+                        IsReadOnly: false,
+                        IsRequired: false,
+                        CSharpType: "double"),
+                ],
+                Signals:
+                [
+                    new GeneratedSignal(
+                        SignalName: "clicked",
+                        HandlerName: "OnClicked",
+                        HandlerSignature: "IButtonBuilder OnClicked(Action handler)",
+                        XmlDoc: "<summary>Handles clicked.</summary>",
+                        DeclaredBy: button,
+                        Parameters: ImmutableArray<GeneratedParameter>.Empty),
+                ],
+                Methods:
+                [
+                    new GeneratedMethod(
+                        Name: "Click",
+                        Signature: "IButtonBuilder Click()",
+                        Parameters: ImmutableArray<GeneratedParameter>.Empty,
+                        ReturnType: "void",
+                        XmlDoc: "<summary>Invokes click.</summary>",
+                        DeclaredBy: button,
+                        IsConstructor: false),
+                ],
+                Enums: ImmutableArray<GeneratedEnum>.Empty,
+                AttachedTypes: ImmutableArray<GeneratedAttachedType>.Empty,
+                DefaultProperty: null,
                 IsCreatable: true,
                 IsDeprecated: false);
         }
