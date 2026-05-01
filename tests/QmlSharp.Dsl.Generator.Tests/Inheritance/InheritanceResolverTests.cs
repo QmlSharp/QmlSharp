@@ -236,6 +236,52 @@ namespace QmlSharp.Dsl.Generator.Tests.Inheritance
             Assert.DoesNotContain("Broken", resolvedTypes.Keys);
         }
 
+        [Fact]
+        public void ResolveModule_CircularInheritance_SkipsBrokenTypeAndKeepsValidTypes()
+        {
+            QmlType root = CreateType("Root", "Root", "QtQuick.Test");
+            QmlType child = CreateType("Child", "Child", "QtQuick.Test", prototype: "Root");
+            QmlType cycleA = CreateType("CycleA", "CycleA", "QtQuick.Test", prototype: "CycleB");
+            QmlType cycleB = CreateType("CycleB", "CycleB", "QtQuick.Test", prototype: "CycleA");
+            IRegistryQuery registry = CreateQuery(root, child, cycleA, cycleB);
+            QmlModule module = registry.FindModule("QtQuick.Test")!;
+            InheritanceResolver resolver = new();
+
+            IReadOnlyDictionary<string, ResolvedType> resolvedTypes = resolver.ResolveModule(module, registry);
+
+            Assert.Equal(["Child", "Root"], resolvedTypes.Keys.Order(StringComparer.Ordinal));
+            Assert.DoesNotContain("CycleA", resolvedTypes.Keys);
+            Assert.DoesNotContain("CycleB", resolvedTypes.Keys);
+        }
+
+        [Fact]
+        public void ResolveModule_MaxDepthExceeded_SkipsBrokenTypeAndKeepsValidTypes()
+        {
+            QmlType root = CreateType("Root", "Root", "QtQuick.Test");
+            QmlType child = CreateType("Child", "Child", "QtQuick.Test", prototype: "Root");
+            QmlType grandchild = CreateType("Grandchild", "Grandchild", "QtQuick.Test", prototype: "Child");
+            IRegistryQuery registry = CreateQuery(root, child, grandchild);
+            QmlModule module = registry.FindModule("QtQuick.Test")!;
+            InheritanceResolver resolver = new(new InheritanceOptions(MaxDepth: 2, IncludeQtObjectProperties: true));
+
+            IReadOnlyDictionary<string, ResolvedType> resolvedTypes = resolver.ResolveModule(module, registry);
+
+            Assert.Equal(["Child", "Root"], resolvedTypes.Keys.Order(StringComparer.Ordinal));
+            Assert.DoesNotContain("Grandchild", resolvedTypes.Keys);
+        }
+
+        [Fact]
+        public void GetDirectSubtypes_UnresolvedPrototype_DoesNotReturnRawStringMatch()
+        {
+            QmlType broken = CreateType("Broken", "Broken", "QtQuick.Test", prototype: "MissingBase");
+            IRegistryQuery registry = CreateQuery(broken);
+            InheritanceResolver resolver = new();
+
+            IReadOnlyList<QmlType> directSubtypes = resolver.GetDirectSubtypes("MissingBase", registry);
+
+            Assert.Empty(directSubtypes);
+        }
+
         private static IRegistryQuery CreateDeepInheritanceFixture()
         {
             return CreateQuery(

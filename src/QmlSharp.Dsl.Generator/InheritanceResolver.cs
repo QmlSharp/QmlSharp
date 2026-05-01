@@ -51,23 +51,21 @@ namespace QmlSharp.Dsl.Generator
             ArgumentNullException.ThrowIfNull(registry);
 
             Dictionary<string, ResolvedType> resolvedTypes = new(StringComparer.Ordinal);
-            foreach (QmlModuleType moduleType in module.Types.OrderBy(moduleType => moduleType.QmlName, StringComparer.Ordinal)
-                         .ThenBy(moduleType => moduleType.QualifiedName, StringComparer.Ordinal))
+            foreach (QmlType type in module.Types
+                         .OrderBy(moduleType => moduleType.QmlName, StringComparer.Ordinal)
+                         .ThenBy(moduleType => moduleType.QualifiedName, StringComparer.Ordinal)
+                         .Select(moduleType => registry.FindTypeByQualifiedName(moduleType.QualifiedName)
+                             ?? registry.FindTypeByQmlName(module.Uri, moduleType.QmlName))
+                         .Where(type => type is not null)
+                         .Select(type => type!))
             {
-                QmlType? type = registry.FindTypeByQualifiedName(moduleType.QualifiedName)
-                    ?? registry.FindTypeByQmlName(module.Uri, moduleType.QmlName);
-                if (type is null)
-                {
-                    continue;
-                }
-
                 try
                 {
                     ResolvedType resolvedType = Resolve(type, registry);
                     string key = type.QmlName ?? type.QualifiedName;
                     resolvedTypes[key] = resolvedType;
                 }
-                catch (TypeResolutionException)
+                catch (DslGenerationException exception) when (IsSkippableResolverDiagnostic(exception))
                 {
                     continue;
                 }
@@ -93,8 +91,7 @@ namespace QmlSharp.Dsl.Generator
             string targetName = targetType?.QualifiedName ?? typeName;
 
             return registry.FindTypes(type =>
-                    string.Equals(type.Prototype, typeName, StringComparison.Ordinal)
-                    || string.Equals(ResolveTypeName(type.Prototype, type.ModuleUri, registry)?.QualifiedName, targetName, StringComparison.Ordinal))
+                    string.Equals(ResolveTypeName(type.Prototype, type.ModuleUri, registry)?.QualifiedName, targetName, StringComparison.Ordinal))
                 .OrderBy(type => type.QmlName ?? type.QualifiedName, StringComparer.Ordinal)
                 .ThenBy(type => type.QualifiedName, StringComparer.Ordinal)
                 .ToArray();
@@ -204,12 +201,11 @@ namespace QmlSharp.Dsl.Generator
 
             foreach (QmlType declaringType in inheritanceChain)
             {
-                foreach (QmlSignal signal in declaringType.Signals.OrderBy(signal => BuildSignalKey(signal), StringComparer.Ordinal))
+                foreach (QmlSignal signal in declaringType.Signals
+                             .OrderBy(signal => BuildSignalKey(signal), StringComparer.Ordinal)
+                             .Where(signal => emittedSignalKeys.Add(BuildSignalKey(signal))))
                 {
-                    if (emittedSignalKeys.Add(BuildSignalKey(signal)))
-                    {
-                        resolvedSignals.Add(new ResolvedSignal(signal, declaringType));
-                    }
+                    resolvedSignals.Add(new ResolvedSignal(signal, declaringType));
                 }
             }
 
@@ -223,12 +219,11 @@ namespace QmlSharp.Dsl.Generator
 
             foreach (QmlType declaringType in inheritanceChain)
             {
-                foreach (QmlMethod method in declaringType.Methods.OrderBy(method => BuildMethodKey(method), StringComparer.Ordinal))
+                foreach (QmlMethod method in declaringType.Methods
+                             .OrderBy(method => BuildMethodKey(method), StringComparer.Ordinal)
+                             .Where(method => emittedMethodKeys.Add(BuildMethodKey(method))))
                 {
-                    if (emittedMethodKeys.Add(BuildMethodKey(method)))
-                    {
-                        resolvedMethods.Add(new ResolvedMethod(method, declaringType));
-                    }
+                    resolvedMethods.Add(new ResolvedMethod(method, declaringType));
                 }
             }
 
@@ -242,12 +237,11 @@ namespace QmlSharp.Dsl.Generator
 
             foreach (QmlType declaringType in inheritanceChain)
             {
-                foreach (QmlEnum enumDefinition in declaringType.Enums.OrderBy(enumDefinition => enumDefinition.Name, StringComparer.Ordinal))
+                foreach (QmlEnum enumDefinition in declaringType.Enums
+                             .OrderBy(enumDefinition => enumDefinition.Name, StringComparer.Ordinal)
+                             .Where(enumDefinition => emittedEnumNames.Add(enumDefinition.Name)))
                 {
-                    if (emittedEnumNames.Add(enumDefinition.Name))
-                    {
-                        resolvedEnums.Add(enumDefinition);
-                    }
+                    resolvedEnums.Add(enumDefinition);
                 }
             }
 
@@ -288,6 +282,13 @@ namespace QmlSharp.Dsl.Generator
 
             QmlType[] globalQmlNameMatches = registry.FindTypes(type => string.Equals(type.QmlName, typeName, StringComparison.Ordinal)).ToArray();
             return globalQmlNameMatches.Length == 1 ? globalQmlNameMatches[0] : null;
+        }
+
+        private static bool IsSkippableResolverDiagnostic(DslGenerationException exception)
+        {
+            return string.Equals(exception.DiagnosticCode, DslDiagnosticCodes.UnresolvedBaseType, StringComparison.Ordinal)
+                || string.Equals(exception.DiagnosticCode, DslDiagnosticCodes.CircularInheritance, StringComparison.Ordinal)
+                || string.Equals(exception.DiagnosticCode, DslDiagnosticCodes.MaxDepthExceeded, StringComparison.Ordinal);
         }
 
         private static bool IsQtObjectType(QmlType type)
