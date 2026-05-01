@@ -8,8 +8,12 @@ using QmlSharp.Registry.Querying;
 namespace QmlSharp.Dsl.Generator.Tests.Pipeline
 {
     [Collection(TestCategories.GeneratedDotnetBuild)]
-    public sealed partial class FullGenerationCoverageTests
+    public sealed class FullGenerationCoverageTests
     {
+        private static readonly Regex ValidQmlSharpPackageNamePattern = new(
+            @"^QmlSharp(\.[A-Z][A-Za-z0-9]*)+$",
+            RegexOptions.CultureInvariant);
+
         private static readonly string[] P0Modules =
         [
             "QtQml",
@@ -138,7 +142,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
 
             foreach (GeneratedPackage package in result.Packages)
             {
-                Assert.Matches(ValidQmlSharpPackageNameRegex(), package.PackageName);
+                Assert.Matches(ValidQmlSharpPackageNamePattern, package.PackageName);
                 Assert.DoesNotContain('-', package.PackageName);
                 Assert.DoesNotContain('@', package.PackageName);
                 Assert.DoesNotContain(" ", package.PackageName, StringComparison.Ordinal);
@@ -363,9 +367,6 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
                 {result.Stderr}
                 """;
         }
-
-        [GeneratedRegex(@"^QmlSharp(\.[A-Z][A-Za-z0-9]*)+$", RegexOptions.CultureInvariant)]
-        private static partial Regex ValidQmlSharpPackageNameRegex();
 
         private sealed record DotnetResult(int ExitCode, string Stdout, string Stderr);
     }

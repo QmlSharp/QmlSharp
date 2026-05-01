@@ -124,6 +124,8 @@ jobs:
               - native
             paths-ignore:
               - build
+              - '**/bin/**'
+              - '**/obj/**'
 
       - name: Autobuild
         if: matrix.build-mode == 'autobuild'
