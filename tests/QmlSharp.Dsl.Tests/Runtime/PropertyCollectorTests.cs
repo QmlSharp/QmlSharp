@@ -116,6 +116,22 @@ namespace QmlSharp.Dsl.Tests.Runtime
                 entry => Assert.Equal("onPressed", entry.PropertyName));
         }
 
+        [Fact]
+        [Trait("Category", TestCategories.Runtime)]
+        public void GeneratedCollectorProxy_TreatsOnPrefixedStringPropertyAsPropertyWhenMetadataMatches()
+        {
+            PropertyCollectorMetadata metadata = new(
+                ImmutableArray.Create(new PropertyMethodMetadata("OnboardingText", "onboardingText")),
+                ImmutableArray<SignalMethodMetadata>.Empty);
+            IOnPrefixedCollector collector = PropertyCollectorFactory.Create<IOnPrefixedCollector>(metadata);
+
+            collector.OnboardingText("Welcome");
+
+            PropertyCollectionEntry entry = Assert.Single(collector.Entries);
+            Assert.Equal("onboardingText", entry.PropertyName);
+            Assert.Equal("Welcome", Assert.IsType<StringLiteral>(entry.Value).Value);
+        }
+
         private interface IBorderCollector : IPropertyCollector
         {
             IBorderCollector Width(int value);
@@ -130,6 +146,11 @@ namespace QmlSharp.Dsl.Tests.Runtime
             IKeysCollector Enabled(bool value);
 
             IKeysCollector OnPressed(string body);
+        }
+
+        private interface IOnPrefixedCollector : IPropertyCollector
+        {
+            IOnPrefixedCollector OnboardingText(string value);
         }
     }
 }

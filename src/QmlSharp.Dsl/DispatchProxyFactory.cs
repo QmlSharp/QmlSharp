@@ -232,6 +232,11 @@ namespace QmlSharp.Dsl
                 return false;
             }
 
+            if (FindProperty(methodName) is not null)
+            {
+                return false;
+            }
+
             SignalMethodMetadata? metadata = FindSignal(methodName);
             builder.HandleSignal(metadata?.HandlerName ?? NameConventions.ToQmlSignalHandlerName(methodName), body);
             return true;
@@ -312,54 +317,30 @@ namespace QmlSharp.Dsl
 
         private PropertyMethodMetadata? FindProperty(string methodName)
         {
-            foreach (PropertyMethodMetadata property in _metadata.Properties)
-            {
-                if (StringComparer.Ordinal.Equals(property.MethodName, methodName))
-                {
-                    return property;
-                }
-            }
-
-            return null;
+            return _metadata.Properties
+                .Where(property => StringComparer.Ordinal.Equals(property.MethodName, methodName))
+                .FirstOrDefault();
         }
 
         private GroupedPropertyMethodMetadata? FindGrouped(string methodName)
         {
-            foreach (GroupedPropertyMethodMetadata grouped in _metadata.GroupedProperties)
-            {
-                if (StringComparer.Ordinal.Equals(grouped.MethodName, methodName))
-                {
-                    return grouped;
-                }
-            }
-
-            return null;
+            return _metadata.GroupedProperties
+                .Where(grouped => StringComparer.Ordinal.Equals(grouped.MethodName, methodName))
+                .FirstOrDefault();
         }
 
         private AttachedPropertyMethodMetadata? FindAttached(string methodName)
         {
-            foreach (AttachedPropertyMethodMetadata attached in _metadata.AttachedProperties)
-            {
-                if (StringComparer.Ordinal.Equals(attached.MethodName, methodName))
-                {
-                    return attached;
-                }
-            }
-
-            return null;
+            return _metadata.AttachedProperties
+                .Where(attached => StringComparer.Ordinal.Equals(attached.MethodName, methodName))
+                .FirstOrDefault();
         }
 
         private SignalMethodMetadata? FindSignal(string methodName)
         {
-            foreach (SignalMethodMetadata signal in _metadata.Signals)
-            {
-                if (StringComparer.Ordinal.Equals(signal.MethodName, methodName))
-                {
-                    return signal;
-                }
-            }
-
-            return null;
+            return _metadata.Signals
+                .Where(signal => StringComparer.Ordinal.Equals(signal.MethodName, methodName))
+                .FirstOrDefault();
         }
 
         private object? ReturnBuilder(MethodInfo targetMethod)
@@ -499,6 +480,11 @@ namespace QmlSharp.Dsl
                 return false;
             }
 
+            if (FindProperty(methodName) is not null)
+            {
+                return false;
+            }
+
             SignalMethodMetadata? metadata = FindSignal(methodName);
             if (metadata is null && _metadata.Signals.Length > 0)
             {
@@ -511,28 +497,16 @@ namespace QmlSharp.Dsl
 
         private PropertyMethodMetadata? FindProperty(string methodName)
         {
-            foreach (PropertyMethodMetadata property in _metadata.Properties)
-            {
-                if (StringComparer.Ordinal.Equals(property.MethodName, methodName))
-                {
-                    return property;
-                }
-            }
-
-            return null;
+            return _metadata.Properties
+                .Where(property => StringComparer.Ordinal.Equals(property.MethodName, methodName))
+                .FirstOrDefault();
         }
 
         private SignalMethodMetadata? FindSignal(string methodName)
         {
-            foreach (SignalMethodMetadata signal in _metadata.Signals)
-            {
-                if (StringComparer.Ordinal.Equals(signal.MethodName, methodName))
-                {
-                    return signal;
-                }
-            }
-
-            return null;
+            return _metadata.Signals
+                .Where(signal => StringComparer.Ordinal.Equals(signal.MethodName, methodName))
+                .FirstOrDefault();
         }
 
         private object? ReturnCollector(MethodInfo targetMethod)

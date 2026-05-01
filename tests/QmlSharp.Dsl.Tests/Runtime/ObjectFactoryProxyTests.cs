@@ -63,6 +63,25 @@ namespace QmlSharp.Dsl.Tests.Runtime
             Assert.Equal("fillWidth", attached.Bindings[0].PropertyName);
         }
 
+        [Fact]
+        [Trait("Category", TestCategories.Runtime)]
+        public void Create_TreatsOnPrefixedStringPropertyAsPropertyWhenMetadataMatches()
+        {
+            ObjectBuilderMetadata metadata = new(
+                ImmutableArray.Create(new PropertyMethodMetadata("OnboardingText", "onboardingText")),
+                ImmutableArray<GroupedPropertyMethodMetadata>.Empty,
+                ImmutableArray<AttachedPropertyMethodMetadata>.Empty,
+                ImmutableArray<SignalMethodMetadata>.Empty);
+            IOnPrefixedPropertyBuilder builder = ObjectFactory.Create<IOnPrefixedPropertyBuilder>("Label", metadata);
+
+            builder.OnboardingText("Welcome");
+
+            ObjectDefinitionNode node = builder.Build();
+            BindingNode binding = Assert.IsType<BindingNode>(Assert.Single(node.Members));
+            Assert.Equal("onboardingText", binding.PropertyName);
+            Assert.Equal("Welcome", Assert.IsType<StringLiteral>(binding.Value).Value);
+        }
+
         private interface IRectangleBuilder : IObjectBuilder
         {
             new IRectangleBuilder Id(string id);
@@ -88,6 +107,11 @@ namespace QmlSharp.Dsl.Tests.Runtime
         private interface ILayoutBuilder : IPropertyCollector
         {
             ILayoutBuilder FillWidth(bool value);
+        }
+
+        private interface IOnPrefixedPropertyBuilder : IObjectBuilder
+        {
+            IOnPrefixedPropertyBuilder OnboardingText(string value);
         }
     }
 }
