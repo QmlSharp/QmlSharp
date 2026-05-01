@@ -239,7 +239,11 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
         {
             IGenerationPipeline pipeline = new GenerationPipeline();
             IRegistryQuery registry = CreateWarningFixture();
-            GenerationOptions options = WithFilter(DslTestFixtures.DefaultOptions.Filter with { ExcludeInternal = false });
+            GenerationOptions options = WithFilter(DslTestFixtures.DefaultOptions.Filter with
+            {
+                ExcludeInternal = false,
+                ExcludeTypes = ["ExplicitSkip"],
+            });
 
             GenerationResult result = await pipeline.Generate(registry, options);
 
