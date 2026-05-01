@@ -393,6 +393,13 @@ namespace QmlSharp.Dsl.Generator
             PipelineRun run)
         {
             HashSet<string> moduleUris = modules.Select(static module => module.Uri).ToHashSet(StringComparer.Ordinal);
+            HashSet<string> duplicateQmlNames = GetDuplicateQmlNames(registry, moduleUris);
+            NameRegistry generatedNameRegistry = new();
+            foreach (QmlType type in GetNamedTypesForModules(registry, moduleUris))
+            {
+                CollectGeneratedNameWarning(type, duplicateQmlNames, generatedNameRegistry, run);
+            }
+
             foreach (IGrouping<string, QmlType> group in registry.FindTypes(type =>
                          type.ModuleUri is not null
                          && moduleUris.Contains(type.ModuleUri)
@@ -405,11 +412,74 @@ namespace QmlSharp.Dsl.Generator
                 {
                     run.Warn(
                         GenerationWarningCode.NameCollision,
-                        $"QML type name '{group.Key}' appears in multiple modules and may require qualified generated names.",
+                        $"{DslDiagnosticCodes.CrossModuleNameCollision}: QML type name '{group.Key}' appears in multiple modules and may require qualified generated names.",
                         type.QualifiedName,
                         type.ModuleUri);
                 }
             }
+        }
+
+        private static IReadOnlyList<QmlType> GetNamedTypesForModules(IRegistryQuery registry, HashSet<string> moduleUris)
+        {
+            return registry.FindTypes(type =>
+                    type.ModuleUri is not null
+                    && moduleUris.Contains(type.ModuleUri)
+                    && !string.IsNullOrWhiteSpace(type.QmlName))
+                .OrderBy(static type => type.ModuleUri, StringComparer.Ordinal)
+                .ThenBy(static type => type.QmlName, StringComparer.Ordinal)
+                .ThenBy(static type => type.QualifiedName, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static HashSet<string> GetDuplicateQmlNames(IRegistryQuery registry, HashSet<string> moduleUris)
+        {
+            return GetNamedTypesForModules(registry, moduleUris)
+                .GroupBy(static type => type.QmlName!, StringComparer.Ordinal)
+                .Where(static group => group.Select(type => type.ModuleUri).Distinct(StringComparer.Ordinal).Count() > 1)
+                .Select(static group => group.Key)
+                .ToHashSet(StringComparer.Ordinal);
+        }
+
+        private static void CollectGeneratedNameWarning(
+            QmlType type,
+            HashSet<string> duplicateQmlNames,
+            INameRegistry generatedNameRegistry,
+            PipelineRun run)
+        {
+            string qmlName = type.QmlName!;
+            string generatedName = generatedNameRegistry.RegisterTypeName(qmlName, type.ModuleUri!);
+            string expectedName = ToPascalCase(qmlName);
+            if (generatedName.StartsWith('@'))
+            {
+                run.Warn(
+                    GenerationWarningCode.NameCollision,
+                    $"{DslDiagnosticCodes.ReservedWordCollision}: QML type name '{qmlName}' is a C# reserved word and was escaped as '{generatedName}'.",
+                    type.QualifiedName,
+                    type.ModuleUri);
+                return;
+            }
+
+            if (string.Equals(generatedName, expectedName, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            bool hasDeterministicSuffix = generatedName.StartsWith(expectedName, StringComparison.Ordinal)
+                && generatedName.Length > expectedName.Length
+                && generatedName[expectedName.Length..].All(char.IsDigit);
+            if (!duplicateQmlNames.Contains(qmlName) && !hasDeterministicSuffix)
+            {
+                return;
+            }
+
+            string diagnosticCode = duplicateQmlNames.Contains(qmlName)
+                ? DslDiagnosticCodes.CrossModuleNameCollision
+                : DslDiagnosticCodes.TypeNameCollision;
+            run.Warn(
+                GenerationWarningCode.NameCollision,
+                $"{diagnosticCode}: QML type name '{qmlName}' was generated as '{generatedName}'.",
+                type.QualifiedName,
+                type.ModuleUri);
         }
 
         private static string GetGeneratedTypeName(
@@ -434,14 +504,18 @@ namespace QmlSharp.Dsl.Generator
         {
             foreach (string typeName in GetReferencedTypeNames(resolvedType).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
             {
-                if (IsKnownTypeReference(typeName, run.Registry, typeMapper))
+                TypeReferenceStatus status = GetTypeReferenceStatus(typeName, run.Registry, typeMapper);
+                if (status == TypeReferenceStatus.Known)
                 {
                     continue;
                 }
 
+                string diagnosticCode = status == TypeReferenceStatus.Ambiguous
+                    ? DslDiagnosticCodes.AmbiguousTypeMapping
+                    : DslDiagnosticCodes.UnmappedQmlType;
                 run.Warn(
                     GenerationWarningCode.UnresolvedTypeReference,
-                    $"Type reference '{typeName}' used by '{resolvedType.Type.QualifiedName}' was not found in the registry or built-in mappings.",
+                    $"{diagnosticCode}: Type reference '{typeName}' used by '{resolvedType.Type.QualifiedName}' was not found as an unambiguous registry type or built-in mapping.",
                     resolvedType.Type.QualifiedName,
                     resolvedType.Type.ModuleUri);
             }
@@ -476,26 +550,36 @@ namespace QmlSharp.Dsl.Generator
             }
         }
 
-        private static bool IsKnownTypeReference(string typeName, IRegistryQuery registry, ITypeMapper typeMapper)
+        private static TypeReferenceStatus GetTypeReferenceStatus(string typeName, IRegistryQuery registry, ITypeMapper typeMapper)
         {
             if (string.IsNullOrWhiteSpace(typeName)
                 || string.Equals(typeName, "void", StringComparison.Ordinal))
             {
-                return true;
+                return TypeReferenceStatus.Known;
             }
 
             if (typeMapper.GetMapping(typeName) is not null)
             {
-                return true;
+                return TypeReferenceStatus.Known;
             }
 
             if (TryGetListElementType(typeName, out string elementType))
             {
-                return IsKnownTypeReference(elementType, registry, typeMapper);
+                return GetTypeReferenceStatus(elementType, registry, typeMapper);
             }
 
-            return registry.FindTypeByQualifiedName(typeName) is not null
-                || registry.FindTypes(type => string.Equals(type.QmlName, typeName, StringComparison.Ordinal)).Count == 1;
+            if (registry.FindTypeByQualifiedName(typeName) is not null)
+            {
+                return TypeReferenceStatus.Known;
+            }
+
+            int matchCount = registry.FindTypes(type => string.Equals(type.QmlName, typeName, StringComparison.Ordinal)).Count;
+            return matchCount switch
+            {
+                1 => TypeReferenceStatus.Known,
+                > 1 => TypeReferenceStatus.Ambiguous,
+                _ => TypeReferenceStatus.Unknown,
+            };
         }
 
         private static bool TryGetListElementType(string typeName, out string elementType)
@@ -591,8 +675,19 @@ namespace QmlSharp.Dsl.Generator
             return exception.DiagnosticCode switch
             {
                 DslDiagnosticCodes.DeprecatedType => DslDiagnosticCodes.DeprecatedType,
-                _ => DslDiagnosticCodes.SkippedType,
+                _ => exception.DiagnosticCode,
             };
+        }
+
+        private static string ToPascalCase(string name)
+        {
+            string[] parts = name.Split(['.', '-', '_', ':', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length == 0)
+            {
+                return "_";
+            }
+
+            return string.Concat(parts.Select(static part => string.Concat(char.ToUpperInvariant(part[0]).ToString(), part[1..])));
         }
 
         private static GenerationStats CreateStats(ImmutableArray<GeneratedPackage> packages, TimeSpan elapsed)
@@ -646,9 +741,7 @@ namespace QmlSharp.Dsl.Generator
 
             public void Skip(QmlType type, string reason, string diagnosticCode)
             {
-                string fullReason = string.Equals(diagnosticCode, DslDiagnosticCodes.DeprecatedType, StringComparison.Ordinal)
-                    ? $"{DslDiagnosticCodes.DeprecatedType}: {reason}"
-                    : $"{DslDiagnosticCodes.SkippedType}: {reason}";
+                string fullReason = $"{diagnosticCode}: {reason}";
                 skippedTypes.Add(new SkippedType(type.QualifiedName, type.ModuleUri ?? string.Empty, fullReason));
                 if (!warnings.Any(warning =>
                         warning.Code == GenerationWarningCode.SkippedType
@@ -684,6 +777,13 @@ namespace QmlSharp.Dsl.Generator
             {
                 progress(phase, currentStep, totalSteps, detail);
             }
+        }
+
+        private enum TypeReferenceStatus
+        {
+            Known,
+            Unknown,
+            Ambiguous,
         }
     }
 }

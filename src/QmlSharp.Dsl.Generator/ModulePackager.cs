@@ -79,6 +79,11 @@ namespace QmlSharp.Dsl.Generator
             ThrowIfMissingRequiredDependencies(package);
 
             string outputRoot = Path.GetFullPath(outputDir);
+            if (File.Exists(outputRoot))
+            {
+                throw new IOException($"Package output root exists as a file: {outputRoot}");
+            }
+
             string packagePath = Path.GetFullPath(Path.Join(outputRoot, ToSafePathSegment(package.PackageName)));
             if (Directory.Exists(packagePath))
             {

@@ -253,6 +253,27 @@ namespace QmlSharp.Dsl.Generator.Tests.Packager
             Assert.Equal(DslDiagnosticCodes.MissingDependency, exception.DiagnosticCode);
         }
 
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
+        public async Task WritePackage_OutputRootIsFile_ThrowsIOException()
+        {
+            using GeneratedOutputTempDirectory tempDirectory = DslTestFixtures.CreateGeneratedOutputTempDirectory();
+            string outputRootFile = Path.Join(tempDirectory.Path, "not-a-directory");
+            await File.WriteAllTextAsync(outputRootFile, "occupied");
+            ModulePackager packager = new();
+            QmlModule module = DslTestFixtures.CreateMinimalFixture().FindModule("QtQuick")!;
+            Dictionary<string, GeneratedTypeCode> generatedTypes = new(StringComparer.Ordinal)
+            {
+                ["QQuickRectangle"] = DslTestFixtures.CreateGeneratedRectangleMetadata(),
+            };
+            GeneratedPackage package = packager.PackageModule(module, generatedTypes, DslTestFixtures.DefaultOptions.Packager);
+
+            IOException exception = await Assert.ThrowsAsync<IOException>(
+                () => packager.WritePackage(package, outputRootFile));
+
+            Assert.Contains("not-a-directory", exception.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static GeneratedTypeCode CreateGeneratedMetadata(string qmlName, string moduleUri, string factoryName)
         {
             return DslTestFixtures.CreateGeneratedRectangleMetadata() with
