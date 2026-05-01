@@ -780,12 +780,10 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
                 properties.Add(CreateProperty("height", "double"));
             }
 
-            foreach (QmlProperty property in commonProperties)
+            foreach (QmlProperty property in commonProperties
+                         .Where(property => !properties.Any(existing => string.Equals(existing.Name, property.Name, StringComparison.Ordinal))))
             {
-                if (!properties.Any(existing => string.Equals(existing.Name, property.Name, StringComparison.Ordinal)))
-                {
-                    properties.Add(property);
-                }
+                properties.Add(property);
             }
 
             return properties.ToImmutable();

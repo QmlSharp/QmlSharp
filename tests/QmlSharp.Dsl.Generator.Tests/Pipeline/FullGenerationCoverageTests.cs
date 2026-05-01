@@ -116,6 +116,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
         public async Task WrittenOutputValidation_P0Modules_HasPortableRelativePaths()
         {
             GenerationResult result = await GenerateP0Async();
+            HashSet<char> invalidFileNameChars = Path.GetInvalidFileNameChars().ToHashSet();
 
             foreach (GeneratedFile file in result.Packages.SelectMany(static package => package.Files))
             {
@@ -125,7 +126,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
                 Assert.DoesNotContain("..", file.RelativePath.Split('/'), StringComparer.Ordinal);
                 Assert.All(
                     file.RelativePath.Split('/', StringSplitOptions.RemoveEmptyEntries),
-                    segment => Assert.DoesNotContain(segment, Path.GetInvalidFileNameChars()));
+                    segment => Assert.DoesNotContain(segment, invalidFileNameChars.Contains));
             }
         }
 
