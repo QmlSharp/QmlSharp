@@ -80,6 +80,21 @@ namespace QmlSharp.Dsl.Generator
         public ImmutableArray<string> Chain { get; }
     }
 
+    /// <summary>Thrown when inheritance resolution exceeds the configured maximum depth.</summary>
+    public sealed class MaxDepthExceededException : DslGenerationException
+    {
+        public MaxDepthExceededException(string typeName, int maxDepth)
+            : base(
+                $"Inheritance depth for '{typeName}' exceeded maximum depth {maxDepth}",
+                DslDiagnosticCodes.MaxDepthExceeded,
+                typeName)
+        {
+            MaxDepth = maxDepth;
+        }
+
+        public int MaxDepth { get; }
+    }
+
     /// <summary>Thrown when a name collision cannot be automatically resolved.</summary>
     public sealed class NameCollisionException : DslGenerationException
     {
