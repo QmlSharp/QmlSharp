@@ -7,14 +7,6 @@ namespace QmlSharp.Dsl.Generator
     /// </summary>
     public sealed class MethodGenerator : IMethodGenerator
     {
-        public GeneratedMethod Generate(ResolvedMethod method, GenerationContext context)
-        {
-            ArgumentNullException.ThrowIfNull(method);
-            ArgumentNullException.ThrowIfNull(context);
-
-            return Generate(method, method.DeclaredBy, context);
-        }
-
         public GeneratedMethod Generate(ResolvedMethod method, QmlType ownerType, GenerationContext context)
         {
             ArgumentNullException.ThrowIfNull(method);
@@ -46,23 +38,8 @@ namespace QmlSharp.Dsl.Generator
         }
 
         public ImmutableArray<GeneratedMethod> GenerateAll(
-            ImmutableArray<ResolvedMethod> methods,
+            ResolvedType type,
             GenerationContext context)
-        {
-            ArgumentNullException.ThrowIfNull(context);
-
-            if (methods.IsDefaultOrEmpty)
-            {
-                return ImmutableArray<GeneratedMethod>.Empty;
-            }
-
-            return methods
-                .OrderBy(method => BuildMethodKey(method.Method), StringComparer.Ordinal)
-                .Select(method => Generate(method, context))
-                .ToImmutableArray();
-        }
-
-        public ImmutableArray<GeneratedMethod> GenerateAll(ResolvedType type, GenerationContext context)
         {
             ArgumentNullException.ThrowIfNull(type);
             ArgumentNullException.ThrowIfNull(context);

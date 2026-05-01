@@ -16,7 +16,7 @@ namespace QmlSharp.Dsl.Generator
 
             string enumName = GetGeneratedEnumName(enumDef, ownerType, context);
             ImmutableArray<GeneratedEnumMember> members = GenerateMembers(enumDef, ownerType, context);
-            bool isFlag = IsFlagEnum(enumDef);
+            bool isFlag = enumDef.IsFlag;
 
             return new GeneratedEnum(
                 Name: enumName,
@@ -97,22 +97,6 @@ namespace QmlSharp.Dsl.Generator
             }
 
             return members.ToImmutable();
-        }
-
-        private static bool IsFlagEnum(QmlEnum enumDef)
-        {
-            if (enumDef.IsFlag)
-            {
-                return true;
-            }
-
-            int[] explicitValues = enumDef.Values
-                .Select(value => value.Value)
-                .Where(value => value.HasValue)
-                .Select(value => value!.Value)
-                .ToArray();
-
-            return explicitValues.Length > 1 && explicitValues.All(value => value == 0 || (value > 0 && (value & (value - 1)) == 0));
         }
 
         private static string BuildCode(string enumName, bool isFlag, ImmutableArray<GeneratedEnumMember> members)

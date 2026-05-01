@@ -7,14 +7,6 @@ namespace QmlSharp.Dsl.Generator
     /// </summary>
     public sealed class SignalGenerator : ISignalGenerator
     {
-        public GeneratedSignal Generate(ResolvedSignal signal, GenerationContext context)
-        {
-            ArgumentNullException.ThrowIfNull(signal);
-            ArgumentNullException.ThrowIfNull(context);
-
-            return Generate(signal, signal.DeclaredBy, context);
-        }
-
         public GeneratedSignal Generate(ResolvedSignal signal, QmlType ownerType, GenerationContext context)
         {
             ArgumentNullException.ThrowIfNull(signal);
@@ -33,23 +25,6 @@ namespace QmlSharp.Dsl.Generator
                 XmlDoc: $"<summary>Handles the QML {signal.Signal.Name} signal.</summary>",
                 DeclaredBy: signal.DeclaredBy,
                 Parameters: parameters);
-        }
-
-        public ImmutableArray<GeneratedSignal> GenerateAll(
-            ImmutableArray<ResolvedSignal> signals,
-            GenerationContext context)
-        {
-            ArgumentNullException.ThrowIfNull(context);
-
-            if (signals.IsDefaultOrEmpty)
-            {
-                return ImmutableArray<GeneratedSignal>.Empty;
-            }
-
-            return signals
-                .OrderBy(signal => BuildSignalKey(signal.Signal), StringComparer.Ordinal)
-                .Select(signal => Generate(signal, context))
-                .ToImmutableArray();
         }
 
         public ImmutableArray<GeneratedSignal> GenerateAll(

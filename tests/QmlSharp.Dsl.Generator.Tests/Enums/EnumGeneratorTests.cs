@@ -37,6 +37,24 @@ namespace QmlSharp.Dsl.Generator.Tests.Enums
         }
 
         [Fact]
+        public void Generate_NonFlagEnumWithPowerOfTwoValues_DoesNotInferFlagsAttribute()
+        {
+            QmlType text = CreateType("QQuickText", "Text");
+            QmlEnum enumDef = CreateEnum(
+                "Mode",
+                isFlag: false,
+                new QmlEnumValue("None", 0),
+                new QmlEnumValue("Primary", 1),
+                new QmlEnumValue("Secondary", 2));
+            EnumGenerator generator = new();
+
+            GeneratedEnum generated = generator.Generate(enumDef, text, CreateContext());
+
+            Assert.False(generated.IsFlag);
+            Assert.DoesNotContain("[Flags]", generated.Code, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void Generate_EG03_EnumMemberValues_PreservesExplicitValues()
         {
             QmlType text = CreateType("QQuickText", "Text");

@@ -76,10 +76,27 @@ namespace QmlSharp.Dsl.Generator.Tests.Methods
             ];
             MethodGenerator generator = new();
 
-            ImmutableArray<GeneratedMethod> generated = generator.GenerateAll(methods, CreateContext());
+            ImmutableArray<GeneratedMethod> generated = generator.GenerateAll(CreateResolvedType(item, methods), CreateContext());
 
             Assert.Equal(2, generated.Length);
             Assert.Equal(["Alpha", "Zeta"], generated.Select(method => method.Name));
+        }
+
+        [Fact]
+        public void GenerateAll_InheritOnlyType_UsesTargetBuilderForInheritedMethod()
+        {
+            QmlType item = CreateType("QQuickItem", "Item");
+            QmlType customItem = CreateType("QQuickCustomItem", "CustomItem");
+            ImmutableArray<ResolvedMethod> methods =
+            [
+                new ResolvedMethod(CreateMethod("forceActiveFocus", "void"), item),
+            ];
+            MethodGenerator generator = new();
+
+            GeneratedMethod generated = Assert.Single(generator.GenerateAll(CreateResolvedType(customItem, methods), CreateContext()));
+
+            Assert.Equal("ICustomItemBuilder ForceActiveFocus()", generated.Signature);
+            Assert.Equal("QQuickItem", generated.DeclaredBy.QualifiedName);
         }
 
         [Fact]
@@ -147,6 +164,19 @@ namespace QmlSharp.Dsl.Generator.Tests.Methods
         private static QmlMethod CreateMethod(string name, string? returnType, params QmlParameter[] parameters)
         {
             return new QmlMethod(name, returnType, parameters.ToImmutableArray());
+        }
+
+        private static ResolvedType CreateResolvedType(QmlType type, ImmutableArray<ResolvedMethod> methods)
+        {
+            return new ResolvedType(
+                Type: type,
+                InheritanceChain: [type],
+                AllProperties: ImmutableArray<ResolvedProperty>.Empty,
+                AllSignals: ImmutableArray<ResolvedSignal>.Empty,
+                AllMethods: methods,
+                AllEnums: ImmutableArray<QmlEnum>.Empty,
+                AttachedType: null,
+                ExtensionType: null);
         }
 
         private static QmlType CreateType(string qualifiedName, string qmlName)

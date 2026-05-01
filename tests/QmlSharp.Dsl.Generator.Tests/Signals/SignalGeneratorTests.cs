@@ -89,17 +89,35 @@ namespace QmlSharp.Dsl.Generator.Tests.Signals
         [Fact]
         public void GenerateAll_SG07_ReturnsAllSignals()
         {
+            QmlType button = CreateType("QQuickButton", "Button");
             ImmutableArray<ResolvedSignal> signals =
             [
-                new ResolvedSignal(CreateSignal("released"), CreateType("QQuickButton", "Button")),
-                new ResolvedSignal(CreateSignal("clicked"), CreateType("QQuickButton", "Button")),
+                new ResolvedSignal(CreateSignal("released"), button),
+                new ResolvedSignal(CreateSignal("clicked"), button),
             ];
             SignalGenerator generator = new();
 
-            ImmutableArray<GeneratedSignal> generated = generator.GenerateAll(signals, CreateContext());
+            ImmutableArray<GeneratedSignal> generated = generator.GenerateAll(CreateResolvedType(button, signals), CreateContext());
 
             Assert.Equal(2, generated.Length);
             Assert.Equal(["OnClicked", "OnReleased"], generated.Select(signal => signal.HandlerName));
+        }
+
+        [Fact]
+        public void GenerateAll_InheritOnlyType_UsesTargetBuilderForInheritedSignal()
+        {
+            QmlType item = CreateType("QQuickItem", "Item");
+            QmlType customItem = CreateType("QQuickCustomItem", "CustomItem");
+            ImmutableArray<ResolvedSignal> signals =
+            [
+                new ResolvedSignal(CreateSignal("widthChanged"), item),
+            ];
+            SignalGenerator generator = new();
+
+            GeneratedSignal generated = Assert.Single(generator.GenerateAll(CreateResolvedType(customItem, signals), CreateContext()));
+
+            Assert.Equal("ICustomItemBuilder OnWidthChanged(Action handler)", generated.HandlerSignature);
+            Assert.Equal("QQuickItem", generated.DeclaredBy.QualifiedName);
         }
 
         [Fact]
@@ -144,6 +162,19 @@ namespace QmlSharp.Dsl.Generator.Tests.Signals
         private static QmlSignal CreateSignal(string name, params QmlParameter[] parameters)
         {
             return new QmlSignal(name, parameters.ToImmutableArray());
+        }
+
+        private static ResolvedType CreateResolvedType(QmlType type, ImmutableArray<ResolvedSignal> signals)
+        {
+            return new ResolvedType(
+                Type: type,
+                InheritanceChain: [type],
+                AllProperties: ImmutableArray<ResolvedProperty>.Empty,
+                AllSignals: signals,
+                AllMethods: ImmutableArray<ResolvedMethod>.Empty,
+                AllEnums: ImmutableArray<QmlEnum>.Empty,
+                AttachedType: null,
+                ExtensionType: null);
         }
 
         private static QmlType CreateType(string qualifiedName, string qmlName)
