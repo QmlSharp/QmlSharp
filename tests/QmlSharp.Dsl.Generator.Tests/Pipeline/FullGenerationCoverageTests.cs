@@ -7,6 +7,7 @@ using QmlSharp.Registry.Querying;
 
 namespace QmlSharp.Dsl.Generator.Tests.Pipeline
 {
+    [Collection(TestCategories.GeneratedDotnetBuild)]
     public sealed partial class FullGenerationCoverageTests
     {
         private static readonly string[] P0Modules =
