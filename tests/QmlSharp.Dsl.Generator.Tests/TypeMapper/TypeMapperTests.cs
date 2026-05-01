@@ -15,6 +15,7 @@ namespace QmlSharp.Dsl.Generator.Tests.TypeMapper
             { "url", "string" },
             { "var", "object" },
             { "variant", "object" },
+            { "list", "IReadOnlyList<object>" },
             { "date", "DateTime" },
             { "point", "QmlPoint" },
             { "size", "QmlSize" },
@@ -84,6 +85,32 @@ namespace QmlSharp.Dsl.Generator.Tests.TypeMapper
             string actual = mapper.MapToCSharp("list<color>");
 
             Assert.Equal("IReadOnlyList<QmlColor>", actual);
+        }
+
+        [Fact]
+        public void MapToCSharp_TM15_BareList_ReturnsReadOnlyListOfObject()
+        {
+            QmlSharp.Dsl.Generator.TypeMapper mapper = new();
+
+            string actual = mapper.MapToCSharp("list");
+
+            Assert.Equal("IReadOnlyList<object>", actual);
+        }
+
+        [Fact]
+        public void GetMapping_TM15_BareList_ReturnsStableListMappingRecord()
+        {
+            QmlSharp.Dsl.Generator.TypeMapper mapper = new();
+
+            TypeMapping? mapping = mapper.GetMapping("list");
+
+            Assert.NotNull(mapping);
+            Assert.Equal("list", mapping.QmlType);
+            Assert.Equal("IReadOnlyList<object>", mapping.CSharpType);
+            Assert.False(mapping.IsValueType);
+            Assert.True(mapping.IsNullable);
+            Assert.Equal("null", mapping.DefaultValue);
+            Assert.Equal("System.Collections.Generic", mapping.RequiresImport);
         }
 
         [Fact]

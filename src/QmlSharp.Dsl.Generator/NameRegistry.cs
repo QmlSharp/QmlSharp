@@ -90,7 +90,7 @@ namespace QmlSharp.Dsl.Generator
                 candidateName = $"{candidateName}Property";
             }
 
-            string resolvedName = ResolveMemberName(candidateName, scope.PropertyNames);
+            string resolvedName = ResolveMemberName(candidateName, scope);
             scope.PropertyNames.Add(resolvedName);
             return resolvedName;
         }
@@ -107,7 +107,7 @@ namespace QmlSharp.Dsl.Generator
                 candidateName = $"{candidateName}Method";
             }
 
-            string resolvedName = ResolveMemberName(candidateName, scope.MethodNames);
+            string resolvedName = ResolveMemberName(candidateName, scope);
             scope.MethodNames.Add(resolvedName);
             return resolvedName;
         }
@@ -119,7 +119,7 @@ namespace QmlSharp.Dsl.Generator
 
             OwnerNameScope scope = GetOwnerScope(ownerType);
             string candidateName = ConvertQmlNameToCSharpName(enumName);
-            string resolvedName = ResolveMemberName(candidateName, scope.EnumNames);
+            string resolvedName = ResolveMemberName(candidateName, scope);
             scope.EnumNames.Add(resolvedName);
             return resolvedName;
         }
@@ -335,15 +335,15 @@ namespace QmlSharp.Dsl.Generator
             return $"{resolvedName}{suffix}";
         }
 
-        private static string ResolveMemberName(string candidateName, HashSet<string> usedNames)
+        private static string ResolveMemberName(string candidateName, OwnerNameScope scope)
         {
-            if (!usedNames.Contains(candidateName))
+            if (!scope.Contains(candidateName))
             {
                 return candidateName;
             }
 
             int suffix = 2;
-            while (usedNames.Contains($"{candidateName}{suffix}"))
+            while (scope.Contains($"{candidateName}{suffix}"))
             {
                 suffix++;
             }
@@ -416,6 +416,13 @@ namespace QmlSharp.Dsl.Generator
             public HashSet<string> MethodNames { get; } = new(Comparer);
 
             public HashSet<string> EnumNames { get; } = new(Comparer);
+
+            public bool Contains(string name)
+            {
+                return PropertyNames.Contains(name)
+                    || MethodNames.Contains(name)
+                    || EnumNames.Contains(name);
+            }
         }
     }
 }

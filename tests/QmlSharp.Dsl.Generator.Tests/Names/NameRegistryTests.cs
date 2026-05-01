@@ -213,6 +213,44 @@ namespace QmlSharp.Dsl.Generator.Tests.Names
         }
 
         [Fact]
+        public void RegisterEnumName_PropertyCollision_ReturnsDeterministicSafeIdentifier()
+        {
+            NameRegistry registry = new();
+            string propertyName = registry.RegisterPropertyName("state", "Item");
+
+            string actual = registry.RegisterEnumName("state", "Item");
+
+            Assert.Equal("State", propertyName);
+            Assert.Equal("State2", actual);
+        }
+
+        [Fact]
+        public void RegisterEnumName_MethodCollision_ReturnsDeterministicSafeIdentifier()
+        {
+            NameRegistry registry = new();
+            string methodName = registry.RegisterMethodName("state", "Item");
+
+            string actual = registry.RegisterEnumName("state", "Item");
+
+            Assert.Equal("State", methodName);
+            Assert.Equal("State2", actual);
+        }
+
+        [Fact]
+        public void RegisterPropertyAndMethodName_EnumCollision_ReturnsDeterministicSafeIdentifier()
+        {
+            NameRegistry registry = new();
+            string enumName = registry.RegisterEnumName("state", "Item");
+
+            string propertyName = registry.RegisterPropertyName("state", "Item");
+            string methodName = registry.RegisterMethodName("state", "Item");
+
+            Assert.Equal("State", enumName);
+            Assert.Equal("State2", propertyName);
+            Assert.Equal("State3", methodName);
+        }
+
+        [Fact]
         public void RegisterPropertyName_SameOwnerDuplicate_ReturnsDeterministicNumericSuffixes()
         {
             NameRegistry registry = new();

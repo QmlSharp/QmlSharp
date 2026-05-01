@@ -129,6 +129,7 @@ namespace QmlSharp.Dsl.Generator
                 Reference("url", "string", null),
                 Reference("var", "object", null),
                 Reference("variant", "object", null),
+                Reference("list", "IReadOnlyList<object>", "System.Collections.Generic"),
                 Value("date", "DateTime", "System"),
                 Value("point", "QmlPoint", "QmlSharp.Core"),
                 Value("size", "QmlSize", "QmlSharp.Core"),
