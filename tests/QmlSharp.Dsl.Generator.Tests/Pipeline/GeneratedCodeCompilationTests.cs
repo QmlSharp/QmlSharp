@@ -5,6 +5,7 @@ using QmlSharp.Registry.Querying;
 
 namespace QmlSharp.Dsl.Generator.Tests.Pipeline
 {
+    [Collection(TestCategories.GeneratedDotnetBuild)]
     public sealed class GeneratedCodeCompilationTests
     {
         [Fact]

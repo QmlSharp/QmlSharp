@@ -36,9 +36,32 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
                 return;
             }
 
-            if (Directory.Exists(Path))
+            DeleteDirectoryWithRetry(Path);
+        }
+
+        private static void DeleteDirectoryWithRetry(string path)
+        {
+            const int maxAttempts = 5;
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                Directory.Delete(Path, recursive: true);
+                try
+                {
+                    if (Directory.Exists(path))
+                    {
+                        Directory.Delete(path, recursive: true);
+                    }
+
+                    return;
+                }
+                catch (IOException) when (attempt < maxAttempts)
+                {
+                    System.Threading.Thread.Sleep(TimeSpan.FromMilliseconds(100 * attempt));
+                }
+                catch (UnauthorizedAccessException) when (attempt < maxAttempts)
+                {
+                    System.Threading.Thread.Sleep(TimeSpan.FromMilliseconds(100 * attempt));
+                }
             }
         }
     }

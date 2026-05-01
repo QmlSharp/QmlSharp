@@ -15,7 +15,7 @@ namespace QmlSharp.Dsl.Generator
 
             ResolvedType resolvedType = new InheritanceResolver(context.Options.Inheritance).Resolve(attachedType, context.Registry);
             string methodName = DeriveAttachedMethodName(attachedType);
-            string builderInterfaceName = $"I{methodName}Builder";
+            string builderInterfaceName = $"I{methodName}AttachedBuilder";
 
             return new GeneratedAttachedType(
                 TypeName: attachedType.QualifiedName,

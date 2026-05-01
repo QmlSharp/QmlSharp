@@ -226,10 +226,10 @@ namespace QmlSharp.Dsl.Generator
                          .Where(static property => !property.IsReadOnly && !IsGroupedProperty(property)))
             {
                 WriteGeneratedXmlDoc(writer, options, property.XmlDoc, Indent);
-                writer.AppendLine($"{Indent}{EnsureInterfaceSignature(property.SetterSignature)};");
+                writer.AppendLine($"{Indent}{EnsureInterfaceSignature(NormalizeOwnerBuilderSignature(property.SetterSignature, typeCode))};");
                 if (!string.IsNullOrWhiteSpace(property.BindSignature))
                 {
-                    writer.AppendLine($"{Indent}{EnsureInterfaceSignature(property.BindSignature)};");
+                    writer.AppendLine($"{Indent}{EnsureInterfaceSignature(NormalizeOwnerBuilderSignature(property.BindSignature, typeCode))};");
                 }
             }
 
@@ -250,7 +250,7 @@ namespace QmlSharp.Dsl.Generator
             foreach (GeneratedMethod method in SortMethods(typeCode.Methods))
             {
                 WriteGeneratedXmlDoc(writer, options, method.XmlDoc, Indent);
-                writer.AppendLine($"{Indent}{EnsureInterfaceSignature(method.Signature)};");
+                writer.AppendLine($"{Indent}{EnsureInterfaceSignature(NormalizeOwnerBuilderSignature(method.Signature, typeCode))};");
             }
 
             if (typeCode.DefaultProperty is not null)
@@ -276,7 +276,7 @@ namespace QmlSharp.Dsl.Generator
             foreach (GeneratedSignal signal in SortSignals(typeCode.Signals))
             {
                 WriteGeneratedXmlDoc(writer, options, signal.XmlDoc, Indent);
-                writer.AppendLine($"{Indent}{EnsureInterfaceSignature(signal.HandlerSignature)};");
+                writer.AppendLine($"{Indent}{EnsureInterfaceSignature(NormalizeOwnerBuilderSignature(signal.HandlerSignature, typeCode))};");
                 writer.AppendLine($"{Indent}{typeCode.BuilderInterfaceName} {signal.HandlerName}(string body);");
             }
         }
@@ -524,12 +524,12 @@ namespace QmlSharp.Dsl.Generator
                 .Where(static property => IsGroupedProperty(property))
                 .GroupBy(static property => GetGroupName(property), StringComparer.Ordinal)
                 .OrderBy(static group => group.Key, StringComparer.Ordinal)
-                .Select(static group =>
+                .Select(group =>
                 {
                     string groupName = group.Key;
                     return new GroupedSurface(
                         GroupName: groupName,
-                        BuilderInterfaceName: $"I{groupName}Builder",
+                        BuilderInterfaceName: $"I{typeCode.FactoryName}{groupName}Builder",
                         Properties: group.OrderBy(static property => GetLocalGroupedMethodName(property), StringComparer.Ordinal).ToImmutableArray());
                 })
                 .ToImmutableArray();
@@ -666,6 +666,17 @@ namespace QmlSharp.Dsl.Generator
         private static IEnumerable<string> NormalizeLines(string value)
         {
             return value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n');
+        }
+
+        private static string NormalizeOwnerBuilderSignature(string signature, GeneratedTypeCode typeCode)
+        {
+            string legacyBuilderPrefix = $"I{ToPascalCase(typeCode.QmlName)}Builder ";
+            if (signature.StartsWith(legacyBuilderPrefix, StringComparison.Ordinal))
+            {
+                return $"{typeCode.BuilderInterfaceName} {signature[legacyBuilderPrefix.Length..]}";
+            }
+
+            return signature;
         }
 
         private static void ThrowIfInvalidType(GeneratedTypeCode typeCode)
