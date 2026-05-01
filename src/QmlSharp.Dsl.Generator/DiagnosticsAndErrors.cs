@@ -112,6 +112,39 @@ namespace QmlSharp.Dsl.Generator
 
         public string ExistingOwner { get; }
     }
+
+    /// <summary>Thrown when a property cannot be represented in generated C# metadata.</summary>
+    public sealed class UnsupportedPropertyTypeException : DslGenerationException
+    {
+        public UnsupportedPropertyTypeException(string propertyName, string propertyType, QmlSharp.Registry.QmlType declaringType)
+            : base(
+                $"Property '{propertyName}' on '{declaringType.QualifiedName}' has unsupported type '{propertyType}'.",
+                DslDiagnosticCodes.UnsupportedPropertyType,
+                declaringType.QualifiedName,
+                declaringType.ModuleUri)
+        {
+            PropertyName = propertyName;
+            PropertyType = propertyType;
+        }
+
+        public string PropertyName { get; }
+
+        public string PropertyType { get; }
+    }
+
+    /// <summary>Thrown when grouped and direct property names conflict.</summary>
+    public sealed class GroupedPropertyConflictException : DslGenerationException
+    {
+        public GroupedPropertyConflictException(string groupName)
+            : base(
+                $"Grouped property '{groupName}' conflicts with a direct property of the same name.",
+                DslDiagnosticCodes.GroupedPropertyConflict)
+        {
+            GroupName = groupName;
+        }
+
+        public string GroupName { get; }
+    }
 }
 
 #pragma warning restore MA0048
