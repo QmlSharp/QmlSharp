@@ -4,5 +4,7 @@ namespace QmlSharp.Dsl.Tests.Fixtures
     {
         public const string Smoke = "Smoke";
         public const string Contract = "Contract";
+        public const string Runtime = "Runtime";
+        public const string Values = "Values";
     }
 }
