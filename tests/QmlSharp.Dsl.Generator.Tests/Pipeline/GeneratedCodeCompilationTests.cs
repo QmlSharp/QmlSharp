@@ -150,6 +150,22 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
             Assert.DoesNotContain("ObjectFactory.Create<IHelperBuilder>", source, StringComparison.Ordinal);
         }
 
+        [Fact]
+        public void ProjectReferenceInclude_IsRelativeToGeneratedProjectDirectory()
+        {
+            using GeneratedOutputTempDirectory temp = DslTestFixtures.CreateGeneratedOutputTempDirectory();
+            string projectDirectory = Path.Join(temp.Path, "consumer");
+            _ = Directory.CreateDirectory(projectDirectory);
+            string referencePath = Path.Join(FindSolutionRoot(), "src", "QmlSharp.Core", "QmlSharp.Core.csproj");
+
+            string include = ToProjectReferenceInclude(projectDirectory, referencePath);
+
+            Assert.False(Path.IsPathRooted(include), $"ProjectReference include should be relative: {include}");
+            Assert.Equal(
+                Path.GetFullPath(referencePath),
+                Path.GetFullPath(Path.Join(projectDirectory, include)));
+        }
+
         private static async Task CompileGeneratedConsumerAsync(IRegistryQuery registry, string usageSource)
         {
             using GeneratedOutputTempDirectory temp = DslTestFixtures.CreateGeneratedOutputTempDirectory();
@@ -211,7 +227,9 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
                         continue;
                     }
 
-                    XElement projectReference = new("ProjectReference", new XAttribute("Include", referencePath));
+                    string projectDirectory = Path.GetDirectoryName(projectPath)
+                        ?? throw new DirectoryNotFoundException($"Project path does not include a directory: {projectPath}");
+                    XElement projectReference = new("ProjectReference", new XAttribute("Include", ToProjectReferenceInclude(projectDirectory, referencePath)));
                     packageReference.AddAfterSelf(projectReference);
                     packageReference.Remove();
                 }
@@ -228,7 +246,7 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
             _ = Directory.CreateDirectory(consumerRoot);
             string references = string.Join(
                 Environment.NewLine,
-                packageProjectPaths.Select(path => $"    <ProjectReference Include=\"{path}\" />"));
+                packageProjectPaths.Select(path => $"    <ProjectReference Include=\"{ToProjectReferenceInclude(consumerRoot, path)}\" />"));
             string project = $$"""
                 <Project Sdk="Microsoft.NET.Sdk">
                   <PropertyGroup>
@@ -244,6 +262,13 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
 
             File.WriteAllText(Path.Join(consumerRoot, "GeneratedConsumer.csproj"), project);
             File.WriteAllText(Path.Join(consumerRoot, "Usage.cs"), usageSource);
+        }
+
+        private static string ToProjectReferenceInclude(string projectDirectory, string referencePath)
+        {
+            string fullProjectDirectory = Path.GetFullPath(projectDirectory);
+            string fullReferencePath = Path.GetFullPath(referencePath);
+            return Path.GetRelativePath(fullProjectDirectory, fullReferencePath);
         }
 
         private static async Task<DotnetResult> RunDotnetAsync(string arguments, string workingDirectory)
