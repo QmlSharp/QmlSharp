@@ -17,16 +17,23 @@ namespace QmlSharp.Dsl.Generator
 
         private readonly ICodeEmitter emitter;
         private readonly IModuleMapper mapper;
+        private readonly bool usePackagePrefixOption;
 
         public ModulePackager()
-            : this(new CodeEmitter(), new ModuleMapper())
+            : this(new CodeEmitter(), new ModuleMapper(), usePackagePrefixOption: true)
         {
         }
 
         public ModulePackager(ICodeEmitter emitter, IModuleMapper mapper)
+            : this(emitter, mapper, usePackagePrefixOption: false)
+        {
+        }
+
+        private ModulePackager(ICodeEmitter emitter, IModuleMapper mapper, bool usePackagePrefixOption)
         {
             this.emitter = emitter ?? throw new ArgumentNullException(nameof(emitter));
             this.mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
+            this.usePackagePrefixOption = usePackagePrefixOption;
         }
 
         public GeneratedPackage PackageModule(
@@ -73,6 +80,11 @@ namespace QmlSharp.Dsl.Generator
 
             string outputRoot = Path.GetFullPath(outputDir);
             string packagePath = Path.GetFullPath(Path.Join(outputRoot, ToSafePathSegment(package.PackageName)));
+            if (Directory.Exists(packagePath))
+            {
+                Directory.Delete(packagePath, recursive: true);
+            }
+
             Directory.CreateDirectory(packagePath);
 
             long totalBytes = 0;
@@ -184,7 +196,9 @@ namespace QmlSharp.Dsl.Generator
 
         private IModuleMapper CreateMapper(PackagerOptions options)
         {
-            if (string.IsNullOrWhiteSpace(options.PackagePrefix) || string.Equals(options.PackagePrefix, "QmlSharp", StringComparison.Ordinal))
+            if (!usePackagePrefixOption
+                || string.IsNullOrWhiteSpace(options.PackagePrefix)
+                || string.Equals(options.PackagePrefix, "QmlSharp", StringComparison.Ordinal))
             {
                 return mapper;
             }
@@ -255,16 +269,7 @@ namespace QmlSharp.Dsl.Generator
                 return 0;
             }
 
-            int count = 1;
-            foreach (char character in content)
-            {
-                if (character == '\n')
-                {
-                    count++;
-                }
-            }
-
-            return count;
+            return 1 + content.Where(static character => character == '\n').Count();
         }
 
         private static void ThrowIfInvalidOptions(PackagerOptions options)
@@ -278,15 +283,13 @@ namespace QmlSharp.Dsl.Generator
 
         private static void ThrowIfMissingRequiredDependencies(GeneratedPackage package)
         {
-            foreach (string dependency in RequiredDependencies)
+            foreach (string dependency in RequiredDependencies
+                         .Where(dependency => !package.Dependencies.Contains(dependency, StringComparer.Ordinal)))
             {
-                if (!package.Dependencies.Contains(dependency, StringComparer.Ordinal))
-                {
-                    throw new DslGenerationException(
-                        $"Package '{package.PackageName}' is missing required dependency '{dependency}'.",
-                        DslDiagnosticCodes.MissingDependency,
-                        moduleUri: package.ModuleUri);
-                }
+                throw new DslGenerationException(
+                    $"Package '{package.PackageName}' is missing required dependency '{dependency}'.",
+                    DslDiagnosticCodes.MissingDependency,
+                    moduleUri: package.ModuleUri);
             }
         }
 
@@ -323,12 +326,9 @@ namespace QmlSharp.Dsl.Generator
                 throw new IOException($"Generated file path must include a file name: {relativePath}");
             }
 
-            foreach (string segment in segments)
+            if (segments.Where(static segment => segment is "." or "..").Any())
             {
-                if (segment is "." or "..")
-                {
-                    throw new IOException($"Generated file path contains an unsafe segment: {relativePath}");
-                }
+                throw new IOException($"Generated file path contains an unsafe segment: {relativePath}");
             }
 
             return Path.Join(segments);

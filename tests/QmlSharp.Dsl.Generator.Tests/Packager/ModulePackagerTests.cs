@@ -63,6 +63,45 @@ namespace QmlSharp.Dsl.Generator.Tests.Packager
 
         [Fact]
         [Trait("Category", TestCategories.Contract)]
+        public void PackageModule_PackagePrefixOption_AppliesWithDefaultMapper()
+        {
+            ModulePackager packager = new();
+            QmlModule module = DslTestFixtures.CreateMinimalFixture().FindModule("QtQuick")!;
+            Dictionary<string, GeneratedTypeCode> generatedTypes = new(StringComparer.Ordinal)
+            {
+                ["QQuickRectangle"] = DslTestFixtures.CreateGeneratedRectangleMetadata(),
+            };
+
+            GeneratedPackage package = packager.PackageModule(
+                module,
+                generatedTypes,
+                DslTestFixtures.DefaultOptions.Packager with { PackagePrefix = "Company.Qml" });
+
+            Assert.Equal("Company.Qml.QtQuick", package.PackageName);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
+        public void PackageAll_InjectedMapperWithPackagePrefixOption_PreservesInjectedNamesAndPriorities()
+        {
+            InjectedModuleMapper mapper = new();
+            ModulePackager packager = new(new CodeEmitter(), mapper);
+            Dictionary<string, GeneratedTypeCode> generatedTypes = new(StringComparer.Ordinal)
+            {
+                ["QQuickRectangle"] = DslTestFixtures.CreateGeneratedRectangleMetadata(),
+                ["QQuickButton"] = DslTestFixtures.CreateGeneratedButtonMetadata(),
+            };
+
+            ImmutableArray<GeneratedPackage> packages = packager.PackageAll(
+                DslTestFixtures.CreateQtQuickControlsFixture(),
+                generatedTypes,
+                DslTestFixtures.DefaultOptions.Packager with { PackagePrefix = "Ignored.Prefix" });
+
+            Assert.Equal(["Injected.QtQuick.Controls", "Injected.QtQuick"], packages.Select(package => package.PackageName).ToArray());
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
         public void PackageAll_P0Fixture_GeneratesAllModulesWithGeneratedTypes()
         {
             ModulePackager packager = new();
@@ -107,6 +146,33 @@ namespace QmlSharp.Dsl.Generator.Tests.Packager
             Assert.Equal(package.Files.Length, written.FileCount);
             Assert.Equal(package.Files.Sum(file => System.Text.Encoding.UTF8.GetByteCount(file.Content)), written.TotalBytes);
             Assert.True(File.Exists(Path.Join(written.OutputPath, "QmlSharp.QtQuick.csproj")));
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
+        public async Task WritePackage_RemovesStaleFilesFromPreviousPackageWrites()
+        {
+            using GeneratedOutputTempDirectory tempDirectory = DslTestFixtures.CreateGeneratedOutputTempDirectory();
+            ModulePackager packager = new();
+            QmlModule module = DslTestFixtures.CreateMinimalFixture().FindModule("QtQuick")!;
+            Dictionary<string, GeneratedTypeCode> generatedTypes = new(StringComparer.Ordinal)
+            {
+                ["QQuickRectangle"] = DslTestFixtures.CreateGeneratedRectangleMetadata(),
+            };
+            GeneratedPackage package = packager.PackageModule(module, generatedTypes, DslTestFixtures.DefaultOptions.Packager);
+            WrittenPackageInfo firstWrite = await packager.WritePackage(package, tempDirectory.Path);
+            string staleFile = Path.Join(firstWrite.OutputPath, "RemovedType.cs");
+            string staleDirectory = Path.Join(firstWrite.OutputPath, "Old");
+            _ = Directory.CreateDirectory(staleDirectory);
+            await File.WriteAllTextAsync(staleFile, "// stale\n");
+            await File.WriteAllTextAsync(Path.Join(staleDirectory, "Nested.cs"), "// stale\n");
+
+            WrittenPackageInfo secondWrite = await packager.WritePackage(package, tempDirectory.Path);
+
+            Assert.Equal(firstWrite.OutputPath, secondWrite.OutputPath);
+            Assert.False(File.Exists(staleFile));
+            Assert.False(Directory.Exists(staleDirectory));
+            Assert.True(File.Exists(Path.Join(secondWrite.OutputPath, "Rectangle.cs")));
         }
 
         [Fact]
@@ -206,6 +272,50 @@ namespace QmlSharp.Dsl.Generator.Tests.Packager
                 IsCreatable = true,
                 IsDeprecated = false,
             };
+        }
+
+        private sealed class InjectedModuleMapper : IModuleMapper
+        {
+            public string ToPackageName(string moduleUri)
+            {
+                return moduleUri switch
+                {
+                    "QtQuick" => "Injected.QtQuick",
+                    "QtQuick.Controls" => "Injected.QtQuick.Controls",
+                    _ => $"Injected.{moduleUri}",
+                };
+            }
+
+            public string ToModuleUri(string packageName)
+            {
+                return packageName.StartsWith("Injected.", StringComparison.Ordinal)
+                    ? packageName["Injected.".Length..]
+                    : packageName;
+            }
+
+            public string ToNamespace(string moduleUri)
+            {
+                return ToPackageName(moduleUri);
+            }
+
+            public int GetPriority(string moduleUri)
+            {
+                return moduleUri switch
+                {
+                    "QtQuick.Controls" => 0,
+                    "QtQuick" => 5,
+                    _ => 10,
+                };
+            }
+
+            public IReadOnlyDictionary<string, string> GetAllMappings()
+            {
+                return new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["QtQuick"] = "Injected.QtQuick",
+                    ["QtQuick.Controls"] = "Injected.QtQuick.Controls",
+                };
+            }
         }
     }
 }
