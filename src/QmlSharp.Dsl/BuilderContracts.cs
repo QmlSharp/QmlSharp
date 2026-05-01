@@ -1,3 +1,6 @@
+using System.Collections.Immutable;
+using QmlSharp.Qml.Ast;
+
 #pragma warning disable MA0048
 
 namespace QmlSharp.Dsl
@@ -9,6 +12,51 @@ namespace QmlSharp.Dsl
     {
         /// <summary>Gets the QML type name represented by this builder.</summary>
         string QmlTypeName { get; }
+
+        /// <summary>Assigns the QML id for this object.</summary>
+        IObjectBuilder Id(string id);
+
+        /// <summary>Adds a child object to this object.</summary>
+        IObjectBuilder Child(IObjectBuilder child);
+
+        /// <summary>Adds child objects to this object in the given order.</summary>
+        IObjectBuilder Children(params IObjectBuilder[] children);
+
+        /// <summary>Adds a literal property binding.</summary>
+        IObjectBuilder SetProperty(string propertyName, object? value);
+
+        /// <summary>Adds a QML expression binding.</summary>
+        IObjectBuilder SetBinding(string propertyName, string expression);
+
+        /// <summary>Adds grouped property bindings.</summary>
+        IObjectBuilder AddGrouped(string groupName, Action<IPropertyCollector> configure);
+
+        /// <summary>Adds attached property bindings.</summary>
+        IObjectBuilder AddAttached(string attachedTypeName, Action<IPropertyCollector> configure);
+
+        /// <summary>Adds a signal handler body.</summary>
+        IObjectBuilder HandleSignal(string handlerName, string body);
+
+        /// <summary>Builds the immutable QML AST object node.</summary>
+        ObjectDefinitionNode Build();
+    }
+
+    /// <summary>
+    /// Collects property, binding, and signal entries for grouped or attached builder callbacks.
+    /// </summary>
+    public interface IPropertyCollector
+    {
+        /// <summary>Gets entries collected so far in insertion order.</summary>
+        ImmutableArray<PropertyCollectionEntry> Entries { get; }
+
+        /// <summary>Adds a literal property binding.</summary>
+        IPropertyCollector SetProperty(string propertyName, object? value);
+
+        /// <summary>Adds a QML expression binding.</summary>
+        IPropertyCollector SetBinding(string propertyName, string expression);
+
+        /// <summary>Adds a signal handler entry.</summary>
+        IPropertyCollector HandleSignal(string handlerName, string body);
     }
 
     /// <summary>
@@ -21,11 +69,33 @@ namespace QmlSharp.Dsl
         /// <param name="qmlTypeName">The QML type name to construct.</param>
         /// <returns>A builder implementing <typeparamref name="TBuilder"/>.</returns>
         public static TBuilder Create<TBuilder>(string qmlTypeName)
-            where TBuilder : IObjectBuilder
+            where TBuilder : class, IObjectBuilder
+        {
+            return Create<TBuilder>(qmlTypeName, ObjectBuilderMetadata.Empty);
+        }
+
+        /// <summary>Creates a generated builder instance with method metadata.</summary>
+        /// <typeparam name="TBuilder">The generated builder interface type.</typeparam>
+        /// <param name="qmlTypeName">The QML type name to construct.</param>
+        /// <param name="metadata">Metadata used to map generated method names to QML names.</param>
+        /// <returns>A builder implementing <typeparamref name="TBuilder"/>.</returns>
+        public static TBuilder Create<TBuilder>(string qmlTypeName, ObjectBuilderMetadata metadata)
+            where TBuilder : class, IObjectBuilder
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(qmlTypeName);
+            ArgumentNullException.ThrowIfNull(metadata);
 
-            throw new NotSupportedException("Builder creation is not available until the DSL runtime implementation is added.");
+            TBuilder proxy = DispatchProxyFactory.CreateObjectProxy<TBuilder>(qmlTypeName, metadata);
+            return proxy;
+        }
+
+        /// <summary>Creates the concrete runtime builder for tests and low-level generated code.</summary>
+        /// <param name="qmlTypeName">The QML type name to construct.</param>
+        /// <returns>A concrete object builder.</returns>
+        public static ObjectBuilder Create(string qmlTypeName)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(qmlTypeName);
+            return new ObjectBuilder(qmlTypeName);
         }
     }
 }
