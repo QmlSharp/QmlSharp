@@ -62,6 +62,7 @@ namespace QmlSharp.Dsl.Generator
     public enum GenerationPhase
     {
         ResolvingInheritance,
+        MappingTypes,
         GeneratingProperties,
         GeneratingSignals,
         GeneratingMethods,
@@ -78,6 +79,7 @@ namespace QmlSharp.Dsl.Generator
     /// <summary>Warning codes produced during generation.</summary>
     public enum GenerationWarningCode
     {
+        SkippedType,
         UnresolvedBaseType,
         UnresolvedTypeReference,
         NameCollision,
