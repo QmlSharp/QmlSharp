@@ -18,19 +18,20 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
                 """
                 using QmlSharp.QtQuick;
 
-                namespace GeneratedConsumer;
-
-                public static class Usage
+                namespace GeneratedConsumer
                 {
-                    public static object Create()
+                    public static class Usage
                     {
-                        return RectangleFactory.Rectangle()
-                            .Width(100)
-                            .Height(50)
-                            .Color("red")
-                            .Border(border => border.Width(2).Color("black"))
-                            .OnColorChanged("console.log(\"changed\")")
-                            .Build();
+                        public static object Create()
+                        {
+                            return RectangleFactory.Rectangle()
+                                .Width(100)
+                                .Height(50)
+                                .Color("red")
+                                .Border(border => border.Width(2).Color("black"))
+                                .OnColorChanged("console.log(\"changed\")")
+                                .Build();
+                        }
                     }
                 }
                 """);
@@ -47,18 +48,19 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
                 """
                 using QmlSharp.QtQuick;
 
-                namespace GeneratedConsumer;
-
-                public static class Usage
+                namespace GeneratedConsumer
                 {
-                    public static object Create()
+                    public static class Usage
                     {
-                        return TextFactory.Text()
-                            .Text("Hello")
-                            .TextBind("model.title")
-                            .Width(320)
-                            .OnTextChanged("console.log(\"text\")")
-                            .Build();
+                        public static object Create()
+                        {
+                            return TextFactory.Text()
+                                .Text("Hello")
+                                .TextBind("model.title")
+                                .Width(320)
+                                .OnTextChanged("console.log(\"text\")")
+                                .Build();
+                        }
                     }
                 }
                 """);
@@ -75,17 +77,18 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
                 """
                 using QmlSharp.QtQuick.Controls;
 
-                namespace GeneratedConsumer;
-
-                public static class Usage
+                namespace GeneratedConsumer
                 {
-                    public static object Create()
+                    public static class Usage
                     {
-                        return ButtonFactory.Button()
-                            .Text("Submit")
-                            .@checked(false)
-                            .OnClicked("submitForm()")
-                            .Build();
+                        public static object Create()
+                        {
+                            return ButtonFactory.Button()
+                                .Text("Submit")
+                                .@checked(false)
+                                .OnClicked("submitForm()")
+                                .Build();
+                        }
                     }
                 }
                 """);
@@ -105,19 +108,20 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
                 using QmlSharp.QtQuick.Controls;
                 using QmlSharp.QtQuick.Layouts;
 
-                namespace GeneratedConsumer;
-
-                public static class Usage
+                namespace GeneratedConsumer
                 {
-                    public static object[] CreateAll()
+                    public static class Usage
                     {
-                        return
-                        [
-                            QtObjectFactory.QtObject().Build(),
-                            RectangleFactory.Rectangle().Width(100).Color("blue").Build(),
-                            ButtonFactory.Button().Text("Run").OnClicked("run()").Build(),
-                            LayoutFactory.Layout().Spacing(12).Build(),
-                        ];
+                        public static object[] CreateAll()
+                        {
+                            return
+                            [
+                                QtObjectFactory.QtObject().Build(),
+                                RectangleFactory.Rectangle().Width(100).Color("blue").Build(),
+                                ButtonFactory.Button().Text("Run").OnClicked("run()").Build(),
+                                LayoutFactory.Layout().Spacing(12).Build(),
+                            ];
+                        }
                     }
                 }
                 """);
@@ -153,10 +157,11 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
         [Fact]
         public void ProjectReferenceInclude_IsRelativeToGeneratedProjectDirectory()
         {
-            using GeneratedOutputTempDirectory temp = DslTestFixtures.CreateGeneratedOutputTempDirectory();
+            string solutionRoot = FindSolutionRoot();
+            using GeneratedOutputTempDirectory temp = CreateGeneratedCompileOutputDirectory(solutionRoot);
             string projectDirectory = Path.Join(temp.Path, "consumer");
             _ = Directory.CreateDirectory(projectDirectory);
-            string referencePath = Path.Join(FindSolutionRoot(), "src", "QmlSharp.Core", "QmlSharp.Core.csproj");
+            string referencePath = Path.Join(solutionRoot, "src", "QmlSharp.Core", "QmlSharp.Core.csproj");
 
             string include = ToProjectReferenceInclude(projectDirectory, referencePath);
 
@@ -168,8 +173,8 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
 
         private static async Task CompileGeneratedConsumerAsync(IRegistryQuery registry, string usageSource)
         {
-            using GeneratedOutputTempDirectory temp = DslTestFixtures.CreateGeneratedOutputTempDirectory();
             string solutionRoot = FindSolutionRoot();
+            using GeneratedOutputTempDirectory temp = CreateGeneratedCompileOutputDirectory(solutionRoot);
             string packageRoot = Path.Join(temp.Path, "packages");
             string consumerRoot = Path.Join(temp.Path, "consumer");
             GenerationPipeline pipeline = new();
@@ -229,7 +234,9 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
 
                     string projectDirectory = Path.GetDirectoryName(projectPath)
                         ?? throw new DirectoryNotFoundException($"Project path does not include a directory: {projectPath}");
-                    XElement projectReference = new("ProjectReference", new XAttribute("Include", ToProjectReferenceInclude(projectDirectory, referencePath)));
+                    XElement projectReference = new(
+                        "ProjectReference",
+                        new XAttribute("Include", ToProjectReferenceInclude(projectDirectory, referencePath)));
                     packageReference.AddAfterSelf(projectReference);
                     packageReference.Remove();
                 }
@@ -262,6 +269,11 @@ namespace QmlSharp.Dsl.Generator.Tests.Pipeline
 
             File.WriteAllText(Path.Join(consumerRoot, "GeneratedConsumer.csproj"), project);
             File.WriteAllText(Path.Join(consumerRoot, "Usage.cs"), usageSource);
+        }
+
+        private static GeneratedOutputTempDirectory CreateGeneratedCompileOutputDirectory(string solutionRoot)
+        {
+            return GeneratedOutputTempDirectory.CreateUnder(Path.Join(solutionRoot, "artifacts", "dsl-compile-tests"));
         }
 
         private static string ToProjectReferenceInclude(string projectDirectory, string referencePath)
