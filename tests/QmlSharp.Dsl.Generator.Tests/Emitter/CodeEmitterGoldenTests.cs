@@ -36,7 +36,13 @@ namespace QmlSharp.Dsl.Generator.Tests.Emitter
 
         private static string GetGoldenPath(string fileName)
         {
-            return Path.Combine(AppContext.BaseDirectory, "testdata", "golden", fileName);
+            string safeFileName = Path.GetFileName(fileName);
+            if (string.IsNullOrWhiteSpace(safeFileName))
+            {
+                throw new ArgumentException("Golden file name must include a file name.", nameof(fileName));
+            }
+
+            return Path.Join(AppContext.BaseDirectory, "testdata", "golden", safeFileName);
         }
     }
 }

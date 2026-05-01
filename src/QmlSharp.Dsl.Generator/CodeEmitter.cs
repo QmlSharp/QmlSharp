@@ -8,6 +8,7 @@ namespace QmlSharp.Dsl.Generator
     public sealed class CodeEmitter : ICodeEmitter
     {
         private const string Indent = "    ";
+        private const string DefaultPackageVersion = "0.1.0";
 
         public string EmitTypeFile(GeneratedTypeCode typeCode, CodeEmitOptions options)
         {
@@ -105,7 +106,7 @@ namespace QmlSharp.Dsl.Generator
                 writer.AppendLine("  <ItemGroup>");
                 foreach (string dependency in dependencies)
                 {
-                    writer.AppendLine($"    <PackageReference Include=\"{EscapeXml(dependency)}\" />");
+                    writer.AppendLine($"    <PackageReference Include=\"{EscapeXml(dependency)}\" Version=\"{DefaultPackageVersion}\" />");
                 }
 
                 writer.AppendLine("  </ItemGroup>");
@@ -306,7 +307,7 @@ namespace QmlSharp.Dsl.Generator
             WriteXmlDoc(writer, options, $"Builder for the {groupedSurface.GroupName} grouped property.");
             writer.AppendLine($"public interface {groupedSurface.BuilderInterfaceName} : IPropertyCollector");
             writer.AppendLine("{");
-            foreach (GeneratedProperty property in groupedSurface.Properties)
+            foreach (GeneratedProperty property in groupedSurface.Properties.Where(static property => !property.IsReadOnly))
             {
                 WriteGeneratedXmlDoc(writer, options, property.XmlDoc, Indent);
                 writer.AppendLine($"{Indent}{groupedSurface.BuilderInterfaceName} {GetLocalGroupedMethodName(property)}({property.CSharpType} value);");
@@ -324,16 +325,13 @@ namespace QmlSharp.Dsl.Generator
             WriteXmlDoc(writer, options, $"Builder for {attachedType.MethodName} attached properties.");
             writer.AppendLine($"public interface {attachedType.BuilderInterfaceName} : IPropertyCollector");
             writer.AppendLine("{");
-            foreach (GeneratedProperty property in SortProperties(attachedType.Properties))
+            foreach (GeneratedProperty property in SortProperties(attachedType.Properties).Where(static property => !property.IsReadOnly))
             {
-                if (!property.IsReadOnly)
+                WriteGeneratedXmlDoc(writer, options, property.XmlDoc, Indent);
+                writer.AppendLine($"{Indent}{attachedType.BuilderInterfaceName} {property.Name}({property.CSharpType} value);");
+                if (!string.IsNullOrWhiteSpace(property.BindSignature))
                 {
-                    WriteGeneratedXmlDoc(writer, options, property.XmlDoc, Indent);
-                    writer.AppendLine($"{Indent}{attachedType.BuilderInterfaceName} {property.Name}({property.CSharpType} value);");
-                    if (!string.IsNullOrWhiteSpace(property.BindSignature))
-                    {
-                        writer.AppendLine($"{Indent}{attachedType.BuilderInterfaceName} {property.Name}Bind(string expr);");
-                    }
+                    writer.AppendLine($"{Indent}{attachedType.BuilderInterfaceName} {property.Name}Bind(string expr);");
                 }
             }
 
@@ -409,7 +407,9 @@ namespace QmlSharp.Dsl.Generator
             string propertyMetadata = WriteMetadataArray("PropertyMethodMetadata", SortProperties(properties).Select(property =>
             {
                 string methodName = IsGroupedProperty(property) ? GetLocalGroupedMethodName(property) : property.Name;
-                return $"new PropertyMethodMetadata(\"{EscapeStringLiteral(methodName)}\", \"{EscapeStringLiteral(GetLocalQmlPropertyName(property))}\", true, {(string.IsNullOrWhiteSpace(property.BindSignature) ? "false" : "true")})";
+                string supportsValue = property.IsReadOnly ? "false" : "true";
+                string supportsBinding = string.IsNullOrWhiteSpace(property.BindSignature) ? "false" : "true";
+                return $"new PropertyMethodMetadata(\"{EscapeStringLiteral(methodName)}\", \"{EscapeStringLiteral(GetLocalQmlPropertyName(property))}\", {supportsValue}, {supportsBinding})";
             }));
             string signalMetadata = WriteMetadataArray("SignalMethodMetadata", SortSignals(signals).Select(GetSignalMetadataEntry));
             return $"new PropertyCollectorMetadata({propertyMetadata}, {signalMetadata})";

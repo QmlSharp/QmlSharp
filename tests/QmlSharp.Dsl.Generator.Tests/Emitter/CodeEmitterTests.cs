@@ -104,6 +104,9 @@ namespace QmlSharp.Dsl.Generator.Tests.Emitter
             Assert.True(
                 output.IndexOf("QmlSharp.Core", StringComparison.Ordinal) < output.IndexOf("QmlSharp.Dsl", StringComparison.Ordinal),
                 "Package dependencies must be emitted in deterministic order.");
+            Assert.All(
+                document.Descendants("PackageReference"),
+                reference => Assert.Equal("0.1.0", reference.Attribute("Version")?.Value));
         }
 
         [Fact]
@@ -165,6 +168,31 @@ namespace QmlSharp.Dsl.Generator.Tests.Emitter
             Assert.Contains("IRectangleBuilder Border(Action<IBorderBuilder> setup);", output, StringComparison.Ordinal);
             Assert.Contains("public interface ILayoutBuilder : IPropertyCollector", output, StringComparison.Ordinal);
             Assert.Contains("IRectangleBuilder Layout(Action<ILayoutBuilder> setup);", output, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
+        public void EmitTypeFile_ReadOnlyGroupedProperty_OmitsGroupedSetterAndBinding()
+        {
+            CodeEmitter emitter = new();
+            GeneratedTypeCode metadata = DslTestFixtures.CreateGeneratedRectangleMetadata();
+            ImmutableArray<GeneratedProperty> properties = metadata.Properties
+                .Select(static property => property.Name == "BorderWidth"
+                    ? property with
+                    {
+                        SetterSignature = string.Empty,
+                        BindSignature = null,
+                        IsReadOnly = true,
+                    }
+                    : property)
+                .ToImmutableArray();
+
+            string output = emitter.EmitTypeFile(metadata with { Properties = properties }, DefaultOptions);
+
+            Assert.Contains("IBorderBuilder Color(QmlColor value);", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("IBorderBuilder Width(double value);", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("IBorderBuilder WidthBind(string expr);", output, StringComparison.Ordinal);
+            Assert.Contains("new PropertyMethodMetadata(\"Width\", \"width\", false, false)", output, StringComparison.Ordinal);
         }
 
         [Fact]
