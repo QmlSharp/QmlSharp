@@ -544,6 +544,8 @@ namespace QmlSharp.Registry.Tests.Snapshots
             {
                 Assert.Equal(expected.Enums[index].Name, actual.Enums[index].Name);
                 Assert.Equal(expected.Enums[index].IsFlag, actual.Enums[index].IsFlag);
+                Assert.Equal(expected.Enums[index].Alias, actual.Enums[index].Alias);
+                Assert.Equal(expected.Enums[index].IsScoped, actual.Enums[index].IsScoped);
                 Assert.Equal(expected.Enums[index].Values.ToArray(), actual.Enums[index].Values.ToArray());
             }
         }

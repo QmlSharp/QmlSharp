@@ -412,6 +412,30 @@ namespace QmlSharp.Registry.Tests.Normalization
             Assert.Contains("incoming value 'flag [Second]'", diagnostic.Message);
         }
 
+        [Fact]
+        public void Enums_preserve_alias_and_scoped_metadata()
+        {
+            RawQmltypesFile qmltypesFile = CreateQmltypesFile(
+                CreateComponent(
+                    name: "QQuickItem",
+                    prototype: null,
+                    exports: ["QtQuick/Item 2.0"],
+                    enums: [new RawQmltypesEnum("Mode", Alias: "ModeAlias", IsFlag: false, Values: ["First"])]));
+            RawMetatypesFile metatypesFile = CreateMetatypesFile(
+                CreateMetatypesClass(
+                    className: "QQuickScopedItem",
+                    enums: [new RawMetatypesEnum("ScopedMode", Alias: "ScopedAlias", IsFlag: false, IsClass: true, Values: ["First"])]));
+
+            NormalizeResult result = CreateNormalizer().Normalize([qmltypesFile], [], [metatypesFile], CreateMapper());
+
+            QmlEnum qmltypesEnum = Assert.Single(AssertType(result.Registry!, "QQuickItem").Enums);
+            QmlEnum metatypesEnum = Assert.Single(AssertType(result.Registry!, "QQuickScopedItem").Enums);
+            Assert.Equal("ModeAlias", qmltypesEnum.Alias);
+            Assert.False(qmltypesEnum.IsScoped);
+            Assert.Equal("ScopedAlias", metatypesEnum.Alias);
+            Assert.True(metatypesEnum.IsScoped);
+        }
+
         private static QmlType AssertType(QmlRegistry registry, string qualifiedName)
         {
             KeyValuePair<string, QmlType> entry = Assert.Single(registry.TypesByQualifiedName, pair => pair.Key == qualifiedName);
