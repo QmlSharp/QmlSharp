@@ -236,6 +236,34 @@ namespace QmlSharp.Dsl.Generator
 
         public string EnumName { get; }
     }
+
+    /// <summary>Thrown when an attached type declaration cannot be resolved to an attached surface.</summary>
+    public sealed class UnresolvedAttachedTypeException : DslGenerationException
+    {
+        public UnresolvedAttachedTypeException(string ownerTypeName, string attachedTypeName, string? moduleUri)
+            : base(
+                $"Cannot resolve attached type '{attachedTypeName}' declared by '{ownerTypeName}'.",
+                DslDiagnosticCodes.UnresolvedAttachedType,
+                ownerTypeName,
+                moduleUri)
+        {
+            AttachedTypeName = attachedTypeName;
+        }
+
+        public string AttachedTypeName { get; }
+    }
+
+    /// <summary>Thrown when a ViewModel schema fixture cannot be represented as generator metadata.</summary>
+    public sealed class ViewModelSchemaException : FormatException
+    {
+        public ViewModelSchemaException(string message, string fieldPath, Exception? inner = null)
+            : base(message, inner)
+        {
+            FieldPath = fieldPath;
+        }
+
+        public string FieldPath { get; }
+    }
 }
 
 #pragma warning restore MA0048
