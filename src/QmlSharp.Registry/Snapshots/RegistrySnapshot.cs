@@ -876,6 +876,10 @@ namespace QmlSharp.Registry.Snapshots
 
             public bool IsFlag { get; init; }
 
+            public string? Alias { get; init; }
+
+            public bool IsScoped { get; init; }
+
             public SnapshotEnumValue[]? Values { get; init; }
 
             public static SnapshotEnum FromModel(QmlEnum @enum)
@@ -884,6 +888,8 @@ namespace QmlSharp.Registry.Snapshots
                 {
                     Name = @enum.Name,
                     IsFlag = @enum.IsFlag,
+                    Alias = @enum.Alias,
+                    IsScoped = @enum.IsScoped,
                     Values = @enum.Values.Select(SnapshotEnumValue.FromModel).ToArray(),
                 };
             }
@@ -895,7 +901,7 @@ namespace QmlSharp.Registry.Snapshots
                     throw CreateCorruptException("Snapshot enum is missing one or more required fields.");
                 }
 
-                return new QmlEnum(Name, IsFlag, Values.Select(value => value.ToModel()).ToImmutableArray());
+                return new QmlEnum(Name, IsFlag, Values.Select(value => value.ToModel()).ToImmutableArray(), Alias, IsScoped);
             }
         }
 

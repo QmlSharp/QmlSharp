@@ -145,6 +145,97 @@ namespace QmlSharp.Dsl.Generator
 
         public string GroupName { get; }
     }
+
+    /// <summary>Thrown when a signal parameter cannot be represented in generated C# metadata.</summary>
+    public sealed class UnsupportedSignalParameterException : DslGenerationException
+    {
+        public UnsupportedSignalParameterException(string signalName, string parameterName, string parameterType, QmlSharp.Registry.QmlType declaringType)
+            : base(
+                $"Signal '{signalName}' on '{declaringType.QualifiedName}' has unsupported parameter '{parameterName}' of type '{parameterType}'.",
+                DslDiagnosticCodes.UnsupportedSignalParameter,
+                declaringType.QualifiedName,
+                declaringType.ModuleUri)
+        {
+            SignalName = signalName;
+            ParameterName = parameterName;
+            ParameterType = parameterType;
+        }
+
+        public string SignalName { get; }
+
+        public string ParameterName { get; }
+
+        public string ParameterType { get; }
+    }
+
+    /// <summary>Thrown when a QML method signature cannot be represented in generated C# metadata.</summary>
+    public sealed class UnsupportedMethodSignatureException : DslGenerationException
+    {
+        public UnsupportedMethodSignatureException(string methodName, string reason, QmlSharp.Registry.QmlType declaringType)
+            : base(
+                $"Method '{methodName}' on '{declaringType.QualifiedName}' has an unsupported signature: {reason}.",
+                DslDiagnosticCodes.UnsupportedMethodSignature,
+                declaringType.QualifiedName,
+                declaringType.ModuleUri)
+        {
+            MethodName = methodName;
+            Reason = reason;
+        }
+
+        public string MethodName { get; }
+
+        public string Reason { get; }
+    }
+
+    /// <summary>Describes a property/method name collision found during method generation.</summary>
+    public sealed class MethodPropertyNameCollisionException : DslGenerationException
+    {
+        public MethodPropertyNameCollisionException(string methodName, string ownerType)
+            : base(
+                $"Method '{methodName}' collides with a generated property name on '{ownerType}'.",
+                DslDiagnosticCodes.MethodPropertyNameCollision,
+                ownerType)
+        {
+            MethodName = methodName;
+        }
+
+        public string MethodName { get; }
+    }
+
+    /// <summary>Thrown when an enum contains duplicate generated member names.</summary>
+    public sealed class DuplicateEnumMemberException : DslGenerationException
+    {
+        public DuplicateEnumMemberException(string enumName, string memberName, QmlSharp.Registry.QmlType ownerType)
+            : base(
+                $"Enum '{enumName}' on '{ownerType.QualifiedName}' contains duplicate generated member '{memberName}'.",
+                DslDiagnosticCodes.DuplicateEnumMember,
+                ownerType.QualifiedName,
+                ownerType.ModuleUri)
+        {
+            EnumName = enumName;
+            MemberName = memberName;
+        }
+
+        public string EnumName { get; }
+
+        public string MemberName { get; }
+    }
+
+    /// <summary>Thrown when two QML enums resolve to the same generated C# enum name.</summary>
+    public sealed class EnumNameCollisionException : DslGenerationException
+    {
+        public EnumNameCollisionException(string enumName, QmlSharp.Registry.QmlType ownerType)
+            : base(
+                $"Enum name '{enumName}' collides within generated type '{ownerType.QualifiedName}'.",
+                DslDiagnosticCodes.EnumNameCollision,
+                ownerType.QualifiedName,
+                ownerType.ModuleUri)
+        {
+            EnumName = enumName;
+        }
+
+        public string EnumName { get; }
+    }
 }
 
 #pragma warning restore MA0048

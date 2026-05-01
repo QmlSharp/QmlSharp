@@ -120,7 +120,9 @@ namespace QmlSharp.Registry
     public sealed record QmlEnum(
         string Name,
         bool IsFlag,
-        ImmutableArray<QmlEnumValue> Values);
+        ImmutableArray<QmlEnumValue> Values,
+        string? Alias = null,
+        bool IsScoped = false);
 
     /// <summary>A single enum value.</summary>
     public sealed record QmlEnumValue(

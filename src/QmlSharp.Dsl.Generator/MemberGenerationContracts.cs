@@ -20,20 +20,20 @@ namespace QmlSharp.Dsl.Generator
     /// <summary>Generates C# signal handler metadata for QML signals.</summary>
     public interface ISignalGenerator
     {
-        GeneratedSignal Generate(ResolvedSignal signal, GenerationContext context);
+        GeneratedSignal Generate(ResolvedSignal signal, QmlType ownerType, GenerationContext context);
 
         ImmutableArray<GeneratedSignal> GenerateAll(
-            ImmutableArray<ResolvedSignal> signals,
+            ResolvedType type,
             GenerationContext context);
     }
 
     /// <summary>Generates C# method wrapper metadata for QML methods.</summary>
     public interface IMethodGenerator
     {
-        GeneratedMethod Generate(ResolvedMethod method, GenerationContext context);
+        GeneratedMethod Generate(ResolvedMethod method, QmlType ownerType, GenerationContext context);
 
         ImmutableArray<GeneratedMethod> GenerateAll(
-            ImmutableArray<ResolvedMethod> methods,
+            ResolvedType type,
             GenerationContext context);
     }
 

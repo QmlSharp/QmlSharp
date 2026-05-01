@@ -712,7 +712,7 @@ namespace QmlSharp.Registry.Normalization
 
                 foreach (RawMetatypesEnum @enum in @class.Enums.OrderBy(@enum => @enum.Name, StringComparer.Ordinal))
                 {
-                    MergeSupplementalEnum(new EnumSeed(@enum.Name, @enum.IsFlag, @enum.Values), sourcePath, diagnostics);
+                    MergeSupplementalEnum(new EnumSeed(@enum.Name, @enum.Alias, @enum.IsFlag, @enum.IsClass, @enum.Values), sourcePath, diagnostics);
                 }
             }
 
@@ -820,7 +820,7 @@ namespace QmlSharp.Registry.Normalization
 
                 foreach (RawQmltypesEnum @enum in component.Enums)
                 {
-                    MergePrimaryEnum(new EnumSeed(@enum.Name, @enum.IsFlag, @enum.Values), sourcePath, diagnostics);
+                    MergePrimaryEnum(new EnumSeed(@enum.Name, @enum.Alias, @enum.IsFlag, IsScoped: false, @enum.Values), sourcePath, diagnostics);
                 }
             }
 
@@ -1258,7 +1258,9 @@ namespace QmlSharp.Registry.Normalization
 
         private sealed record EnumSeed(
             string Name,
+            string? Alias,
             bool IsFlag,
+            bool IsScoped,
             ImmutableArray<string> Values)
         {
             public string GetDiagnosticSummary()
@@ -1275,7 +1277,9 @@ namespace QmlSharp.Registry.Normalization
                 return new QmlEnum(
                     Name,
                     IsFlag,
-                    Values.Select((value, index) => new QmlEnumValue(value, index)).ToImmutableArray());
+                    Values.Select((value, index) => new QmlEnumValue(value, index)).ToImmutableArray(),
+                    Alias,
+                    IsScoped);
             }
         }
 
