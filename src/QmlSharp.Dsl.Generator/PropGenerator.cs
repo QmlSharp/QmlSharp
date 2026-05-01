@@ -7,39 +7,45 @@ namespace QmlSharp.Dsl.Generator
     /// </summary>
     public sealed class PropGenerator : IPropGenerator
     {
-        public GeneratedProperty Generate(ResolvedProperty property, GenerationContext context)
+        public GeneratedProperty Generate(ResolvedProperty property, QmlType ownerType, GenerationContext context)
         {
+            ArgumentNullException.ThrowIfNull(ownerType);
             ArgumentNullException.ThrowIfNull(context);
-            return Generate(property, context, GetBuilderInterfaceName(property.DeclaredBy));
+            return Generate(property, context, GetBuilderInterfaceName(ownerType));
         }
 
         public ImmutableArray<GeneratedProperty> GenerateAll(
-            ImmutableArray<ResolvedProperty> properties,
+            ResolvedType type,
             GenerationContext context)
         {
+            ArgumentNullException.ThrowIfNull(type);
             ArgumentNullException.ThrowIfNull(context);
 
+            ImmutableArray<ResolvedProperty> properties = type.AllProperties;
             if (properties.IsDefaultOrEmpty)
             {
                 return ImmutableArray<GeneratedProperty>.Empty;
             }
 
-            string builderInterfaceName = GetBuilderInterfaceName(InferOwnerType(properties));
             return properties
                 .OrderBy(property => property.Property.Name, StringComparer.Ordinal)
-                .Select(property => Generate(property, context, builderInterfaceName))
+                .Select(property => Generate(property, type.Type, context))
                 .ToImmutableArray();
         }
 
         public ImmutableArray<GroupedPropertyInfo> DetectGroupedProperties(
-            ImmutableArray<ResolvedProperty> properties)
+            ResolvedType type)
         {
+            ArgumentNullException.ThrowIfNull(type);
+
+            ImmutableArray<ResolvedProperty> properties = type.AllProperties;
             if (properties.IsDefaultOrEmpty)
             {
                 return ImmutableArray<GroupedPropertyInfo>.Empty;
             }
 
             ThrowIfGroupedPropertyConflicts(properties);
+            string ownerBuilderInterfaceName = GetBuilderInterfaceName(type.Type);
 
             return properties
                 .Where(property => TrySplitGroupedPropertyName(property.Property.Name, out _, out _))
@@ -50,7 +56,6 @@ namespace QmlSharp.Dsl.Generator
                     ImmutableArray<ResolvedProperty> subProperties = group
                         .OrderBy(property => property.Property.Name, StringComparer.Ordinal)
                         .ToImmutableArray();
-                    string ownerBuilderInterfaceName = GetBuilderInterfaceName(InferOwnerType(subProperties));
                     string groupName = ToPascalCase(group.Key);
                     return new GroupedPropertyInfo(
                         GroupName: groupName,
@@ -91,17 +96,6 @@ namespace QmlSharp.Dsl.Generator
                 IsReadOnly: property.Property.IsReadonly,
                 IsRequired: property.Property.IsRequired,
                 CSharpType: csharpType);
-        }
-
-        private static QmlType InferOwnerType(ImmutableArray<ResolvedProperty> properties)
-        {
-            ResolvedProperty? overridingOrLocalProperty = properties.FirstOrDefault(property => property.IsOverridden);
-            if (overridingOrLocalProperty is not null)
-            {
-                return overridingOrLocalProperty.DeclaredBy;
-            }
-
-            return properties[0].DeclaredBy;
         }
 
         private static string GetBuilderInterfaceName(QmlType type)

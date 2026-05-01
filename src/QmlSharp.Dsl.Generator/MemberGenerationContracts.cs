@@ -7,14 +7,14 @@ namespace QmlSharp.Dsl.Generator
     /// <summary>Generates C# fluent setter metadata for QML properties.</summary>
     public interface IPropGenerator
     {
-        GeneratedProperty Generate(ResolvedProperty property, GenerationContext context);
+        GeneratedProperty Generate(ResolvedProperty property, QmlType ownerType, GenerationContext context);
 
         ImmutableArray<GeneratedProperty> GenerateAll(
-            ImmutableArray<ResolvedProperty> properties,
+            ResolvedType type,
             GenerationContext context);
 
         ImmutableArray<GroupedPropertyInfo> DetectGroupedProperties(
-            ImmutableArray<ResolvedProperty> properties);
+            ResolvedType type);
     }
 
     /// <summary>Generates C# signal handler metadata for QML signals.</summary>
