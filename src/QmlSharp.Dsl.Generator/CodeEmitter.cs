@@ -235,11 +235,7 @@ namespace QmlSharp.Dsl.Generator
                 writer.AppendLine($"{Indent}{typeCode.BuilderInterfaceName} {attachedType.MethodName}(Action<{attachedType.BuilderInterfaceName}> setup);");
             }
 
-            foreach (GeneratedSignal signal in SortSignals(typeCode.Signals))
-            {
-                WriteGeneratedXmlDoc(writer, options, signal.XmlDoc, Indent);
-                writer.AppendLine($"{Indent}{EnsureInterfaceSignature(signal.HandlerSignature)};");
-            }
+            WriteSignalMethods(writer, typeCode, options);
 
             foreach (GeneratedMethod method in SortMethods(typeCode.Methods))
             {
@@ -263,6 +259,16 @@ namespace QmlSharp.Dsl.Generator
             }
 
             writer.AppendLine("}");
+        }
+
+        private static void WriteSignalMethods(CodeWriter writer, GeneratedTypeCode typeCode, CodeEmitOptions options)
+        {
+            foreach (GeneratedSignal signal in SortSignals(typeCode.Signals))
+            {
+                WriteGeneratedXmlDoc(writer, options, signal.XmlDoc, Indent);
+                writer.AppendLine($"{Indent}{EnsureInterfaceSignature(signal.HandlerSignature)};");
+                writer.AppendLine($"{Indent}{typeCode.BuilderInterfaceName} {signal.HandlerName}(string body);");
+            }
         }
 
         private static void WriteFactoryClass(CodeWriter writer, GeneratedTypeCode typeCode, CodeEmitOptions options)
@@ -337,6 +343,7 @@ namespace QmlSharp.Dsl.Generator
             {
                 WriteGeneratedXmlDoc(writer, options, signal.XmlDoc, Indent);
                 writer.AppendLine($"{Indent}{EnsureInterfaceSignature(signal.HandlerSignature.Replace("IObjectBuilder", attachedType.BuilderInterfaceName, StringComparison.Ordinal))};");
+                writer.AppendLine($"{Indent}{attachedType.BuilderInterfaceName} {signal.HandlerName}(string body);");
             }
 
             writer.AppendLine("}");

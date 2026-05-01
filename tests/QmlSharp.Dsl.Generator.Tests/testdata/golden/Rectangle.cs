@@ -83,6 +83,7 @@ public interface IRectangleBuilder : IObjectBuilder
     /// Handles colorChanged.
     /// </summary>
     IRectangleBuilder OnColorChanged(Action handler);
+    IRectangleBuilder OnColorChanged(string body);
     /// <summary>
     /// Adds a child object to the data default property.
     /// </summary>

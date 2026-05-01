@@ -63,6 +63,7 @@ public interface ITextBuilder : IObjectBuilder
     /// Handles textChanged.
     /// </summary>
     ITextBuilder OnTextChanged(Action handler);
+    ITextBuilder OnTextChanged(string body);
     /// <summary>
     /// Invokes append.
     /// </summary>

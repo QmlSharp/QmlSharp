@@ -21,6 +21,14 @@ namespace QmlSharp.Dsl.Generator.Tests.Fixtures
 
         public void Dispose()
         {
+            if (string.Equals(
+                    Environment.GetEnvironmentVariable("QMLSHARP_PRESERVE_DSL_COMPILE_OUTPUT"),
+                    "1",
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
             if (Directory.Exists(Path))
             {
                 Directory.Delete(Path, recursive: true);

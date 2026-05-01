@@ -50,6 +50,7 @@ public interface IButtonBuilder : IObjectBuilder
     /// Handles clicked.
     /// </summary>
     IButtonBuilder OnClicked(Action handler);
+    IButtonBuilder OnClicked(string body);
     /// <summary>
     /// Invokes click.
     /// </summary>
