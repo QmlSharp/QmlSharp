@@ -27,4 +27,9 @@
     <ProjectReference Include="..\..\src\QmlSharp.Qml.Ast\QmlSharp.Qml.Ast.csproj" />
     <ProjectReference Include="..\..\src\QmlSharp.Registry\QmlSharp.Registry.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="testdata\golden\*.cs" />
+    <None Include="testdata\golden\*.cs" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
