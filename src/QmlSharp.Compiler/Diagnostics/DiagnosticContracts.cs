@@ -252,6 +252,9 @@ namespace QmlSharp.Compiler
         /// <summary>Writing a source map failed.</summary>
         public const string SourceMapWriteFailed = "QMLSHARP-C004";
 
+        /// <summary>Optional Qt validation failed.</summary>
+        public const string QtValidationFailed = "QMLSHARP-C005";
+
         /// <summary>An unexpected compiler internal error occurred.</summary>
         public const string InternalError = "QMLSHARP-G001";
 
