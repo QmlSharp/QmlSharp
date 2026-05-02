@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Compiler.Tests</AssemblyName>
+    <RootNamespace>QmlSharp.Compiler.Tests</RootNamespace>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\QmlSharp.Core\QmlSharp.Core.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Compiler\QmlSharp.Compiler.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Dsl\QmlSharp.Dsl.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Dsl.Generator\QmlSharp.Dsl.Generator.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Qml.Ast\QmlSharp.Qml.Ast.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Qml.Emitter\QmlSharp.Qml.Emitter.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Qt.Tools\QmlSharp.Qt.Tools.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Registry\QmlSharp.Registry.csproj" />
+  </ItemGroup>
+</Project>
