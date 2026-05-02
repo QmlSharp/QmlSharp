@@ -108,6 +108,47 @@ namespace QmlSharp.Compiler.Tests.Pipeline
 
         [Fact]
         [Trait("Category", TestCategories.Unit)]
+        public void OutputWriter_FailedDuplicateViewClassDoesNotDeleteSuccessfulArtifacts()
+        {
+            using TempOutputDirectory temp = new();
+            CompilerOptions options = CreateOptions(temp.Path);
+            CompilationUnit successfulUnit = CreateCounterUnit() with
+            {
+                SourceFilePath = "A/CounterView.cs",
+                QmlText = "Item { objectName: \"successful\" }\n",
+            };
+            CompilationUnit failedUnit = CreateCounterUnit() with
+            {
+                SourceFilePath = "Z/CounterView.cs",
+                ViewClassName = "CounterView",
+                ViewModelClassName = "BrokenCounterViewModel",
+                QmlText = "partial qml must not delete the successful artifact\n",
+                Schema = null,
+                SourceMap = null,
+                Diagnostics = ImmutableArray.Create(new CompilerDiagnostic(
+                    DiagnosticCodes.UnknownQmlType,
+                    DiagnosticSeverity.Error,
+                    "Unknown type.",
+                    SourceLocation.FileOnly("Z/CounterView.cs"),
+                    "TransformingDsl")),
+            };
+            CompilationResult compilation = CompilationResult.FromUnits(ImmutableArray.Create(successfulUnit, failedUnit));
+
+            OutputResult result = new CompilerOutputWriter().WriteOutput(compilation, options);
+
+            string qmlPath = Path.Join(temp.Path, "qml", "QmlSharp", "TestApp", "CounterView.qml");
+            string sourceMapPath = Path.Join(temp.Path, "source-maps", "CounterView.qml.map");
+            Assert.True(result.Success);
+            Assert.Empty(result.Diagnostics);
+            Assert.Equal(new[] { qmlPath }, result.QmlFiles);
+            Assert.Equal(new[] { sourceMapPath }, result.SourceMapFiles);
+            Assert.True(File.Exists(qmlPath));
+            Assert.True(File.Exists(sourceMapPath));
+            Assert.Contains("successful", File.ReadAllText(qmlPath), StringComparison.Ordinal);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
         public void OutputWriter_WritesSchemaOnlyUnitWithoutQmlArtifact()
         {
             using TempOutputDirectory temp = new();
