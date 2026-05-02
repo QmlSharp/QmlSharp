@@ -294,7 +294,7 @@ namespace QmlSharp.Compiler
         private static bool IsCallbackArgument(InvocationExpressionSyntax invocation)
         {
             return invocation.ArgumentList.Arguments.Count == 1
-                && invocation.ArgumentList.Arguments[0].Expression is SimpleLambdaExpressionSyntax;
+                && invocation.ArgumentList.Arguments[0].Expression is SimpleLambdaExpressionSyntax or ParenthesizedLambdaExpressionSyntax;
         }
 
         private static bool IsAttachedCallback(string methodName)
@@ -306,8 +306,8 @@ namespace QmlSharp.Compiler
             InvocationExpressionSyntax invocation,
             SemanticModel semanticModel)
         {
-            if (invocation.ArgumentList.Arguments[0].Expression is not SimpleLambdaExpressionSyntax lambda
-                || lambda.ExpressionBody is not InvocationExpressionSyntax bodyInvocation)
+            if (!TryGetCallbackBodyInvocation(invocation.ArgumentList.Arguments[0].Expression, out InvocationExpressionSyntax? bodyInvocation)
+                || bodyInvocation is null)
             {
                 return ImmutableArray<DslPropertyCall>.Empty;
             }
@@ -328,6 +328,20 @@ namespace QmlSharp.Compiler
             }
 
             return properties.ToImmutable();
+        }
+
+        private static bool TryGetCallbackBodyInvocation(
+            ExpressionSyntax expression,
+            out InvocationExpressionSyntax? bodyInvocation)
+        {
+            bodyInvocation = expression switch
+            {
+                SimpleLambdaExpressionSyntax { ExpressionBody: InvocationExpressionSyntax invocation } => invocation,
+                ParenthesizedLambdaExpressionSyntax { ExpressionBody: InvocationExpressionSyntax invocation } => invocation,
+                _ => null,
+            };
+
+            return bodyInvocation is not null;
         }
 
         private static DslSignalHandlerCall ExtractSignalHandler(
@@ -373,7 +387,7 @@ namespace QmlSharp.Compiler
         {
             if (expression is MemberAccessExpressionSyntax memberAccess)
             {
-                return ExtractMemberAccessValue(memberAccess);
+                return ExtractMemberAccessValue(memberAccess, semanticModel);
             }
 
             Optional<object?> constant = semanticModel.GetConstantValue(expression);
@@ -391,11 +405,25 @@ namespace QmlSharp.Compiler
             };
         }
 
-        private static object ExtractMemberAccessValue(MemberAccessExpressionSyntax memberAccess)
+        private static object ExtractMemberAccessValue(MemberAccessExpressionSyntax memberAccess, SemanticModel semanticModel)
         {
             if (memberAccess.Expression is IdentifierNameSyntax receiver)
             {
-                return new DslStateReference(receiver.Identifier.ValueText, memberAccess.Name.Identifier.ValueText, ToSourceLocation(memberAccess));
+                string receiverName = receiver.Identifier.ValueText;
+                string memberName = memberAccess.Name.Identifier.ValueText;
+                SourceLocation? location = ToSourceLocation(memberAccess);
+
+                if (IsViewModelReferenceReceiver(receiverName))
+                {
+                    return new DslStateReference(receiverName, memberName, location);
+                }
+
+                if (IsStaticMemberAccess(memberAccess, semanticModel) || IsLikelyQmlEnumReference(receiverName, memberName))
+                {
+                    return new DslEnumReference(receiverName, null, memberName, location);
+                }
+
+                return new DslStateReference(receiverName, memberName, location);
             }
 
             if (memberAccess.Expression is MemberAccessExpressionSyntax nested
@@ -409,6 +437,43 @@ namespace QmlSharp.Compiler
             }
 
             return new DslEnumReference(string.Empty, null, memberAccess.ToString(), ToSourceLocation(memberAccess));
+        }
+
+        private static bool IsViewModelReferenceReceiver(string receiverName)
+        {
+            return StringComparer.Ordinal.Equals(receiverName, "Vm")
+                || StringComparer.Ordinal.Equals(receiverName, "vm");
+        }
+
+        private static bool IsStaticMemberAccess(MemberAccessExpressionSyntax memberAccess, SemanticModel semanticModel)
+        {
+            ISymbol? memberSymbol = semanticModel.GetSymbolInfo(memberAccess).Symbol;
+            if (memberSymbol is IFieldSymbol field)
+            {
+                return field.IsConst || field.IsStatic;
+            }
+
+            if (memberSymbol is IPropertySymbol property)
+            {
+                return property.IsStatic;
+            }
+
+            if (memberSymbol is IMethodSymbol method)
+            {
+                return method.IsStatic;
+            }
+
+            return semanticModel.GetSymbolInfo(memberAccess.Expression).Symbol is INamedTypeSymbol;
+        }
+
+        private static bool IsLikelyQmlEnumReference(string receiverName, string memberName)
+        {
+            return StartsWithUppercase(receiverName) && StartsWithUppercase(memberName);
+        }
+
+        private static bool StartsWithUppercase(string value)
+        {
+            return !string.IsNullOrWhiteSpace(value) && char.IsUpper(value[0]);
         }
 
         private static bool TryCreateCommandReference(ExpressionSyntax expression, out DslCommandReference? commandReference)

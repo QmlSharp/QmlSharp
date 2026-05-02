@@ -109,6 +109,21 @@ namespace QmlSharp.Compiler.Tests.Transform
 
         [Fact]
         [Trait("Category", TestCategories.Unit)]
+        public void DslTransformer_Callbacks_AcceptParenthesizedAndTypedLambdas()
+        {
+            ObjectDefinitionNode groupedAst = TransformToAst("Rectangle().Border((b) => b.Width(2).Color(\"red\"))");
+            ObjectDefinitionNode attachedAst = TransformToAst("Rectangle().Layout((DslBuilder l) => l.FillWidth(true))");
+
+            GroupedBindingNode grouped = Assert.Single(groupedAst.Members.OfType<GroupedBindingNode>());
+            AttachedBindingNode attached = Assert.Single(attachedAst.Members.OfType<AttachedBindingNode>());
+            Assert.Equal("border", grouped.GroupName);
+            Assert.Equal(["width", "color"], grouped.Bindings.Select(static binding => binding.PropertyName));
+            Assert.Equal("Layout", attached.AttachedTypeName);
+            Assert.Equal("fillWidth", Assert.Single(attached.Bindings).PropertyName);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
         public void DslTransformer_DT10_NestedChildren_LowersRecursively()
         {
             ObjectDefinitionNode ast = TransformToAst("Rectangle().Child(Button().Child(Text().Text(\"ok\")))");
@@ -169,6 +184,18 @@ namespace QmlSharp.Compiler.Tests.Transform
             BindingNode binding = Assert.Single(ast.Members.OfType<BindingNode>());
             EnumReference enumReference = Assert.IsType<EnumReference>(binding.Value);
             Assert.Equal("TextEnums.HAlignment", enumReference.TypeName);
+            Assert.Equal("AlignLeft", enumReference.MemberName);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
+        public void DslTransformer_TwoSegmentEnumReference_ExtractsAndLowersToEnumReference()
+        {
+            ObjectDefinitionNode ast = TransformToAst("Text().HorizontalAlignment(TextEnums.AlignLeft)");
+
+            BindingNode binding = Assert.Single(ast.Members.OfType<BindingNode>());
+            EnumReference enumReference = Assert.IsType<EnumReference>(binding.Value);
+            Assert.Equal("TextEnums", enumReference.TypeName);
             Assert.Equal("AlignLeft", enumReference.MemberName);
         }
 
@@ -463,6 +490,8 @@ namespace QmlSharp.Compiler.Tests.Transform
 
                     private static class TextEnums
                     {
+                        public const int AlignLeft = 1;
+
                         public static class HAlignment
                         {
                             public const int AlignLeft = 1;
