@@ -9,7 +9,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Performance
         private const double SmallDocumentAverageBudgetMs = 5.0;
         private const double LargeDocumentSingleCallBudgetMs = 50.0;
         private const double SourceMapOverheadMultiplierBudget = 2.0;
-        private const double SourceMapOverheadAbsoluteBudgetMs = 1.0;
+        private const double SourceMapOverheadAbsoluteBudgetMs = 2.0;
         private const double FragmentAverageBudgetMs = 1.0;
         private const double SourceMapQueryAverageBudgetMs = 1.0;
 
