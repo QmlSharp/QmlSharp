@@ -69,35 +69,24 @@ namespace QmlSharp.Compiler
         {
             EnsureMsBuildRegistered();
 
-            MSBuildWorkspace? workspace = null;
-            try
+            using WorkspaceLease workspaceLease = new(MSBuildWorkspace.Create());
+            MSBuildWorkspace workspace = workspaceLease.Workspace;
+            Project project = workspace.OpenProjectAsync(normalizedOptions.ProjectPath).GetAwaiter().GetResult();
+            Compilation? compilation = project.GetCompilationAsync().GetAwaiter().GetResult();
+
+            if (compilation is null)
             {
-                workspace = MSBuildWorkspace.Create();
-                Project project = workspace.OpenProjectAsync(normalizedOptions.ProjectPath).GetAwaiter().GetResult();
-                Compilation? compilation = project.GetCompilationAsync().GetAwaiter().GetResult();
-
-                if (compilation is null)
-                {
-                    ProjectContext context = CreateNullCompilationProjectContext(project.Name, normalizedOptions, diagnostics, workspace);
-                    workspace = null;
-                    return context;
-                }
-
-                ImmutableArray<string> sourceFiles = CollectSourceFiles(
-                    compilation,
-                    Path.GetDirectoryName(Path.GetFullPath(normalizedOptions.ProjectPath)) ?? Directory.GetCurrentDirectory(),
-                    normalizedOptions);
-
-                ReportCompilationErrors(compilation, diagnostics, sourceFiles);
-
-                ProjectContext projectContext = new(compilation, sourceFiles, normalizedOptions, diagnostics, workspace);
-                workspace = null;
-                return projectContext;
+                return CreateNullCompilationProjectContext(project.Name, normalizedOptions, diagnostics, workspaceLease.Release());
             }
-            finally
-            {
-                workspace?.Dispose();
-            }
+
+            ImmutableArray<string> sourceFiles = CollectSourceFiles(
+                compilation,
+                Path.GetDirectoryName(Path.GetFullPath(normalizedOptions.ProjectPath)) ?? Directory.GetCurrentDirectory(),
+                normalizedOptions);
+
+            ReportCompilationErrors(compilation, diagnostics, sourceFiles);
+
+            return new ProjectContext(compilation, sourceFiles, normalizedOptions, diagnostics, workspaceLease.Release());
         }
 
         private static bool IsProjectLoadException(Exception exception)
@@ -605,6 +594,37 @@ namespace QmlSharp.Compiler
         private static string NormalizePath(string path)
         {
             return path.Replace('\\', '/');
+        }
+
+        private sealed class WorkspaceLease : IDisposable
+        {
+            private MSBuildWorkspace? workspace;
+
+            public WorkspaceLease(MSBuildWorkspace workspace)
+            {
+                this.workspace = workspace;
+            }
+
+            public MSBuildWorkspace Workspace
+            {
+                get
+                {
+                    return workspace ?? throw new ObjectDisposedException(nameof(WorkspaceLease));
+                }
+            }
+
+            public MSBuildWorkspace Release()
+            {
+                MSBuildWorkspace releasedWorkspace = Workspace;
+                workspace = null;
+                return releasedWorkspace;
+            }
+
+            public void Dispose()
+            {
+                workspace?.Dispose();
+                workspace = null;
+            }
         }
     }
 }
