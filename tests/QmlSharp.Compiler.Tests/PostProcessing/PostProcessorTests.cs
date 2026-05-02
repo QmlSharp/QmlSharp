@@ -402,7 +402,9 @@ namespace QmlSharp.Compiler.Tests.PostProcessing
                 return true;
             }
 
-            foreach (ObjectDefinitionNode child in node.Members.OfType<ObjectDefinitionNode>())
+            foreach (ObjectDefinitionNode child in node.Members
+                .Where(member => member is ObjectDefinitionNode)
+                .Cast<ObjectDefinitionNode>())
             {
                 if (TryFindBinding(child, propertyName, out binding))
                 {
@@ -434,7 +436,9 @@ namespace QmlSharp.Compiler.Tests.PostProcessing
                 return true;
             }
 
-            foreach (ObjectDefinitionNode child in node.Members.OfType<ObjectDefinitionNode>())
+            foreach (ObjectDefinitionNode child in node.Members
+                .Where(member => member is ObjectDefinitionNode)
+                .Cast<ObjectDefinitionNode>())
             {
                 if (TryFindSignalHandler(child, handlerName, out handler))
                 {
