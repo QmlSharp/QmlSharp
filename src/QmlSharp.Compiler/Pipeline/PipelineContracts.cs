@@ -47,7 +47,14 @@ namespace QmlSharp.Compiler
         ImmutableArray<string> SchemaFiles,
         string? EventBindingsFile,
         ImmutableArray<string> SourceMapFiles,
-        long TotalBytes);
+        long TotalBytes)
+    {
+        /// <summary>Gets diagnostics reported while writing artifacts.</summary>
+        public ImmutableArray<CompilerDiagnostic> Diagnostics { get; init; } = ImmutableArray<CompilerDiagnostic>.Empty;
+
+        /// <summary>Gets a value indicating whether output writing finished without error diagnostics.</summary>
+        public bool Success => !Diagnostics.Any(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Fatal);
+    }
 
     /// <summary>Compilation progress notification.</summary>
     public sealed record CompilationProgress(CompilationPhase Phase, int CurrentFile, int TotalFiles, string? Detail);

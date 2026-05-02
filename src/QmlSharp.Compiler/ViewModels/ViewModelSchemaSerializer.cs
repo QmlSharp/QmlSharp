@@ -7,7 +7,7 @@ namespace QmlSharp.Compiler
     /// <summary>
     /// Serializes ViewModel schemas to the canonical runtime contract JSON shape.
     /// </summary>
-    public sealed class ViewModelSchemaSerializer
+    public sealed class ViewModelSchemaSerializer : IViewModelSchemaSerializer
     {
         private static readonly JsonWriterOptions WriterOptions = new()
         {
