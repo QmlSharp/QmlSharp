@@ -71,9 +71,10 @@ namespace QmlSharp.Compiler
                 return CreateResult(qmlFiles, schemaFiles, eventBindingsFile, sourceMapFiles, totalBytes, diagnostics);
             }
 
+            ProtectedArtifactPaths protectedArtifacts = CreateProtectedArtifactPaths(result, normalizedOptions, layout);
             foreach (CompilationUnit unit in OrderedUnits(result.Units))
             {
-                WriteUnitArtifacts(unit, normalizedOptions, layout, qmlFiles, schemaFiles, sourceMapFiles, diagnostics, ref totalBytes);
+                WriteUnitArtifacts(unit, normalizedOptions, layout, protectedArtifacts, qmlFiles, schemaFiles, sourceMapFiles, diagnostics, ref totalBytes);
             }
 
             string eventPath = Path.Join(layout.OutputDir, EventBindingsFileName);
@@ -90,6 +91,7 @@ namespace QmlSharp.Compiler
             CompilationUnit unit,
             CompilerOptions options,
             OutputLayout layout,
+            ProtectedArtifactPaths protectedArtifacts,
             ImmutableArray<string>.Builder qmlFiles,
             ImmutableArray<string>.Builder schemaFiles,
             ImmutableArray<string>.Builder sourceMapFiles,
@@ -97,8 +99,8 @@ namespace QmlSharp.Compiler
             ref long totalBytes)
         {
             WriteSchemaArtifact(unit, layout, schemaFiles, diagnostics, ref totalBytes);
-            WriteQmlArtifact(unit, layout, qmlFiles, diagnostics, ref totalBytes);
-            WriteSourceMapArtifact(unit, options, layout, sourceMapFiles, diagnostics, ref totalBytes);
+            WriteQmlArtifact(unit, layout, protectedArtifacts, qmlFiles, diagnostics, ref totalBytes);
+            WriteSourceMapArtifact(unit, options, layout, protectedArtifacts, sourceMapFiles, diagnostics, ref totalBytes);
         }
 
         private void WriteSchemaArtifact(
@@ -123,12 +125,19 @@ namespace QmlSharp.Compiler
         private static void WriteQmlArtifact(
             CompilationUnit unit,
             OutputLayout layout,
+            ProtectedArtifactPaths protectedArtifacts,
             ImmutableArray<string>.Builder qmlFiles,
             ImmutableArray<CompilerDiagnostic>.Builder diagnostics,
             ref long totalBytes)
         {
             if (!unit.Success || string.IsNullOrEmpty(unit.QmlText))
             {
+                string? staleQmlPath = TryBuildArtifactPath(layout.QmlModuleDir, unit.ViewClassName, ".qml", diagnostics);
+                if (staleQmlPath is not null && !protectedArtifacts.ContainsQmlPath(staleQmlPath))
+                {
+                    _ = TryDeleteStaleArtifact(staleQmlPath, DiagnosticCodes.OutputWriteFailed, diagnostics);
+                }
+
                 return;
             }
 
@@ -143,18 +152,29 @@ namespace QmlSharp.Compiler
             CompilationUnit unit,
             CompilerOptions options,
             OutputLayout layout,
+            ProtectedArtifactPaths protectedArtifacts,
             ImmutableArray<string>.Builder sourceMapFiles,
             ImmutableArray<CompilerDiagnostic>.Builder diagnostics,
             ref long totalBytes)
         {
+            if (!unit.Success)
+            {
+                string staleMapBaseName = GetSourceMapBaseName(unit);
+                string? staleSourceMapPath = TryBuildArtifactPath(layout.SourceMapDir, staleMapBaseName, ".qml.map", diagnostics);
+                if (staleSourceMapPath is not null && !protectedArtifacts.ContainsSourceMapPath(staleSourceMapPath))
+                {
+                    _ = TryDeleteStaleArtifact(staleSourceMapPath, DiagnosticCodes.SourceMapWriteFailed, diagnostics);
+                }
+
+                return;
+            }
+
             if (!options.GenerateSourceMaps || unit.SourceMap is null)
             {
                 return;
             }
 
-            string mapBaseName = string.IsNullOrWhiteSpace(unit.ViewClassName)
-                ? Path.GetFileNameWithoutExtension(unit.SourceMap.OutputFilePath)
-                : unit.ViewClassName;
+            string mapBaseName = GetSourceMapBaseName(unit);
             string? sourceMapPath = TryBuildArtifactPath(layout.SourceMapDir, mapBaseName, ".qml.map", diagnostics);
             if (sourceMapPath is not null && TrySerializeSourceMap(unit.SourceMap, sourceMapPath, diagnostics, out string sourceMapJson))
             {
@@ -222,6 +242,38 @@ namespace QmlSharp.Compiler
             }
 
             return valid;
+        }
+
+        private static ProtectedArtifactPaths CreateProtectedArtifactPaths(
+            CompilationResult result,
+            CompilerOptions options,
+            OutputLayout layout)
+        {
+            HashSet<string> qmlPaths = new(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> sourceMapPaths = new(StringComparer.OrdinalIgnoreCase);
+
+            foreach (CompilationUnit unit in OrderedUnits(result.Units)
+                .Where(static unit => unit.Success && !string.IsNullOrEmpty(unit.QmlText) && IsSafeFileNameStem(unit.ViewClassName)))
+            {
+                qmlPaths.Add(NormalizeArtifactPath(BuildArtifactPath(layout.QmlModuleDir, unit.ViewClassName, ".qml")));
+            }
+
+            foreach (string mapBaseName in OrderedUnits(result.Units)
+                .Where(unit => options.GenerateSourceMaps && unit.Success && unit.SourceMap is not null)
+                .Select(static unit => GetSourceMapBaseName(unit))
+                .Where(static mapBaseName => IsSafeFileNameStem(mapBaseName)))
+            {
+                sourceMapPaths.Add(NormalizeArtifactPath(BuildArtifactPath(layout.SourceMapDir, mapBaseName, ".qml.map")));
+            }
+
+            return new ProtectedArtifactPaths(qmlPaths, sourceMapPaths);
+        }
+
+        private static string GetSourceMapBaseName(CompilationUnit unit)
+        {
+            return string.IsNullOrWhiteSpace(unit.ViewClassName)
+                ? Path.GetFileNameWithoutExtension(unit.SourceMap?.OutputFilePath ?? unit.SourceFilePath)
+                : unit.ViewClassName;
         }
 
         private static bool TryReserveArtifactPath(
@@ -366,6 +418,31 @@ namespace QmlSharp.Compiler
             }
         }
 
+        private static bool TryDeleteStaleArtifact(
+            string path,
+            string diagnosticCode,
+            ImmutableArray<CompilerDiagnostic>.Builder diagnostics)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                diagnostics.Add(CreateDiagnostic(
+                    diagnosticCode,
+                    path,
+                    "Deleting stale compiler output failed.",
+                    exception));
+                return false;
+            }
+        }
+
         private static void WriteAtomically(string path, byte[] bytes)
         {
             string? directory = Path.GetDirectoryName(path);
@@ -409,6 +486,16 @@ namespace QmlSharp.Compiler
             }
 
             return Path.Join(directory, $"{fileNameWithoutExtension}{extension}");
+        }
+
+        private static string BuildArtifactPath(string directory, string fileNameWithoutExtension, string extension)
+        {
+            return Path.Join(directory, $"{fileNameWithoutExtension}{extension}");
+        }
+
+        private static string NormalizeArtifactPath(string path)
+        {
+            return Path.GetFullPath(path);
         }
 
         private static bool IsSafeFileNameStem(string value)
@@ -520,6 +607,28 @@ namespace QmlSharp.Compiler
                 string sourceMapDir = options.SourceMapDir ?? Path.Join(outputDir, "source-maps");
 
                 return new OutputLayout(outputDir, qmlModuleDir, schemaDir, sourceMapDir);
+            }
+        }
+
+        private sealed class ProtectedArtifactPaths
+        {
+            private readonly HashSet<string> qmlPaths;
+            private readonly HashSet<string> sourceMapPaths;
+
+            public ProtectedArtifactPaths(HashSet<string> qmlPaths, HashSet<string> sourceMapPaths)
+            {
+                this.qmlPaths = qmlPaths;
+                this.sourceMapPaths = sourceMapPaths;
+            }
+
+            public bool ContainsQmlPath(string path)
+            {
+                return qmlPaths.Contains(NormalizeArtifactPath(path));
+            }
+
+            public bool ContainsSourceMapPath(string path)
+            {
+                return sourceMapPaths.Contains(NormalizeArtifactPath(path));
             }
         }
     }

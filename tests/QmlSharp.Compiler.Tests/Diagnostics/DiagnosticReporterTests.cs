@@ -140,6 +140,31 @@ namespace QmlSharp.Compiler.Tests.Diagnostics
 
         [Fact]
         [Trait("Category", TestCategories.Unit)]
+        public void DiagnosticReporter_EveryErrorSeverityDiagnosticCode_HasStableMessageFormat()
+        {
+            DiagnosticReporter reporter = new();
+
+            foreach (string code in GetDiagnosticCodeConstants())
+            {
+                CompilerDiagnostic diagnostic = reporter.Report(
+                    code,
+                    DiagnosticSeverity.Error,
+                    SourceLocation.Partial("View.cs", 4, 2),
+                    "hardening-test",
+                    "format detail.");
+                string formatted = reporter.Format(diagnostic);
+
+                Assert.Contains("View.cs(4,2)", formatted, StringComparison.Ordinal);
+                Assert.Contains(code, formatted, StringComparison.Ordinal);
+                Assert.Contains("Error", formatted, StringComparison.Ordinal);
+                Assert.Contains("hardening-test", formatted, StringComparison.Ordinal);
+                Assert.Contains("format detail.", formatted, StringComparison.Ordinal);
+                Assert.DoesNotContain("Unknown compiler diagnostic", formatted, StringComparison.Ordinal);
+            }
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
         public void DiagnosticReporter_AnalyzerCodeNames_MatchApiDesignContract()
         {
             Assert.Equal("QMLSHARP-A001", DiagnosticCodes.InvalidStateAttribute);

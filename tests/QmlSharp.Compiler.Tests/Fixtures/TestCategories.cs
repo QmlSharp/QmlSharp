@@ -6,6 +6,7 @@ namespace QmlSharp.Compiler.Tests.Fixtures
         public const string Contract = "Contract";
         public const string Golden = "Golden";
         public const string Integration = "Integration";
+        public const string Performance = "Performance";
         public const string RequiresQt = "RequiresQt";
         public const string Unit = "Unit";
     }
