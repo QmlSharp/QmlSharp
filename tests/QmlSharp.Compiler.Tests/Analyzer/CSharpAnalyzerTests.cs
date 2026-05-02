@@ -338,6 +338,33 @@ namespace QmlSharp.Compiler.Tests.Analyzer
             Assert.All(context.SourceFiles, filePath => Assert.Contains($"{Path.DirectorySeparatorChar}Views{Path.DirectorySeparatorChar}", filePath));
         }
 
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
+        public void CSharpAnalyzer_CreateProjectContextWithProject_IncludePatternsHonorPlatformPathCasing()
+        {
+            using TempOutputDirectory temp = new();
+            string projectPath = CreateProjectFile(temp.Path);
+            WriteSource(temp.Path, "Views", "IncludedViewModel.cs", CompilerSourceFixtures.CounterViewModelSource);
+            WriteSource(temp.Path, "Views", "IncludedView.cs", CompilerSourceFixtures.CounterViewSource);
+
+            string includePattern = PathsAreCaseInsensitive()
+                ? "views/**/*.CS"
+                : "Views/**/*.cs";
+            CompilerOptions options = CompilerTestFixtures.DefaultOptions with
+            {
+                ProjectPath = projectPath,
+                OutputDir = Path.Join(temp.Path, "dist"),
+                IncludePatterns = ImmutableArray.Create(includePattern),
+                ExcludePatterns = ImmutableArray<string>.Empty,
+            };
+
+            using ProjectContext context = analyzer.CreateProjectContext(options);
+
+            Assert.Empty(context.Diagnostics.GetDiagnostics(DiagnosticSeverity.Error));
+            Assert.Equal(2, context.SourceFiles.Length);
+            Assert.All(context.SourceFiles, filePath => Assert.Contains($"{Path.DirectorySeparatorChar}Views{Path.DirectorySeparatorChar}", filePath));
+        }
+
         private static bool IsRoslynCompilationDiagnostic(CompilerDiagnostic diagnostic)
         {
             return diagnostic.Code == DiagnosticCodes.RoslynCompilationFailed
@@ -354,6 +381,11 @@ namespace QmlSharp.Compiler.Tests.Analyzer
             CSharpCompilation compilation = RoslynTestHelper.CreateCompilation(sources);
             ImmutableArray<string> sourceFiles = sources.Select(static source => source.FileName).ToImmutableArray();
             return analyzer.CreateInMemoryProjectContext(CompilerTestFixtures.DefaultOptions, compilation, sourceFiles);
+        }
+
+        private static bool PathsAreCaseInsensitive()
+        {
+            return OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
         }
 
         private static string CreateProjectFile(string directory)

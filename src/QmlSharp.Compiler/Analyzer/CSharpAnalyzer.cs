@@ -14,7 +14,9 @@ namespace QmlSharp.Compiler
         private const string ViewModelAttributeMetadataName = "QmlSharp.Core.ViewModelAttribute";
         private const string AnalysisPhase = "Analyze";
 
-        private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+        private static readonly bool PathsAreCaseInsensitive = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
+
+        private static readonly StringComparer PathComparer = PathsAreCaseInsensitive
             ? StringComparer.OrdinalIgnoreCase
             : StringComparer.Ordinal;
 
@@ -46,7 +48,7 @@ namespace QmlSharp.Compiler
             {
                 return LoadProjectContext(normalizedOptions, diagnostics);
             }
-            catch (Exception exception) when (exception is InvalidOperationException or IOException or ArgumentException)
+            catch (Exception exception) when (IsProjectLoadException(exception))
             {
                 _ = diagnostics.Report(
                     DiagnosticCodes.ProjectLoadFailed,
@@ -67,23 +69,43 @@ namespace QmlSharp.Compiler
         {
             EnsureMsBuildRegistered();
 
-            MSBuildWorkspace workspace = MSBuildWorkspace.Create();
-            Project project = workspace.OpenProjectAsync(normalizedOptions.ProjectPath).GetAwaiter().GetResult();
-            Compilation? compilation = project.GetCompilationAsync().GetAwaiter().GetResult();
-
-            if (compilation is null)
+            MSBuildWorkspace? workspace = null;
+            try
             {
-                return CreateNullCompilationProjectContext(project.Name, normalizedOptions, diagnostics, workspace);
+                workspace = MSBuildWorkspace.Create();
+                Project project = workspace.OpenProjectAsync(normalizedOptions.ProjectPath).GetAwaiter().GetResult();
+                Compilation? compilation = project.GetCompilationAsync().GetAwaiter().GetResult();
+
+                if (compilation is null)
+                {
+                    ProjectContext context = CreateNullCompilationProjectContext(project.Name, normalizedOptions, diagnostics, workspace);
+                    workspace = null;
+                    return context;
+                }
+
+                ImmutableArray<string> sourceFiles = CollectSourceFiles(
+                    compilation,
+                    Path.GetDirectoryName(Path.GetFullPath(normalizedOptions.ProjectPath)) ?? Directory.GetCurrentDirectory(),
+                    normalizedOptions);
+
+                ReportCompilationErrors(compilation, diagnostics, sourceFiles);
+
+                ProjectContext projectContext = new(compilation, sourceFiles, normalizedOptions, diagnostics, workspace);
+                workspace = null;
+                return projectContext;
             }
+            finally
+            {
+                workspace?.Dispose();
+            }
+        }
 
-            ImmutableArray<string> sourceFiles = CollectSourceFiles(
-                compilation,
-                Path.GetDirectoryName(Path.GetFullPath(normalizedOptions.ProjectPath)) ?? Directory.GetCurrentDirectory(),
-                normalizedOptions);
-
-            ReportCompilationErrors(compilation, diagnostics, sourceFiles);
-
-            return new ProjectContext(compilation, sourceFiles, normalizedOptions, diagnostics, workspace);
+        private static bool IsProjectLoadException(Exception exception)
+        {
+            return exception is InvalidOperationException or IOException or ArgumentException
+                || StringComparer.Ordinal.Equals(
+                    exception.GetType().FullName,
+                    "Microsoft.Build.Exceptions.InvalidProjectFileException");
         }
 
         private static ProjectContext CreateNullCompilationProjectContext(
@@ -269,9 +291,8 @@ namespace QmlSharp.Compiler
             CompilerOptions options)
         {
             ImmutableArray<string>.Builder files = ImmutableArray.CreateBuilder<string>();
-            foreach (SyntaxTree syntaxTree in compilation.SyntaxTrees)
+            foreach (string filePath in compilation.SyntaxTrees.Select(static syntaxTree => syntaxTree.FilePath))
             {
-                string filePath = syntaxTree.FilePath;
                 if (string.IsNullOrWhiteSpace(filePath))
                 {
                     continue;
@@ -299,12 +320,13 @@ namespace QmlSharp.Compiler
                 SemanticModel semanticModel = context.Compilation.GetSemanticModel(syntaxTree);
                 SyntaxNode root = syntaxTree.GetRoot();
 
-                foreach (ClassDeclarationSyntax classDeclaration in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+                foreach (INamedTypeSymbol symbol in root.DescendantNodes()
+                    .OfType<ClassDeclarationSyntax>()
+                    .Select(classDeclaration => semanticModel.GetDeclaredSymbol(classDeclaration))
+                    .Where(static declaredSymbol => declaredSymbol is INamedTypeSymbol)
+                    .Cast<INamedTypeSymbol>())
                 {
-                    if (semanticModel.GetDeclaredSymbol(classDeclaration) is INamedTypeSymbol symbol)
-                    {
-                        symbols.Add(symbol);
-                    }
+                    symbols.Add(symbol);
                 }
             }
 
@@ -313,16 +335,15 @@ namespace QmlSharp.Compiler
 
         private static IEnumerable<SyntaxTree> GetAnalyzableSyntaxTrees(ProjectContext context)
         {
-            foreach (SyntaxTree syntaxTree in context.Compilation.SyntaxTrees)
-            {
-                if (IsSourceFileAnalyzable(context, syntaxTree))
-                {
-                    yield return syntaxTree;
-                }
-            }
+            ImmutableHashSet<string> sourceFilesWithCompilationErrors = GetSourceFilesWithCompilationErrors(context.Compilation);
+            return context.Compilation.SyntaxTrees
+                .Where(syntaxTree => IsSourceFileAnalyzable(context, syntaxTree, sourceFilesWithCompilationErrors));
         }
 
-        private static bool IsSourceFileAnalyzable(ProjectContext context, SyntaxTree syntaxTree)
+        private static bool IsSourceFileAnalyzable(
+            ProjectContext context,
+            SyntaxTree syntaxTree,
+            ImmutableHashSet<string> sourceFilesWithCompilationErrors)
         {
             if (!ContainsSourceFile(context, syntaxTree.FilePath))
             {
@@ -334,11 +355,19 @@ namespace QmlSharp.Compiler
                 return false;
             }
 
-            return !context.Compilation.GetDiagnostics()
-                .Any(diagnostic =>
+            return !sourceFilesWithCompilationErrors.Contains(NormalizePath(syntaxTree.FilePath));
+        }
+
+        private static ImmutableHashSet<string> GetSourceFilesWithCompilationErrors(Compilation compilation)
+        {
+            return compilation.GetDiagnostics()
+                .Where(static diagnostic =>
                     diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error
-                    && diagnostic.Location.SourceTree is not null
-                    && PathsEqual(diagnostic.Location.SourceTree.FilePath, syntaxTree.FilePath));
+                    && diagnostic.Location.SourceTree is not null)
+                .Select(static diagnostic => diagnostic.Location.SourceTree!.FilePath)
+                .Where(static filePath => !string.IsNullOrWhiteSpace(filePath))
+                .Select(static filePath => NormalizePath(filePath))
+                .ToImmutableHashSet(PathComparer);
         }
 
         private static bool HasValidSyntax(SyntaxTree syntaxTree)
@@ -384,15 +413,9 @@ namespace QmlSharp.Compiler
 
         private static bool HasAttribute(ISymbol symbol, string metadataName)
         {
-            foreach (AttributeData attribute in symbol.GetAttributes())
-            {
-                if (StringComparer.Ordinal.Equals(attribute.AttributeClass?.ToDisplayString(), metadataName))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return symbol.GetAttributes()
+                .Where(attribute => StringComparer.Ordinal.Equals(attribute.AttributeClass?.ToDisplayString(), metadataName))
+                .Any();
         }
 
         private static string GetSourceFilePath(INamedTypeSymbol symbol)
@@ -482,15 +505,9 @@ namespace QmlSharp.Compiler
             }
 
             string normalizedPath = NormalizePath(path);
-            foreach (string pattern in patterns)
-            {
-                if (GlobMatches(pattern, normalizedPath))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return patterns
+                .Where(static pattern => !string.IsNullOrWhiteSpace(pattern))
+                .Any(pattern => GlobMatches(pattern, normalizedPath));
         }
 
         private static bool GlobMatches(string pattern, string normalizedPath)
@@ -569,8 +586,15 @@ namespace QmlSharp.Compiler
             }
 
             return pathIndex < pathSegment.Length
-                && patternSegment[patternIndex] == pathSegment[pathIndex]
+                && PathCharsEqual(patternSegment[patternIndex], pathSegment[pathIndex])
                 && SegmentMatches(patternSegment, patternIndex + 1, pathSegment, pathIndex + 1);
+        }
+
+        private static bool PathCharsEqual(char left, char right)
+        {
+            return PathsAreCaseInsensitive
+                ? char.ToUpperInvariant(left) == char.ToUpperInvariant(right)
+                : left == right;
         }
 
         private static bool PathsEqual(string left, string right)
