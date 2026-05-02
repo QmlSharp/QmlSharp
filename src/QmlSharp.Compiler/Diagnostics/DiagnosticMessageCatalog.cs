@@ -44,6 +44,7 @@ namespace QmlSharp.Compiler
                     new(DiagnosticCodes.OutputWriteFailed, "Writing compiler output failed."),
                     new(DiagnosticCodes.SchemaSerializationFailed, "Schema serialization failed."),
                     new(DiagnosticCodes.SourceMapWriteFailed, "Writing source map output failed."),
+                    new(DiagnosticCodes.QtValidationFailed, "Qt QML validation failed."),
                     new(DiagnosticCodes.InternalError, "An internal compiler error occurred."),
                     new(DiagnosticCodes.RoslynCompilationFailed, "Roslyn compilation failed."),
                     new(DiagnosticCodes.ProjectLoadFailed, "Project loading failed."),

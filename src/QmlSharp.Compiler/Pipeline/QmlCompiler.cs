@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.CodeAnalysis;
 using QmlSharp.Qml.Emitter;
+using QmlSharp.Qt.Tools;
 using QmlSharp.Registry;
 using QmlSharp.Registry.Querying;
 
@@ -27,6 +28,7 @@ namespace QmlSharp.Compiler
         private readonly ISourceMapManager sourceMapManager;
         private readonly IEventBindingsBuilder eventBindingsBuilder;
         private readonly CompilerOutputWriter outputWriter;
+        private readonly CompilerQtValidator qtValidator;
         private readonly List<Action<CompilationProgress>> progressCallbacks = [];
 
         /// <summary>
@@ -71,7 +73,9 @@ namespace QmlSharp.Compiler
             IRegistryQuery registry,
             ISourceMapManager sourceMapManager,
             IEventBindingsBuilder eventBindingsBuilder,
-            CompilerOutputWriter outputWriter)
+            CompilerOutputWriter outputWriter,
+            IQmlFormat? qmlFormat = null,
+            IQmlLint? qmlLint = null)
         {
             this.analyzer = analyzer ?? throw new ArgumentNullException(nameof(analyzer));
             this.viewModelExtractor = viewModelExtractor ?? throw new ArgumentNullException(nameof(viewModelExtractor));
@@ -84,6 +88,9 @@ namespace QmlSharp.Compiler
             this.sourceMapManager = sourceMapManager ?? throw new ArgumentNullException(nameof(sourceMapManager));
             this.eventBindingsBuilder = eventBindingsBuilder ?? throw new ArgumentNullException(nameof(eventBindingsBuilder));
             this.outputWriter = outputWriter ?? throw new ArgumentNullException(nameof(outputWriter));
+            qtValidator = qmlFormat is null && qmlLint is null
+                ? CompilerQtValidator.CreateDefault()
+                : new CompilerQtValidator(qmlFormat ?? new QmlFormat(), qmlLint ?? new QmlLint());
         }
 
         /// <inheritdoc />
@@ -115,21 +122,35 @@ namespace QmlSharp.Compiler
                 units.Add(CompileView(view, context, normalizedOptions, viewModelsByMetadataName, idAllocator));
             }
 
-            EventBindingsIndex eventBindings = eventBindingsBuilder.Build(units
+            ImmutableArray<CompilationUnit> validatedUnits = ValidateQt(units.ToImmutable(), normalizedOptions);
+
+            EventBindingsIndex eventBindings = eventBindingsBuilder.Build(validatedUnits
                 .Where(static unit => unit.Schema is not null)
                 .Select(static unit => unit.Schema!)
                 .ToImmutableArray());
-            ImmutableArray<CompilerDiagnostic> projectDiagnostics = GetProjectDiagnosticsNotOwnedByUnits(context, units.ToImmutable());
+            ImmutableArray<CompilerDiagnostic> projectDiagnostics = GetProjectDiagnosticsNotOwnedByUnits(context, validatedUnits);
 
             stopwatch.Stop();
             CompilationResult result = CompilationResult.FromUnits(
-                units.ToImmutable(),
+                validatedUnits,
                 projectDiagnostics,
                 eventBindings,
                 stopwatch.ElapsedMilliseconds);
 
             Report(CompilationPhase.Done, views.Length, views.Length, result.Success ? "Compilation completed." : "Compilation completed with diagnostics.");
             return result;
+        }
+
+        private ImmutableArray<CompilationUnit> ValidateQt(ImmutableArray<CompilationUnit> units, CompilerOptions options)
+        {
+            if (!options.FormatQml && !options.LintQml)
+            {
+                return units;
+            }
+
+            return units
+                .Select(unit => qtValidator.Validate(unit, options))
+                .ToImmutableArray();
         }
 
         /// <inheritdoc />
@@ -161,7 +182,8 @@ namespace QmlSharp.Compiler
             }
 
             ImmutableDictionary<string, DiscoveredViewModel> viewModelsByMetadataName = CreateViewModelLookup(analyzer.DiscoverViewModels(context));
-            return CompileView(view, context, normalizedOptions, viewModelsByMetadataName, idAllocator);
+            CompilationUnit unit = CompileView(view, context, normalizedOptions, viewModelsByMetadataName, idAllocator);
+            return qtValidator.Validate(unit, normalizedOptions);
         }
 
         /// <inheritdoc />

@@ -130,11 +130,11 @@ namespace QmlSharp.Compiler.Tests.Diagnostics
 
         [Fact]
         [Trait("Category", TestCategories.Unit)]
-        public void DiagnosticReporter_All37DiagnosticCodeConstants_HaveMessageTemplates()
+        public void DiagnosticReporter_All38DiagnosticCodeConstants_HaveMessageTemplates()
         {
             ImmutableArray<string> codes = GetDiagnosticCodeConstants();
 
-            Assert.Equal(37, codes.Length);
+            Assert.Equal(38, codes.Length);
             Assert.Equal(codes.Order(StringComparer.Ordinal).ToArray(), DiagnosticMessageCatalog.AllCodes.ToArray());
         }
 
