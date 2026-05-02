@@ -23,7 +23,88 @@ namespace QmlSharp.Compiler
     /// <summary>
     /// Source location with 1-based public line and column positions.
     /// </summary>
-    public sealed record SourceLocation(string FilePath, int Line, int Column);
+    public sealed record SourceLocation
+    {
+        /// <summary>
+        /// Initializes a new source location with file, line, and column information.
+        /// </summary>
+        /// <param name="filePath">The source file path.</param>
+        /// <param name="line">The 1-based source line.</param>
+        /// <param name="column">The 1-based source column.</param>
+        public SourceLocation(string filePath, int line, int column)
+            : this(filePath, line, column, requireFilePath: true)
+        {
+        }
+
+        private SourceLocation(string? filePath, int? line, int? column, bool requireFilePath)
+        {
+            if (requireFilePath)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+            }
+            else if (filePath is not null && string.IsNullOrWhiteSpace(filePath))
+            {
+                throw new ArgumentException("File path must not be empty or whitespace.", nameof(filePath));
+            }
+
+            ValidatePositive(line, nameof(line));
+            ValidatePositive(column, nameof(column));
+
+            FilePath = filePath;
+            Line = line;
+            Column = column;
+        }
+
+        /// <summary>Gets the optional source file path.</summary>
+        public string? FilePath { get; init; }
+
+        /// <summary>Gets the optional 1-based source line.</summary>
+        public int? Line { get; init; }
+
+        /// <summary>Gets the optional 1-based source column.</summary>
+        public int? Column { get; init; }
+
+        /// <summary>
+        /// Creates a source location with file-only information.
+        /// </summary>
+        /// <param name="filePath">The source file path.</param>
+        /// <returns>A file-only source location.</returns>
+        public static SourceLocation FileOnly(string filePath)
+        {
+            return new SourceLocation(filePath, null, null, requireFilePath: true);
+        }
+
+        /// <summary>
+        /// Creates a source location with line and column information.
+        /// </summary>
+        /// <param name="line">The 1-based source line.</param>
+        /// <param name="column">The 1-based source column.</param>
+        /// <returns>A line-and-column source location.</returns>
+        public static SourceLocation LineColumn(int line, int column)
+        {
+            return new SourceLocation(null, line, column, requireFilePath: false);
+        }
+
+        /// <summary>
+        /// Creates a source location with any available subset of location fields.
+        /// </summary>
+        /// <param name="filePath">The optional source file path.</param>
+        /// <param name="line">The optional 1-based source line.</param>
+        /// <param name="column">The optional 1-based source column.</param>
+        /// <returns>A partial source location.</returns>
+        public static SourceLocation Partial(string? filePath = null, int? line = null, int? column = null)
+        {
+            return new SourceLocation(filePath, line, column, requireFilePath: false);
+        }
+
+        private static void ValidatePositive(int? value, string parameterName)
+        {
+            if (value.HasValue && value.Value < 1)
+            {
+                throw new ArgumentOutOfRangeException(parameterName, value, "Source locations use 1-based positions.");
+            }
+        }
+    }
 
     /// <summary>
     /// Source-to-output mapping captured during compiler transforms.
@@ -69,17 +150,17 @@ namespace QmlSharp.Compiler
     /// </summary>
     public static class DiagnosticCodes
     {
-        /// <summary>No ViewModel attribute was found where one was required.</summary>
-        public const string MissingViewModelAttribute = "QMLSHARP-A001";
+        /// <summary>A State attribute is invalid.</summary>
+        public const string InvalidStateAttribute = "QMLSHARP-A001";
 
-        /// <summary>A state property is invalid.</summary>
-        public const string InvalidStateProperty = "QMLSHARP-A002";
+        /// <summary>A Command attribute is invalid.</summary>
+        public const string InvalidCommandAttribute = "QMLSHARP-A002";
 
-        /// <summary>A command method is invalid.</summary>
-        public const string InvalidCommandMethod = "QMLSHARP-A003";
+        /// <summary>An Effect attribute is invalid.</summary>
+        public const string InvalidEffectAttribute = "QMLSHARP-A003";
 
-        /// <summary>An effect event is invalid.</summary>
-        public const string InvalidEffectEvent = "QMLSHARP-A004";
+        /// <summary>A referenced ViewModel type could not be found.</summary>
+        public const string ViewModelNotFound = "QMLSHARP-A004";
 
         /// <summary>A ViewModel contains duplicate state names.</summary>
         public const string DuplicateStateName = "QMLSHARP-A005";

@@ -173,17 +173,19 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
             string markerPath = Path.Join(
                 Path.GetTempPath(),
                 "qmlsharp-toolrunner-child-" + Guid.NewGuid().ToString("N") + ".txt");
-            ProbeInvocation probe = CreateProbeInvocation("spawn-child-sleep", markerPath, "1500");
+            ProbeInvocation probe = CreateProbeInvocation("spawn-child-sleep", markerPath, "2500");
 
             try
             {
-                _ = await Assert.ThrowsAsync<QtToolTimeoutError>(() =>
+                QtToolTimeoutError error = await Assert.ThrowsAsync<QtToolTimeoutError>(() =>
                     runner.RunAsync(
                         probe.ExecutablePath,
                         probe.Arguments,
-                        new ToolRunnerOptions { Timeout = TimeSpan.FromMilliseconds(200) }));
+                        new ToolRunnerOptions { Timeout = TimeSpan.FromSeconds(1) }));
 
-                await Task.Delay(TimeSpan.FromSeconds(2));
+                Assert.Contains("child-pid=", error.PartialStdout, StringComparison.Ordinal);
+
+                await Task.Delay(TimeSpan.FromSeconds(3));
 
                 Assert.False(File.Exists(markerPath));
             }
