@@ -87,10 +87,32 @@ namespace QmlSharp.Compiler
         {
             ArgumentNullException.ThrowIfNull(options);
             ThrowIfDisposed();
+            cancellationToken.ThrowIfCancellationRequested();
 
             CompilerOptions normalizedOptions = options.ValidateAndNormalize();
-            int activeGeneration;
-            CancellationToken token;
+            WatcherStartState startState = InitializeStart(normalizedOptions, onCompiled, cancellationToken);
+            CancellationTokenRegistration registration = default;
+            try
+            {
+                registration = RegisterExternalCancellation(startState, cancellationToken);
+                registration = default;
+                startState.Token.ThrowIfCancellationRequested();
+                startState.Watcher.Start();
+                await CompileNowAsync(startState.Generation, startState.Token).ConfigureAwait(false);
+            }
+            catch
+            {
+                registration.Dispose();
+                await StopAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        private WatcherStartState InitializeStart(
+            CompilerOptions normalizedOptions,
+            Action<CompilationResult>? onCompiled,
+            CancellationToken cancellationToken)
+        {
             lock (gate)
             {
                 if (status is WatcherStatus.Watching or WatcherStatus.Compiling)
@@ -98,24 +120,46 @@ namespace QmlSharp.Compiler
                     throw new InvalidOperationException("The compiler watcher is already running.");
                 }
 
-                this.options = normalizedOptions;
+                options = normalizedOptions;
                 compiledCallback = onCompiled;
                 stopCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                cancellationRegistration = cancellationToken.Register(static state =>
-                {
-                    _ = ((CompilerWatcher)state!).StopAsync();
-                }, this);
                 fileWatcher = fileWatcherFactory.Create(normalizedOptions);
                 fileWatcher.Changed += OnFileChanged;
                 fileWatcher.Error += OnWatcherError;
                 generation++;
-                activeGeneration = generation;
-                token = stopCancellation.Token;
                 status = WatcherStatus.Watching;
+
+                return new WatcherStartState(
+                    generation,
+                    fileWatcher,
+                    stopCancellation,
+                    stopCancellation.Token);
+            }
+        }
+
+        private CancellationTokenRegistration RegisterExternalCancellation(
+            WatcherStartState startState,
+            CancellationToken cancellationToken)
+        {
+            CancellationTokenRegistration registration = cancellationToken.Register(static state =>
+            {
+                _ = ((CompilerWatcher)state!).StopAsync();
+            }, this);
+
+            lock (gate)
+            {
+                if (generation == startState.Generation
+                    && stopCancellation == startState.StopCancellation
+                    && status != WatcherStatus.Stopped)
+                {
+                    cancellationRegistration = registration;
+                    return default;
+                }
             }
 
-            fileWatcher.Start();
-            await CompileNowAsync(activeGeneration, token).ConfigureAwait(false);
+            registration.Dispose();
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new OperationCanceledException("The compiler watcher stopped during startup.", cancellationToken);
         }
 
         /// <inheritdoc />
@@ -170,6 +214,7 @@ namespace QmlSharp.Compiler
                 }
                 catch (OperationCanceledException)
                 {
+                    System.Diagnostics.Trace.TraceInformation("Compiler watcher shutdown canceled a pending compile task.");
                 }
             }
 
@@ -210,6 +255,7 @@ namespace QmlSharp.Compiler
 
             int activeGeneration;
             CancellationToken token;
+            CancellationTokenSource? previousDebounceCancellation;
             lock (gate)
             {
                 if (stopCancellation is null || status == WatcherStatus.Stopped)
@@ -219,11 +265,14 @@ namespace QmlSharp.Compiler
 
                 incrementalCompiler.Invalidate(ImmutableArray.Create(args.FilePath));
                 activeGeneration = generation;
-                debounceCancellation?.Cancel();
+                previousDebounceCancellation = debounceCancellation;
+                previousDebounceCancellation?.Cancel();
                 debounceCancellation = CancellationTokenSource.CreateLinkedTokenSource(stopCancellation.Token);
                 token = debounceCancellation.Token;
                 pendingCompileTask = DebounceAndCompileAsync(activeGeneration, token);
             }
+
+            previousDebounceCancellation?.Dispose();
         }
 
         private void OnWatcherError(object? sender, CompilerWatcherErrorEventArgs args)
@@ -245,6 +294,8 @@ namespace QmlSharp.Compiler
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                System.Diagnostics.Trace.TraceInformation("Compiler watcher debounce was canceled before compilation.");
+                return;
             }
         }
 
@@ -281,6 +332,8 @@ namespace QmlSharp.Compiler
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                System.Diagnostics.Trace.TraceInformation("Compiler watcher compilation was canceled.");
+                return;
             }
             catch (Exception exception) when (exception is InvalidOperationException
                 or ArgumentException
@@ -388,6 +441,7 @@ namespace QmlSharp.Compiler
                     or IOException
                     or NotSupportedException)
                 {
+                    System.Diagnostics.Trace.TraceError($"Compiler watcher error handler failed: {handlerException}");
                 }
             }
         }
@@ -396,5 +450,11 @@ namespace QmlSharp.Compiler
         {
             ObjectDisposedException.ThrowIf(disposed, this);
         }
+
+        private sealed record WatcherStartState(
+            int Generation,
+            ICompilerFileWatcher Watcher,
+            CancellationTokenSource StopCancellation,
+            CancellationToken Token);
     }
 }

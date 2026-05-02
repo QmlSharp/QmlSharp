@@ -102,6 +102,38 @@ namespace QmlSharp.Compiler.Tests.Watcher
         }
 
         [Fact]
+        public async Task CompilerWatcher_StartAsyncWithPreCanceledTokenDoesNotCreateWatcher()
+        {
+            using TestHarness harness = new(TimeSpan.Zero);
+            using CancellationTokenSource cancellation = new();
+            await cancellation.CancelAsync();
+
+            _ = await Assert.ThrowsAsync<OperationCanceledException>(() => harness.Watcher.StartAsync(
+                Options,
+                cancellationToken: cancellation.Token));
+
+            Assert.Equal(WatcherStatus.Idle, harness.Watcher.Status);
+            Assert.Equal(0, harness.FileWatcherFactory.CreateCalls);
+            Assert.False(harness.FileWatcher.Started);
+        }
+
+        [Fact]
+        public async Task CompilerWatcher_ReplacedDebounceCompilesOnlyLatestChange()
+        {
+            using TestHarness harness = new(TimeSpan.FromMilliseconds(100));
+            CallbackProbe callbacks = new(targetCount: 2);
+            await harness.Watcher.StartAsync(Options, callbacks.Record);
+
+            harness.FileWatcher.RaiseChanged("CounterView.cs");
+            harness.FileWatcher.RaiseChanged("TodoView.cs");
+            await callbacks.WaitAsync();
+
+            Assert.Equal(2, harness.IncrementalCompiler.CompileCalls);
+            Assert.Equal(new[] { "TodoView.cs" }, harness.IncrementalCompiler.Invalidations.Last());
+            Assert.Equal("TodoView.cs", callbacks.Results.Last().Units.Single().SourceFilePath);
+        }
+
+        [Fact]
         public async Task CompilerWatcher_WatcherErrorInvokesErrorCallbackAndSetsErrorStatus()
         {
             using TestHarness harness = new(TimeSpan.Zero);
@@ -218,6 +250,8 @@ namespace QmlSharp.Compiler.Tests.Watcher
 
             public FakeIncrementalCompiler IncrementalCompiler { get; }
 
+            public FakeFileWatcherFactory FileWatcherFactory => fileWatcherFactory;
+
             public FakeFileWatcher FileWatcher => fileWatcherFactory.FileWatcher;
 
             public void Dispose()
@@ -257,9 +291,12 @@ namespace QmlSharp.Compiler.Tests.Watcher
         {
             public FakeFileWatcher FileWatcher { get; } = new();
 
+            public int CreateCalls { get; private set; }
+
             public ICompilerFileWatcher Create(CompilerOptions options)
             {
                 ArgumentNullException.ThrowIfNull(options);
+                CreateCalls++;
                 return FileWatcher;
             }
         }
