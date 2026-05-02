@@ -208,19 +208,18 @@ namespace QmlSharp.Compiler
 
         private static ImmutableArray<string> ReadParameterTypes(JsonElement element)
         {
-            ImmutableArray<string>.Builder parameterTypes = ImmutableArray.CreateBuilder<string>();
-            foreach (JsonElement parameterType in element.EnumerateArray())
-            {
-                string? value = parameterType.GetString();
-                if (value is null)
+            return element.EnumerateArray()
+                .Select(static parameterType =>
                 {
-                    throw new JsonException("Parameter type entries must be strings.");
-                }
+                    string? value = parameterType.GetString();
+                    if (value is null)
+                    {
+                        throw new JsonException("Parameter type entries must be strings.");
+                    }
 
-                parameterTypes.Add(value);
-            }
-
-            return parameterTypes.ToImmutable();
+                    return value;
+                })
+                .ToImmutableArray();
         }
 
         private static string ReadRequiredString(JsonElement element, string propertyName)
