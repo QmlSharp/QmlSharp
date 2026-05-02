@@ -140,6 +140,16 @@ namespace QmlSharp.Compiler.Tests.Diagnostics
 
         [Fact]
         [Trait("Category", TestCategories.Unit)]
+        public void DiagnosticReporter_AnalyzerCodeNames_MatchApiDesignContract()
+        {
+            Assert.Equal("QMLSHARP-A001", DiagnosticCodes.InvalidStateAttribute);
+            Assert.Equal("QMLSHARP-A002", DiagnosticCodes.InvalidCommandAttribute);
+            Assert.Equal("QMLSHARP-A003", DiagnosticCodes.InvalidEffectAttribute);
+            Assert.Equal("QMLSHARP-A004", DiagnosticCodes.ViewModelNotFound);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
         public void DiagnosticReporter_SeverityFilteringAndMaxAllowedSeverity_DecideBlockingDiagnostics()
         {
             DiagnosticReporter reporter = new();
@@ -184,13 +194,26 @@ namespace QmlSharp.Compiler.Tests.Diagnostics
             DiagnosticReporter reporter = new();
 
             string noLocation = reporter.Format(new CompilerDiagnostic(DiagnosticCodes.EmitFailed, DiagnosticSeverity.Error, string.Empty));
-            string fileOnly = reporter.Format(new CompilerDiagnostic(DiagnosticCodes.EmitFailed, DiagnosticSeverity.Error, "failed", new SourceLocation("View.qml")));
-            string lineAndColumnOnly = reporter.Format(new CompilerDiagnostic(DiagnosticCodes.EmitFailed, DiagnosticSeverity.Error, "failed", new SourceLocation(Line: 7, Column: 3)));
+            string fileOnly = reporter.Format(new CompilerDiagnostic(DiagnosticCodes.EmitFailed, DiagnosticSeverity.Error, "failed", SourceLocation.FileOnly("View.qml")));
+            string lineAndColumnOnly = reporter.Format(new CompilerDiagnostic(DiagnosticCodes.EmitFailed, DiagnosticSeverity.Error, "failed", SourceLocation.LineColumn(7, 3)));
 
             Assert.DoesNotContain(":", noLocation[..noLocation.IndexOf(DiagnosticCodes.EmitFailed, StringComparison.Ordinal)], StringComparison.Ordinal);
             Assert.StartsWith("View.qml:", fileOnly, StringComparison.Ordinal);
             Assert.StartsWith("line 7, column 3:", lineAndColumnOnly, StringComparison.Ordinal);
             Assert.Contains(DiagnosticMessageCatalog.GetTemplate(DiagnosticCodes.EmitFailed), noLocation, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
+        public void SourceLocation_PublicConstructor_PreservesThreeArgumentContract()
+        {
+            ConstructorInfo? constructor = typeof(SourceLocation).GetConstructor([typeof(string), typeof(int), typeof(int)]);
+            SourceLocation location = new("CounterView.cs", 12, 8);
+
+            Assert.NotNull(constructor);
+            Assert.Equal("CounterView.cs", location.FilePath);
+            Assert.Equal(12, location.Line);
+            Assert.Equal(8, location.Column);
         }
 
         private static void AssertCodesFormat(string prefix)

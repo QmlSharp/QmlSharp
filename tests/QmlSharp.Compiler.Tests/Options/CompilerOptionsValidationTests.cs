@@ -64,8 +64,8 @@ namespace QmlSharp.Compiler.Tests.Options
             Assert.True(normalized.Incremental);
             Assert.True(normalized.GenerateSourceMaps);
             Assert.Equal(["**/*.cs"], normalized.IncludePatterns.ToArray());
-            Assert.Equal(Path.Combine("dist", "source-maps"), normalized.SourceMapDir);
-            Assert.Equal(Path.Combine("dist", ".compiler-cache"), normalized.CacheDir);
+            Assert.Equal(Path.Join("dist", "source-maps"), normalized.SourceMapDir);
+            Assert.Equal(Path.Join("dist", ".compiler-cache"), normalized.CacheDir);
             Assert.Empty(normalized.AdditionalAnalyzers);
         }
 

@@ -72,10 +72,10 @@ namespace QmlSharp.Compiler
                 : IncludePatterns;
             ImmutableArray<string> excludePatterns = MergeExcludePatterns(ExcludePatterns);
             string sourceMapDir = string.IsNullOrWhiteSpace(SourceMapDir)
-                ? Path.Combine(OutputDir, "source-maps")
+                ? CombineWithRelativeChild(OutputDir, "source-maps")
                 : SourceMapDir;
             string cacheDir = string.IsNullOrWhiteSpace(CacheDir)
-                ? Path.Combine(OutputDir, ".compiler-cache")
+                ? CombineWithRelativeChild(OutputDir, ".compiler-cache")
                 : CacheDir;
             ImmutableArray<string> additionalAnalyzers = AdditionalAnalyzers.IsDefault
                 ? ImmutableArray<string>.Empty
@@ -122,6 +122,19 @@ namespace QmlSharp.Compiler
             {
                 throw new ArgumentException($"{parameterName} is required.", parameterName);
             }
+        }
+
+        private static string CombineWithRelativeChild(string baseDir, string childSegment)
+        {
+            ValidateRequired(baseDir, nameof(baseDir));
+            ValidateRequired(childSegment, nameof(childSegment));
+
+            if (Path.IsPathRooted(childSegment))
+            {
+                throw new ArgumentException("Child path segment must be relative.", nameof(childSegment));
+            }
+
+            return Path.Join(baseDir, childSegment);
         }
 
         private static void ValidateModuleVersion(QmlVersion moduleVersion)

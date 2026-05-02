@@ -10,10 +10,10 @@ namespace QmlSharp.Compiler
                 StringComparer.Ordinal,
                 new KeyValuePair<string, string>[]
                 {
-                    new(DiagnosticCodes.MissingViewModelAttribute, "ViewModel attribute is required for the bound ViewModel type."),
-                    new(DiagnosticCodes.InvalidStateProperty, "State property is invalid."),
-                    new(DiagnosticCodes.InvalidCommandMethod, "Command method is invalid."),
-                    new(DiagnosticCodes.InvalidEffectEvent, "Effect event is invalid."),
+                    new(DiagnosticCodes.InvalidStateAttribute, "State attribute usage is invalid."),
+                    new(DiagnosticCodes.InvalidCommandAttribute, "Command attribute usage is invalid."),
+                    new(DiagnosticCodes.InvalidEffectAttribute, "Effect attribute usage is invalid."),
+                    new(DiagnosticCodes.ViewModelNotFound, "Referenced ViewModel type could not be found."),
                     new(DiagnosticCodes.DuplicateStateName, "Duplicate state property name was found."),
                     new(DiagnosticCodes.DuplicateCommandName, "Duplicate command name was found."),
                     new(DiagnosticCodes.DuplicateEffectName, "Duplicate effect name was found."),
