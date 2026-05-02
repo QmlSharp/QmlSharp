@@ -51,6 +51,25 @@ namespace QmlSharp.Compiler.Tests.PostProcessing
 
         [Fact]
         [Trait("Category", TestCategories.Contract)]
+        public void PostProcessor_StateRewrite_DoesNotRewriteLocalIdentifiers()
+        {
+            QmlDocument document = DocumentWithMembers(new BindingNode
+            {
+                PropertyName = "text",
+                Value = Values.Block("let count = 0;\ncount + Vm.Count;"),
+            });
+
+            PostProcessResult result = Process(document, CompilerTestFixtures.CreateCounterSchema());
+
+            BindingNode textBinding = FindBinding(result.Document.RootObject, "text");
+            ScriptBlock block = Assert.IsType<ScriptBlock>(textBinding.Value);
+            Assert.Contains("let count = 0;", block.Code, StringComparison.Ordinal);
+            Assert.Contains("count + __qmlsharp_vm0.count;", block.Code, StringComparison.Ordinal);
+            Assert.DoesNotContain("let __qmlsharp_vm0.count", block.Code, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
         public void PP_04_RewritesCommandHandlerReferences()
         {
             QmlDocument document = DocumentWithMembers(new ObjectDefinitionNode
@@ -100,6 +119,56 @@ namespace QmlSharp.Compiler.Tests.PostProcessing
             AttachedBindingNode component = result.Document.RootObject.Members.OfType<AttachedBindingNode>().Single(node => string.Equals(node.AttachedTypeName, "Component", StringComparison.Ordinal));
             Assert.Contains(component.Bindings, binding => string.Equals(binding.PropertyName, "onCompleted", StringComparison.Ordinal) && string.Equals(BindingCode(binding), "__qmlsharp_vm0.onMounted();", StringComparison.Ordinal));
             Assert.Contains(component.Bindings, binding => string.Equals(binding.PropertyName, "onDestruction", StringComparison.Ordinal) && string.Equals(BindingCode(binding), "__qmlsharp_vm0.onUnmounting();", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
+        public void PostProcessor_LifecycleInjection_ComposesWithExistingComponentHandlers()
+        {
+            ViewModelSchema schema = CompilerTestFixtures.CreateCounterSchema() with
+            {
+                Lifecycle = new LifecycleInfo(OnMounted: true, OnUnmounting: false, HotReload: true),
+            };
+            QmlDocument document = DocumentWithMembers(new AttachedBindingNode
+            {
+                AttachedTypeName = "Component",
+                Bindings = ImmutableArray.Create(new BindingNode
+                {
+                    PropertyName = "onCompleted",
+                    Value = Values.Block("console.log(\"ready\");"),
+                }),
+            });
+
+            PostProcessResult result = Process(document, schema);
+
+            AttachedBindingNode component = result.Document.RootObject.Members.OfType<AttachedBindingNode>().Single(node => string.Equals(node.AttachedTypeName, "Component", StringComparison.Ordinal));
+            BindingNode completed = Assert.Single(component.Bindings.Where(binding => string.Equals(binding.PropertyName, "onCompleted", StringComparison.Ordinal)));
+            string code = BindingCode(completed);
+            Assert.Contains("console.log(\"ready\");", code, StringComparison.Ordinal);
+            Assert.Contains("__qmlsharp_vm0.onMounted();", code, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
+        public void PostProcessor_QtQmlImport_UsesResolvedRuntimeVersion()
+        {
+            ViewModelSchema schema = CompilerTestFixtures.CreateCounterSchema() with
+            {
+                Lifecycle = new LifecycleInfo(OnMounted: true, OnUnmounting: false, HotReload: true),
+            };
+            ResolvedImport qtQmlImport = new("QmlSharp.QtQml", "QtQml", new QmlVersion(6, 11), Alias: null);
+            PostProcessor processor = new();
+
+            PostProcessResult result = processor.Process(
+                CompilerTestFixtures.CreateCounterAstFixture(),
+                CreateView(),
+                schema,
+                ImmutableArray.Create(qtQmlImport),
+                CompilerTestFixtures.DefaultOptions);
+
+            ImportNode qtQml = Assert.Single(result.Document.Imports.Where(import => string.Equals(import.ModuleUri, "QtQml", StringComparison.Ordinal)));
+            Assert.Equal("6.11", qtQml.Version);
+            Assert.DoesNotContain(result.Diagnostics, diagnostic => string.Equals(diagnostic.Code, DiagnosticCodes.ImportConflict, StringComparison.Ordinal));
         }
 
         [Fact]
@@ -315,50 +384,66 @@ namespace QmlSharp.Compiler.Tests.PostProcessing
 
         private static BindingNode FindBinding(ObjectDefinitionNode node, string propertyName)
         {
-            foreach (BindingNode binding in node.Members.OfType<BindingNode>())
+            if (TryFindBinding(node, propertyName, out BindingNode? binding) && binding is not null)
             {
-                if (string.Equals(binding.PropertyName, propertyName, StringComparison.Ordinal))
-                {
-                    return binding;
-                }
-            }
-
-            foreach (ObjectDefinitionNode child in node.Members.OfType<ObjectDefinitionNode>())
-            {
-                try
-                {
-                    return FindBinding(child, propertyName);
-                }
-                catch (InvalidOperationException)
-                {
-                }
+                return binding;
             }
 
             throw new InvalidOperationException($"Binding '{propertyName}' was not found.");
         }
 
-        private static SignalHandlerNode FindSignalHandler(ObjectDefinitionNode node, string handlerName)
+        private static bool TryFindBinding(ObjectDefinitionNode node, string propertyName, out BindingNode? binding)
         {
-            foreach (SignalHandlerNode handler in node.Members.OfType<SignalHandlerNode>())
+            foreach (BindingNode candidate in node.Members
+                .OfType<BindingNode>()
+                .Where(candidate => string.Equals(candidate.PropertyName, propertyName, StringComparison.Ordinal)))
             {
-                if (string.Equals(handler.HandlerName, handlerName, StringComparison.Ordinal))
-                {
-                    return handler;
-                }
+                binding = candidate;
+                return true;
             }
 
             foreach (ObjectDefinitionNode child in node.Members.OfType<ObjectDefinitionNode>())
             {
-                try
+                if (TryFindBinding(child, propertyName, out binding))
                 {
-                    return FindSignalHandler(child, handlerName);
-                }
-                catch (InvalidOperationException)
-                {
+                    return true;
                 }
             }
 
+            binding = null;
+            return false;
+        }
+
+        private static SignalHandlerNode FindSignalHandler(ObjectDefinitionNode node, string handlerName)
+        {
+            if (TryFindSignalHandler(node, handlerName, out SignalHandlerNode? handler) && handler is not null)
+            {
+                return handler;
+            }
+
             throw new InvalidOperationException($"Handler '{handlerName}' was not found.");
+        }
+
+        private static bool TryFindSignalHandler(ObjectDefinitionNode node, string handlerName, out SignalHandlerNode? handler)
+        {
+            foreach (SignalHandlerNode candidate in node.Members
+                .OfType<SignalHandlerNode>()
+                .Where(candidate => string.Equals(candidate.HandlerName, handlerName, StringComparison.Ordinal)))
+            {
+                handler = candidate;
+                return true;
+            }
+
+            foreach (ObjectDefinitionNode child in node.Members.OfType<ObjectDefinitionNode>())
+            {
+                if (TryFindSignalHandler(child, handlerName, out handler))
+                {
+                    return true;
+                }
+            }
+
+            handler = null;
+            return false;
         }
 
         private static string BindingCode(BindingNode binding)

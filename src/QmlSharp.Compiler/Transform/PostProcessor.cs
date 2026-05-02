@@ -41,6 +41,7 @@ namespace QmlSharp.Compiler
                 document.Imports,
                 imports,
                 schema,
+                options,
                 needsQtQmlImport: schema.Lifecycle.OnMounted || schema.Lifecycle.OnUnmounting || schema.Effects.Length > 0,
                 diagnostics,
                 injectedNodes);
@@ -184,17 +185,6 @@ namespace QmlSharp.Compiler
                 }
 
                 rewritten = ReplaceFirst(rewritten, match.Value, $"{viewModelId}.{propertyName}");
-            }
-
-            foreach (string propertyName in lookup.PropertyNames)
-            {
-                string pattern = $@"(?<![\w.]){Regex.Escape(propertyName)}\b";
-                rewritten = Regex.Replace(
-                    rewritten,
-                    pattern,
-                    $"{viewModelId}.{propertyName}",
-                    RegexOptions.CultureInvariant,
-                    RegexTimeout);
             }
 
             return rewritten;
@@ -358,6 +348,7 @@ namespace QmlSharp.Compiler
             ImmutableArray<ImportNode> originalImports,
             ImmutableArray<ResolvedImport> resolvedImports,
             ViewModelSchema schema,
+            CompilerOptions options,
             bool needsQtQmlImport,
             ImmutableArray<CompilerDiagnostic>.Builder diagnostics,
             ImmutableArray<InjectedNode>.Builder injectedNodes)
@@ -378,7 +369,7 @@ namespace QmlSharp.Compiler
 
             if (needsQtQmlImport)
             {
-                AddImport(imports, CreateModuleImport("QtQml", schema.ModuleVersion, alias: null), diagnostics, injectedNodes, isInjected: true);
+                AddImport(imports, CreateModuleImport("QtQml", ResolveQtQmlVersion(resolvedImports, options), alias: null), diagnostics, injectedNodes, isInjected: true);
             }
 
             return imports.Values
@@ -437,16 +428,65 @@ namespace QmlSharp.Compiler
 
             foreach (BindingNode addition in additions)
             {
-                bool alreadyPresent = existing.Any(binding =>
-                    string.Equals(binding.PropertyName, addition.PropertyName, StringComparison.Ordinal)
-                    && string.Equals(BindingValueCode(binding.Value), BindingValueCode(addition.Value), StringComparison.Ordinal));
-                if (!alreadyPresent)
+                int existingIndex = FindBindingIndex(merged, addition.PropertyName);
+                if (existingIndex < 0)
                 {
                     merged.Add(addition);
+                    continue;
                 }
+
+                BindingNode current = merged[existingIndex];
+                string currentCode = BindingValueCode(current.Value);
+                string additionCode = BindingValueCode(addition.Value);
+                if (currentCode.Contains(additionCode, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                merged[existingIndex] = current with
+                {
+                    Value = Values.Block(CombineScriptBlocks(currentCode, additionCode)),
+                };
             }
 
             return merged.ToImmutable();
+        }
+
+        private static int FindBindingIndex(ImmutableArray<BindingNode>.Builder bindings, string propertyName)
+        {
+            for (int index = 0; index < bindings.Count; index++)
+            {
+                if (string.Equals(bindings[index].PropertyName, propertyName, StringComparison.Ordinal))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        private static string CombineScriptBlocks(string existingCode, string additionCode)
+        {
+            if (string.IsNullOrWhiteSpace(existingCode))
+            {
+                return additionCode;
+            }
+
+            if (string.IsNullOrWhiteSpace(additionCode))
+            {
+                return existingCode;
+            }
+
+            return string.Concat(existingCode.TrimEnd(), "\n", additionCode);
+        }
+
+        private static QmlVersion ResolveQtQmlVersion(ImmutableArray<ResolvedImport> resolvedImports, CompilerOptions options)
+        {
+            return resolvedImports
+                .Where(import => string.Equals(import.QmlModuleUri, "QtQml", StringComparison.Ordinal) && import.Alias is null)
+                .OrderBy(import => import.CSharpNamespace, StringComparer.Ordinal)
+                .Select(import => import.Version)
+                .FirstOrDefault() ?? options.ModuleVersion;
         }
 
         private static string BindingValueCode(BindingValue value)

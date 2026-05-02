@@ -36,14 +36,10 @@ namespace QmlSharp.Compiler
 
             Dictionary<string, ResolvedImport> resolved = new(StringComparer.Ordinal);
 
-            foreach (DiscoveredImport import in imports)
+            foreach (ResolvedImport candidate in imports
+                .Select(import => ResolveSingle(import, options))
+                .OfType<ResolvedImport>())
             {
-                ResolvedImport? candidate = ResolveSingle(import, options);
-                if (candidate is null)
-                {
-                    continue;
-                }
-
                 string key = CreateKey(candidate.QmlModuleUri, candidate.Alias);
                 if (!resolved.TryGetValue(key, out ResolvedImport? existing)
                     || StringComparer.Ordinal.Compare(candidate.CSharpNamespace, existing.CSharpNamespace) < 0)

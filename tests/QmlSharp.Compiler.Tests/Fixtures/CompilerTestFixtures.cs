@@ -118,7 +118,7 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                                 new BindingNode
                                 {
                                     PropertyName = "text",
-                                    Value = new ScriptExpression("count.toString()"),
+                                    Value = new ScriptExpression("Vm.Count.toString()"),
                                 }),
                         }),
                 },
