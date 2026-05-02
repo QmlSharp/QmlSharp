@@ -22,7 +22,7 @@ namespace QmlSharp.Compiler
         private CancellationTokenRegistration cancellationRegistration;
         private Task? pendingCompileTask;
         private Action<CompilationResult>? compiledCallback;
-        private CompilerOptions? options;
+        private CompilerOptions? currentOptions;
         private WatcherStatus status = WatcherStatus.Idle;
         private bool disposed;
         private int generation;
@@ -95,7 +95,6 @@ namespace QmlSharp.Compiler
             try
             {
                 registration = RegisterExternalCancellation(startState, cancellationToken);
-                registration = default;
                 startState.Token.ThrowIfCancellationRequested();
                 startState.Watcher.Start();
                 await CompileNowAsync(startState.Generation, startState.Token).ConfigureAwait(false);
@@ -120,7 +119,7 @@ namespace QmlSharp.Compiler
                     throw new InvalidOperationException("The compiler watcher is already running.");
                 }
 
-                options = normalizedOptions;
+                currentOptions = normalizedOptions;
                 compiledCallback = onCompiled;
                 stopCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 fileWatcher = fileWatcherFactory.Create(normalizedOptions);
@@ -195,7 +194,7 @@ namespace QmlSharp.Compiler
                 cancellationRegistration = default;
                 pendingCompileTask = null;
                 compiledCallback = null;
-                options = null;
+                currentOptions = null;
             }
 
             if (watcherToDispose is not null)
@@ -363,12 +362,12 @@ namespace QmlSharp.Compiler
         {
             lock (gate)
             {
-                if (generation != activeGeneration || options is null)
+                if (generation != activeGeneration || currentOptions is null)
                 {
                     throw new OperationCanceledException("The compiler watcher stopped.");
                 }
 
-                return options;
+                return currentOptions;
             }
         }
 
