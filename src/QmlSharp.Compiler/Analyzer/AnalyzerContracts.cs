@@ -33,7 +33,8 @@ namespace QmlSharp.Compiler
             Microsoft.CodeAnalysis.Compilation compilation,
             ImmutableArray<string> sourceFiles,
             CompilerOptions options,
-            IDiagnosticReporter diagnostics)
+            IDiagnosticReporter diagnostics,
+            IDisposable? ownedResource = null)
         {
             ArgumentNullException.ThrowIfNull(compilation);
             ArgumentNullException.ThrowIfNull(options);
@@ -43,6 +44,7 @@ namespace QmlSharp.Compiler
             SourceFiles = sourceFiles;
             Options = options;
             Diagnostics = diagnostics;
+            OwnedResource = ownedResource;
         }
 
         /// <summary>Gets the Roslyn compilation.</summary>
@@ -57,9 +59,13 @@ namespace QmlSharp.Compiler
         /// <summary>Gets the shared diagnostic reporter.</summary>
         public IDiagnosticReporter Diagnostics { get; }
 
+        private IDisposable? OwnedResource { get; set; }
+
         /// <inheritdoc/>
         public void Dispose()
         {
+            OwnedResource?.Dispose();
+            OwnedResource = null;
         }
     }
 
