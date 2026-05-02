@@ -129,6 +129,12 @@ namespace QmlSharp.Compiler
         {
             if (!unit.Success || string.IsNullOrEmpty(unit.QmlText))
             {
+                string? staleQmlPath = TryBuildArtifactPath(layout.QmlModuleDir, unit.ViewClassName, ".qml", diagnostics);
+                if (staleQmlPath is not null)
+                {
+                    _ = TryDeleteStaleArtifact(staleQmlPath, DiagnosticCodes.OutputWriteFailed, diagnostics);
+                }
+
                 return;
             }
 
@@ -147,6 +153,20 @@ namespace QmlSharp.Compiler
             ImmutableArray<CompilerDiagnostic>.Builder diagnostics,
             ref long totalBytes)
         {
+            if (!unit.Success)
+            {
+                string staleMapBaseName = string.IsNullOrWhiteSpace(unit.ViewClassName)
+                    ? Path.GetFileNameWithoutExtension(unit.SourceMap?.OutputFilePath ?? unit.SourceFilePath)
+                    : unit.ViewClassName;
+                string? staleSourceMapPath = TryBuildArtifactPath(layout.SourceMapDir, staleMapBaseName, ".qml.map", diagnostics);
+                if (staleSourceMapPath is not null)
+                {
+                    _ = TryDeleteStaleArtifact(staleSourceMapPath, DiagnosticCodes.SourceMapWriteFailed, diagnostics);
+                }
+
+                return;
+            }
+
             if (!options.GenerateSourceMaps || unit.SourceMap is null)
             {
                 return;
@@ -361,6 +381,31 @@ namespace QmlSharp.Compiler
                     diagnosticCode,
                     path,
                     "Writing compiler output failed.",
+                    exception));
+                return false;
+            }
+        }
+
+        private static bool TryDeleteStaleArtifact(
+            string path,
+            string diagnosticCode,
+            ImmutableArray<CompilerDiagnostic>.Builder diagnostics)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                diagnostics.Add(CreateDiagnostic(
+                    diagnosticCode,
+                    path,
+                    "Deleting stale compiler output failed.",
                     exception));
                 return false;
             }

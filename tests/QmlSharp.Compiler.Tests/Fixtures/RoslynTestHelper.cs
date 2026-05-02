@@ -43,6 +43,15 @@ namespace QmlSharp.Compiler.Tests.Fixtures
             return (compilation, model);
         }
 
+        public static ProjectContext CreateContext(ImmutableArray<(string FileName, string Source)> sources)
+        {
+            CSharpCompilation compilation = CreateCompilation(sources);
+            return new CSharpAnalyzer().CreateInMemoryProjectContext(
+                CompilerTestFixtures.DefaultOptions,
+                compilation,
+                sources.Select(static source => source.FileName).ToImmutableArray());
+        }
+
         private static ImmutableArray<MetadataReference> CreateMetadataReferences()
         {
             string? trustedPlatformAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;

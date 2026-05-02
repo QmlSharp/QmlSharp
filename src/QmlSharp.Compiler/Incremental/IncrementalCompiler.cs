@@ -694,7 +694,21 @@ namespace QmlSharp.Compiler
                     ReadRequiredString(unit, "schemaHash"),
                     ReadRequiredString(unit, "contentHash"));
 
+                ValidateCachedUnit(cachedUnit);
                 cachedUnitsByViewFile[NormalizePathKey(cachedUnit.SourceFilePath)] = cachedUnit;
+            }
+        }
+
+        private void ValidateCachedUnit(CachedUnit cachedUnit)
+        {
+            if (cachedUnit.SchemaJson is not null)
+            {
+                _ = schemaSerializer.Deserialize(cachedUnit.SchemaJson);
+            }
+
+            if (cachedUnit.SourceMapJson is not null)
+            {
+                _ = sourceMapManager.Deserialize(cachedUnit.SourceMapJson);
             }
         }
 

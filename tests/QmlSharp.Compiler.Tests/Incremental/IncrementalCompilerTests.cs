@@ -287,6 +287,43 @@ namespace QmlSharp.Compiler.Tests.Incremental
             Assert.Equal(SourceFileNames(), dirtyFiles);
         }
 
+        [Fact]
+        public void IncrementalCompiler_CorruptedCachedSchemaClearsCacheWithoutThrowing()
+        {
+            using ProjectContext context = CreateContext();
+            using TempOutputDirectory temp = new();
+            string cachePath = Path.Join(temp.Path, "incremental-cache.json");
+            File.WriteAllText(cachePath, """
+                {
+                  "cacheVersion": "1.0",
+                  "optionsFingerprint": null,
+                  "moduleFingerprint": null,
+                  "sourceMapFingerprint": null,
+                  "files": [],
+                  "dependencies": [],
+                  "units": [
+                    {
+                      "sourceFilePath": "CounterView.cs",
+                      "viewClassName": "CounterView",
+                      "viewModelClassName": "CounterViewModel",
+                      "contentHash": "abc",
+                      "schemaHash": "def",
+                      "schemaJson": "{",
+                      "diagnostics": []
+                    }
+                  ]
+                }
+                """);
+            IncrementalCompiler incrementalCompiler = CreateIncrementalCompiler(out _);
+
+            incrementalCompiler.LoadCache(temp.Path);
+            ImmutableArray<string> dirtyFiles = incrementalCompiler.GetDirtyFiles(context);
+            CompilationResult result = incrementalCompiler.CompileIncremental(context, CompilerTestFixtures.DefaultOptions);
+
+            Assert.Equal(SourceFileNames(), dirtyFiles);
+            Assert.True(result.Success);
+        }
+
         private static IncrementalCompiler CreateIncrementalCompiler(out CountingCompiler countingCompiler)
         {
             ICompiler innerCompiler = new QmlSharp.Compiler.QmlCompiler(

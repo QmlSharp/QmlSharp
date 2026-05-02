@@ -71,6 +71,43 @@ namespace QmlSharp.Compiler.Tests.Pipeline
 
         [Fact]
         [Trait("Category", TestCategories.Unit)]
+        public void OutputWriter_FailedUnitDeletesStaleQmlAndSourceMapArtifacts()
+        {
+            using TempOutputDirectory temp = new();
+            CompilerOptions options = CreateOptions(temp.Path);
+            string qmlPath = Path.Join(temp.Path, "qml", "QmlSharp", "TestApp", "BrokenView.qml");
+            string sourceMapPath = Path.Join(temp.Path, "source-maps", "BrokenView.qml.map");
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(qmlPath)!);
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(sourceMapPath)!);
+            File.WriteAllText(qmlPath, "stale qml");
+            File.WriteAllText(sourceMapPath, "stale map");
+            CompilationUnit failedUnit = CreateCounterUnit() with
+            {
+                SourceFilePath = "BrokenView.cs",
+                ViewClassName = "BrokenView",
+                ViewModelClassName = "BrokenViewModel",
+                QmlText = "partial qml must not survive\n",
+                Schema = null,
+                Diagnostics = ImmutableArray.Create(new CompilerDiagnostic(
+                    DiagnosticCodes.UnknownQmlType,
+                    DiagnosticSeverity.Error,
+                    "Unknown type.",
+                    SourceLocation.FileOnly("BrokenView.cs"),
+                    "TransformingDsl")),
+            };
+            CompilationResult compilation = CompilationResult.FromUnits(ImmutableArray.Create(failedUnit));
+
+            OutputResult result = new CompilerOutputWriter().WriteOutput(compilation, options);
+
+            Assert.True(result.Success);
+            Assert.Empty(result.QmlFiles);
+            Assert.Empty(result.SourceMapFiles);
+            Assert.False(File.Exists(qmlPath));
+            Assert.False(File.Exists(sourceMapPath));
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
         public void OutputWriter_WritesSchemaOnlyUnitWithoutQmlArtifact()
         {
             using TempOutputDirectory temp = new();
