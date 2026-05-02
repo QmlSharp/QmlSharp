@@ -157,9 +157,10 @@ namespace QmlSharp.Compiler
                 return;
             }
 
-            foreach (string filePath in filePaths.Where(static filePath => !string.IsNullOrWhiteSpace(filePath)))
+            foreach (string key in filePaths
+                .Where(static filePath => !string.IsNullOrWhiteSpace(filePath))
+                .Select(static filePath => NormalizePathKey(filePath)))
             {
-                string key = NormalizePathKey(filePath);
                 _ = explicitlyInvalidated.Add(key);
                 foreach (string viewModelClassName in dependencyGraph.GetDependenciesOf(key))
                 {
@@ -218,6 +219,10 @@ namespace QmlSharp.Compiler
                 ClearCache();
             }
             catch (InvalidOperationException)
+            {
+                ClearCache();
+            }
+            catch (FormatException)
             {
                 ClearCache();
             }
@@ -326,12 +331,11 @@ namespace QmlSharp.Compiler
             ImmutableArray<string>.Builder dirtyViewFiles,
             bool forceFullCompile)
         {
-            foreach (DiscoveredView view in views.OrderBy(static view => view.FilePath, PathComparer))
+            foreach (DiscoveredView view in views
+                .OrderBy(static view => view.FilePath, PathComparer)
+                .Where(view => forceFullCompile || dirtyFiles.Any(filePath => PathsEqual(filePath, view.FilePath))))
             {
-                if (forceFullCompile || dirtyFiles.Any(filePath => PathsEqual(filePath, view.FilePath)))
-                {
-                    dirtyViewFiles.Add(view.FilePath);
-                }
+                dirtyViewFiles.Add(view.FilePath);
             }
         }
 
@@ -457,6 +461,7 @@ namespace QmlSharp.Compiler
                 unit.QmlText,
                 schemaJson,
                 sourceMapJson,
+                NormalizeDiagnostics(unit.Diagnostics),
                 schemaHash,
                 contentHash);
         }
@@ -572,6 +577,50 @@ namespace QmlSharp.Compiler
                     writer.WriteString("sourceMapJson", unit.SourceMapJson);
                 }
 
+                WriteDiagnostics(writer, unit.Diagnostics);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        }
+
+        private static void WriteDiagnostics(Utf8JsonWriter writer, ImmutableArray<CompilerDiagnostic> diagnostics)
+        {
+            writer.WritePropertyName("diagnostics");
+            writer.WriteStartArray();
+            foreach (CompilerDiagnostic diagnostic in NormalizeDiagnostics(diagnostics))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("code", diagnostic.Code);
+                writer.WriteString("severity", diagnostic.Severity.ToString());
+                writer.WriteString("message", diagnostic.Message);
+                if (diagnostic.Phase is not null)
+                {
+                    writer.WriteString("phase", diagnostic.Phase);
+                }
+
+                if (diagnostic.Location is not null)
+                {
+                    writer.WritePropertyName("location");
+                    writer.WriteStartObject();
+                    if (diagnostic.Location.FilePath is not null)
+                    {
+                        writer.WriteString("filePath", diagnostic.Location.FilePath);
+                    }
+
+                    if (diagnostic.Location.Line is not null)
+                    {
+                        writer.WriteNumber("line", diagnostic.Location.Line.Value);
+                    }
+
+                    if (diagnostic.Location.Column is not null)
+                    {
+                        writer.WriteNumber("column", diagnostic.Location.Column.Value);
+                    }
+
+                    writer.WriteEndObject();
+                }
+
                 writer.WriteEndObject();
             }
 
@@ -596,9 +645,9 @@ namespace QmlSharp.Compiler
             optionsFingerprint = ReadOptionalString(root, "optionsFingerprint");
             moduleFingerprint = ReadOptionalString(root, "moduleFingerprint");
             sourceMapFingerprint = ReadOptionalString(root, "sourceMapFingerprint");
-            ReadFileHashes(root.GetProperty("files"));
-            ReadDependencies(root.GetProperty("dependencies"));
-            ReadUnits(root.GetProperty("units"));
+            ReadFileHashes(ReadRequiredProperty(root, "files"));
+            ReadDependencies(ReadRequiredProperty(root, "dependencies"));
+            ReadUnits(ReadRequiredProperty(root, "units"));
         }
 
         private void ReadFileHashes(JsonElement files)
@@ -616,9 +665,10 @@ namespace QmlSharp.Compiler
             foreach (JsonElement dependency in dependencies.EnumerateArray())
             {
                 string viewFilePath = ReadRequiredString(dependency, "viewFilePath");
-                foreach (JsonElement viewModelClassName in dependency.GetProperty("viewModelClassNames").EnumerateArray())
+                foreach (string? value in ReadRequiredProperty(dependency, "viewModelClassNames")
+                    .EnumerateArray()
+                    .Select(static viewModelClassName => viewModelClassName.GetString()))
                 {
-                    string? value = viewModelClassName.GetString();
                     if (value is null)
                     {
                         throw new JsonException("Dependency class names must be strings.");
@@ -640,6 +690,7 @@ namespace QmlSharp.Compiler
                     ReadOptionalString(unit, "qmlText"),
                     ReadOptionalString(unit, "schemaJson"),
                     ReadOptionalString(unit, "sourceMapJson"),
+                    ReadDiagnostics(ReadRequiredProperty(unit, "diagnostics")),
                     ReadRequiredString(unit, "schemaHash"),
                     ReadRequiredString(unit, "contentHash"));
 
@@ -667,6 +718,19 @@ namespace QmlSharp.Compiler
                 .Where(static filePath => !string.IsNullOrWhiteSpace(filePath))
                 .Distinct(PathComparer)
                 .Order(PathComparer)
+                .ToImmutableArray();
+        }
+
+        private static ImmutableArray<CompilerDiagnostic> NormalizeDiagnostics(ImmutableArray<CompilerDiagnostic> diagnostics)
+        {
+            return (diagnostics.IsDefault ? ImmutableArray<CompilerDiagnostic>.Empty : diagnostics)
+                .OrderBy(static diagnostic => diagnostic.Location?.FilePath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(static diagnostic => diagnostic.Location?.Line ?? 0)
+                .ThenBy(static diagnostic => diagnostic.Location?.Column ?? 0)
+                .ThenBy(static diagnostic => diagnostic.Severity)
+                .ThenBy(static diagnostic => diagnostic.Code, StringComparer.Ordinal)
+                .ThenBy(static diagnostic => diagnostic.Message, StringComparer.Ordinal)
+                .ThenBy(static diagnostic => diagnostic.Phase ?? string.Empty, StringComparer.Ordinal)
                 .ToImmutableArray();
         }
 
@@ -732,7 +796,7 @@ namespace QmlSharp.Compiler
 
         private static string ReadRequiredString(JsonElement element, string propertyName)
         {
-            string? value = element.GetProperty(propertyName).GetString();
+            string? value = ReadRequiredProperty(element, propertyName).GetString();
             if (value is null)
             {
                 throw new JsonException($"Property '{propertyName}' must be a string.");
@@ -744,6 +808,66 @@ namespace QmlSharp.Compiler
         private static string? ReadOptionalString(JsonElement element, string propertyName)
         {
             return element.TryGetProperty(propertyName, out JsonElement value) ? value.GetString() : null;
+        }
+
+        private static JsonElement ReadRequiredProperty(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out JsonElement value))
+            {
+                throw new JsonException($"Property '{propertyName}' is required.");
+            }
+
+            return value;
+        }
+
+        private static ImmutableArray<CompilerDiagnostic> ReadDiagnostics(JsonElement diagnostics)
+        {
+            ImmutableArray<CompilerDiagnostic>.Builder builder = ImmutableArray.CreateBuilder<CompilerDiagnostic>();
+            foreach (JsonElement diagnostic in diagnostics.EnumerateArray())
+            {
+                builder.Add(new CompilerDiagnostic(
+                    ReadRequiredString(diagnostic, "code"),
+                    ReadSeverity(diagnostic),
+                    ReadRequiredString(diagnostic, "message"),
+                    ReadLocation(diagnostic),
+                    ReadOptionalString(diagnostic, "phase")));
+            }
+
+            return NormalizeDiagnostics(builder.ToImmutable());
+        }
+
+        private static DiagnosticSeverity ReadSeverity(JsonElement diagnostic)
+        {
+            string severity = ReadRequiredString(diagnostic, "severity");
+            if (!Enum.TryParse(severity, ignoreCase: false, out DiagnosticSeverity value))
+            {
+                throw new JsonException($"Diagnostic severity '{severity}' is invalid.");
+            }
+
+            return value;
+        }
+
+        private static SourceLocation? ReadLocation(JsonElement diagnostic)
+        {
+            if (!diagnostic.TryGetProperty("location", out JsonElement location))
+            {
+                return null;
+            }
+
+            string? filePath = ReadOptionalString(location, "filePath");
+            int? line = ReadOptionalInt32(location, "line");
+            int? column = ReadOptionalInt32(location, "column");
+            return SourceLocation.Partial(filePath, line, column);
+        }
+
+        private static int? ReadOptionalInt32(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out JsonElement value))
+            {
+                return null;
+            }
+
+            return value.GetInt32();
         }
 
         private static string NormalizeJsonText(string json)
@@ -765,6 +889,7 @@ namespace QmlSharp.Compiler
             string? QmlText,
             string? SchemaJson,
             string? SourceMapJson,
+            ImmutableArray<CompilerDiagnostic> Diagnostics,
             string SchemaHash,
             string ContentHash)
         {
@@ -780,7 +905,7 @@ namespace QmlSharp.Compiler
                     QmlText = QmlText,
                     Schema = schema,
                     SourceMap = sourceMap,
-                    Diagnostics = ImmutableArray<CompilerDiagnostic>.Empty,
+                    Diagnostics = Diagnostics,
                     Stats = new CompilationUnitStats
                     {
                         QmlBytes = QmlText is null ? 0 : Encoding.UTF8.GetByteCount(QmlText),

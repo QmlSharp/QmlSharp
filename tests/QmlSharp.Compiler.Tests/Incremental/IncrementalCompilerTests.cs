@@ -245,6 +245,48 @@ namespace QmlSharp.Compiler.Tests.Incremental
             Assert.Equal(SourceFileNames(), dirtyFiles);
         }
 
+        [Fact]
+        public void IncrementalCompiler_CachedFailedUnitRestoresDiagnostics()
+        {
+            using ProjectContext context = CreateContext();
+            using TempOutputDirectory temp = new();
+            DiagnosticCompiler firstInnerCompiler = new();
+            IncrementalCompiler firstCompiler = CreateIncrementalCompiler(firstInnerCompiler);
+            CompilationResult firstResult = firstCompiler.CompileIncremental(context, CompilerTestFixtures.DefaultOptions);
+            firstCompiler.SaveCache(temp.Path);
+            DiagnosticCompiler secondInnerCompiler = new();
+            IncrementalCompiler secondCompiler = CreateIncrementalCompiler(secondInnerCompiler);
+            secondCompiler.LoadCache(temp.Path);
+
+            CompilationResult secondResult = secondCompiler.CompileIncremental(context, CompilerTestFixtures.DefaultOptions);
+
+            Assert.False(firstResult.Success);
+            Assert.False(secondResult.Success);
+            Assert.Equal(2, firstInnerCompiler.CompileFileCalls);
+            Assert.Equal(0, secondInnerCompiler.CompileFileCalls);
+            CompilerDiagnostic diagnostic = Assert.Single(secondResult.Diagnostics);
+            Assert.Equal(DiagnosticCodes.EmitFailed, diagnostic.Code);
+            Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Equal("CounterView.cs", diagnostic.Location?.FilePath);
+        }
+
+        [Fact]
+        public void IncrementalCompiler_MalformedCacheMissingRequiredPropertyClearsCache()
+        {
+            using ProjectContext context = CreateContext();
+            using TempOutputDirectory temp = new();
+            string cachePath = Path.Join(temp.Path, "incremental-cache.json");
+            File.WriteAllText(
+                cachePath,
+                "{\n  \"cacheVersion\": \"1.0\",\n  \"units\": []\n}\n");
+            IncrementalCompiler incrementalCompiler = CreateIncrementalCompiler(out _);
+
+            incrementalCompiler.LoadCache(temp.Path);
+            ImmutableArray<string> dirtyFiles = incrementalCompiler.GetDirtyFiles(context);
+
+            Assert.Equal(SourceFileNames(), dirtyFiles);
+        }
+
         private static IncrementalCompiler CreateIncrementalCompiler(out CountingCompiler countingCompiler)
         {
             ICompiler innerCompiler = new QmlSharp.Compiler.QmlCompiler(
@@ -260,8 +302,13 @@ namespace QmlSharp.Compiler.Tests.Incremental
                 new EventBindingsBuilder(),
                 new CompilerOutputWriter());
             countingCompiler = new CountingCompiler(innerCompiler);
+            return CreateIncrementalCompiler(countingCompiler);
+        }
+
+        private static IncrementalCompiler CreateIncrementalCompiler(ICompiler compiler)
+        {
             return new IncrementalCompiler(
-                countingCompiler,
+                compiler,
                 new CSharpAnalyzer(),
                 new ViewModelExtractor(),
                 static () => new IdAllocator(),
@@ -354,6 +401,52 @@ namespace QmlSharp.Compiler.Tests.Incremental
             public SemanticModel GetSemanticModel(ProjectContext context, string filePath)
             {
                 return innerAnalyzer.GetSemanticModel(context, filePath);
+            }
+        }
+
+        private sealed class DiagnosticCompiler : ICompiler
+        {
+            public int CompileFileCalls { get; private set; }
+
+            public CompilationResult Compile(CompilerOptions options)
+            {
+                throw new NotSupportedException("Incremental tests call CompileFile with an existing ProjectContext.");
+            }
+
+            public CompilationUnit CompileFile(string filePath, ProjectContext context, CompilerOptions options)
+            {
+                CompileFileCalls++;
+                string viewClassName = Path.GetFileNameWithoutExtension(filePath);
+                string viewModelClassName = StringComparer.Ordinal.Equals(viewClassName, "CounterView")
+                    ? "CounterViewModel"
+                    : "TodoViewModel";
+                ImmutableArray<CompilerDiagnostic> diagnostics = StringComparer.Ordinal.Equals(viewClassName, "CounterView")
+                    ? ImmutableArray.Create(new CompilerDiagnostic(
+                        DiagnosticCodes.EmitFailed,
+                        DiagnosticSeverity.Error,
+                        "Intentional cached diagnostic.",
+                        SourceLocation.FileOnly(filePath),
+                        "incremental-test"))
+                    : ImmutableArray<CompilerDiagnostic>.Empty;
+
+                return new CompilationUnit
+                {
+                    SourceFilePath = filePath,
+                    ViewClassName = viewClassName,
+                    ViewModelClassName = viewModelClassName,
+                    QmlText = $"{viewClassName} {{}}\n",
+                    Diagnostics = diagnostics,
+                };
+            }
+
+            public OutputResult WriteOutput(CompilationResult result, CompilerOptions options)
+            {
+                throw new NotSupportedException("Incremental tests do not write output.");
+            }
+
+            public void OnProgress(Action<CompilationProgress> callback)
+            {
+                ArgumentNullException.ThrowIfNull(callback);
             }
         }
     }
