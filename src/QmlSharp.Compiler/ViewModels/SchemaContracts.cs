@@ -10,6 +10,9 @@ namespace QmlSharp.Compiler
         /// <summary>Extracts one ViewModel schema.</summary>
         ViewModelSchema Extract(DiscoveredViewModel viewModel, ProjectContext context, IIdAllocator idAllocator);
 
+        /// <summary>Extracts one ViewModel schema for a specific View binding.</summary>
+        ViewModelSchema Extract(DiscoveredView view, ProjectContext context, IIdAllocator idAllocator);
+
         /// <summary>Extracts all ViewModel schemas.</summary>
         ImmutableArray<ViewModelSchema> ExtractAll(
             ImmutableArray<DiscoveredViewModel> viewModels,
