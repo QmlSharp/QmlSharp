@@ -14,13 +14,14 @@ namespace QmlSharp.Compiler.Tests.Fixtures
 
         public static ProjectContext CreateCounterContext()
         {
-            CSharpCompilation compilation = RoslynTestHelper.CreateCompilation(
-                CompilerSourceFixtures.CounterViewModelSource,
-                CompilerSourceFixtures.CounterViewSource);
+            ImmutableArray<(string FileName, string Source)> sources = ImmutableArray.Create(
+                ("CounterViewModel.cs", CompilerSourceFixtures.CounterViewModelSource),
+                ("CounterView.cs", CompilerSourceFixtures.CounterViewSource));
+            CSharpCompilation compilation = RoslynTestHelper.CreateCompilation(sources);
 
             return new ProjectContext(
                 compilation,
-                ImmutableArray.Create("CounterViewModel.cs", "CounterView.cs"),
+                sources.Select(source => source.FileName).ToImmutableArray(),
                 DefaultOptions,
                 new DiagnosticReporter());
         }
@@ -78,9 +79,11 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                 Version: 2,
                 CompilerSlotKey: "CounterView::__qmlsharp_vm0",
                 Properties: ImmutableArray.Create(new StateEntry("count", "int", "0", ReadOnly: false, MemberId: 1, SourceName: "Count")),
-                Commands: ImmutableArray.Create(new CommandEntry("increment", ImmutableArray<ParameterEntry>.Empty, CommandId: 2, SourceName: "Increment")),
+                Commands: ImmutableArray.Create(
+                    new CommandEntry("decrement", ImmutableArray<ParameterEntry>.Empty, CommandId: 3, SourceName: "Decrement"),
+                    new CommandEntry("increment", ImmutableArray<ParameterEntry>.Empty, CommandId: 2, SourceName: "Increment")),
                 Effects: ImmutableArray<EffectEntry>.Empty,
-                Lifecycle: new LifecycleInfo(OnMounted: false, OnUnmounting: false, HotReload: true));
+                Lifecycle: new LifecycleInfo(OnMounted: true, OnUnmounting: true, HotReload: false));
         }
 
         public static ViewModelSchema CreateTodoSchema()
@@ -94,6 +97,7 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                 Version: 2,
                 CompilerSlotKey: "TodoView::__qmlsharp_vm0",
                 Properties: ImmutableArray.Create(
+                    new StateEntry("items", "list<string>", null, ReadOnly: false, MemberId: 16, SourceName: "Items"),
                     new StateEntry("title", "string", "\"\"", ReadOnly: false, MemberId: 11, SourceName: "Title"),
                     new StateEntry("itemCount", "int", "0", ReadOnly: true, MemberId: 12, SourceName: "ItemCount")),
                 Commands: ImmutableArray.Create(

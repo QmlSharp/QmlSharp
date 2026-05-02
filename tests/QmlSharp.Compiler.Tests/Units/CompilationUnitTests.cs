@@ -92,8 +92,8 @@ namespace QmlSharp.Compiler.Tests.Units
                 CompilerTestFixtures.CreateTodoSchema(),
                 CompilerTestFixtures.CreateCounterSchema()));
 
-            Assert.Equal(3, index.Commands.Length);
-            Assert.Equal(new[] { "increment", "addItem", "removeItem" }, index.Commands.Select(static command => command.CommandName).ToArray());
+            Assert.Equal(4, index.Commands.Length);
+            Assert.Equal(new[] { "decrement", "increment", "addItem", "removeItem" }, index.Commands.Select(static command => command.CommandName).ToArray());
             Assert.Contains(index.Commands, static command => command.CommandId == 14 && command.ParameterTypes.SequenceEqual(["int"]));
         }
 

@@ -34,4 +34,8 @@
     <ProjectReference Include="..\..\src\QmlSharp.Qt.Tools\QmlSharp.Qt.Tools.csproj" />
     <ProjectReference Include="..\..\src\QmlSharp.Registry\QmlSharp.Registry.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="testdata\golden\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

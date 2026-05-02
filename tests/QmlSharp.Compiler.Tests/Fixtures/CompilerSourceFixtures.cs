@@ -19,6 +19,20 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                 {
                     Count++;
                 }
+
+                [Command]
+                public void Decrement()
+                {
+                    Count--;
+                }
+
+                public void OnMounted()
+                {
+                }
+
+                public void OnUnmounting()
+                {
+                }
             }
             """;
 
@@ -30,10 +44,24 @@ namespace QmlSharp.Compiler.Tests.Fixtures
 
             public sealed class CounterView : View<CounterViewModel>
             {
-                public override IObjectBuilder Build()
-                {
-                    throw new System.NotImplementedException();
-                }
+                public override object Build() =>
+                    Column().Children(
+                        Text().TextBind("Vm.Count.toString()"),
+                        Row().Children(
+                            Button().Text("+").OnClicked(() => Vm.Increment()),
+                            Button().Text("-").OnClicked(() => Vm.Decrement())));
+
+                private static IObjectBuilder Column() => throw new System.NotImplementedException();
+                private static IObjectBuilder Row() => throw new System.NotImplementedException();
+                private static IObjectBuilder Text() => throw new System.NotImplementedException();
+                private static IObjectBuilder Button() => throw new System.NotImplementedException();
+            }
+
+            internal static class CounterDslExtensions
+            {
+                public static IObjectBuilder Text(this IObjectBuilder builder, string value) => builder;
+                public static IObjectBuilder TextBind(this IObjectBuilder builder, string expression) => builder;
+                public static IObjectBuilder OnClicked(this IObjectBuilder builder, System.Action handler) => builder;
             }
             """;
 
@@ -48,6 +76,7 @@ namespace QmlSharp.Compiler.Tests.Fixtures
             public sealed class TodoViewModel
             {
                 [State] public string Title { get; set; } = "";
+                [State] public IReadOnlyList<string> Items { get; set; } = [];
                 [State(Readonly = true)] public int ItemCount { get; set; }
                 [Command] public void AddItem() { }
                 [Command] public void RemoveItem(int index) { }
@@ -63,10 +92,32 @@ namespace QmlSharp.Compiler.Tests.Fixtures
 
             public sealed class TodoView : View<TodoViewModel>
             {
-                public override IObjectBuilder Build()
-                {
-                    throw new System.NotImplementedException();
-                }
+                public override object Build() =>
+                    Column().Children(
+                        Text().TextBind("Vm.Title"),
+                        Text().TextBind("Vm.ItemCount.toString()"),
+                        Text().TextBind("Vm.Items.length.toString()"),
+                        Row().Children(
+                            Button().Text("Add").OnClicked(() => Vm.AddItem()),
+                            Button().Text("Remove").OnClicked(() => Vm.RemoveItem(0))));
+
+                private static IObjectBuilder Column() => throw new System.NotImplementedException();
+                private static IObjectBuilder Row() => throw new System.NotImplementedException();
+                private static IObjectBuilder Text() => throw new System.NotImplementedException();
+                private static IObjectBuilder Button() => throw new System.NotImplementedException();
+            }
+            """;
+
+        public const string SharedDslExtensionsSource = """
+            using QmlSharp.Dsl;
+
+            namespace TestApp;
+
+            internal static class SharedDslExtensions
+            {
+                public static IObjectBuilder Text(this IObjectBuilder builder, string value) => builder;
+                public static IObjectBuilder TextBind(this IObjectBuilder builder, string expression) => builder;
+                public static IObjectBuilder OnClicked(this IObjectBuilder builder, System.Action handler) => builder;
             }
             """;
 
@@ -92,6 +143,7 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                 sources.Add(($"{name}View.cs", CreateSyntheticView(name)));
             }
 
+            sources.Add(("SharedDslExtensions.cs", SharedDslExtensionsSource));
             return sources.ToImmutable();
         }
 
@@ -117,10 +169,10 @@ namespace QmlSharp.Compiler.Tests.Fixtures
             _ = builder.AppendLine("namespace TestApp;");
             _ = builder.AppendLine($"public sealed class {name}View : View<{name}ViewModel>");
             _ = builder.AppendLine("{");
-            _ = builder.AppendLine("    public override IObjectBuilder Build()");
-            _ = builder.AppendLine("    {");
-            _ = builder.AppendLine("        throw new System.NotImplementedException();");
-            _ = builder.AppendLine("    }");
+            _ = builder.AppendLine("    public override object Build() => Column().Children(Text().TextBind(\"Vm.Count.toString()\"), Button().Text(\"+\").OnClicked(() => Vm.Increment()));");
+            _ = builder.AppendLine("    private static IObjectBuilder Column() => throw new System.NotImplementedException();");
+            _ = builder.AppendLine("    private static IObjectBuilder Text() => throw new System.NotImplementedException();");
+            _ = builder.AppendLine("    private static IObjectBuilder Button() => throw new System.NotImplementedException();");
             _ = builder.AppendLine("}");
             return builder.ToString();
         }

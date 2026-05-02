@@ -53,6 +53,16 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                 "LinearGradient",
                 "QtQuick",
                 prototype: "QtQuick.Item");
+            QmlType column = CreateType(
+                "QtQuick.Column",
+                "Column",
+                "QtQuick",
+                prototype: "QtQuick.Item");
+            QmlType row = CreateType(
+                "QtQuick.Row",
+                "Row",
+                "QtQuick",
+                prototype: "QtQuick.Item");
             QmlType button = CreateType(
                 "QtQuick.Controls.Button",
                 "Button",
@@ -71,7 +81,9 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                     new QmlModuleType("QtQuick.Rectangle", "Rectangle", new QmlSharp.Registry.QmlVersion(6, 11)),
                     new QmlModuleType("QtQuick.Text", "Text", new QmlSharp.Registry.QmlVersion(6, 11)),
                     new QmlModuleType("QtQuick.MouseArea", "MouseArea", new QmlSharp.Registry.QmlVersion(6, 11)),
-                    new QmlModuleType("QtQuick.LinearGradient", "LinearGradient", new QmlSharp.Registry.QmlVersion(6, 11))));
+                    new QmlModuleType("QtQuick.LinearGradient", "LinearGradient", new QmlSharp.Registry.QmlVersion(6, 11)),
+                    new QmlModuleType("QtQuick.Column", "Column", new QmlSharp.Registry.QmlVersion(6, 11)),
+                    new QmlModuleType("QtQuick.Row", "Row", new QmlSharp.Registry.QmlVersion(6, 11))));
 
             QmlModule controls = new(
                 "QtQuick.Controls",
@@ -94,6 +106,8 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                 .Add(mouseArea.QualifiedName, mouseArea)
                 .Add(layout.QualifiedName, layout)
                 .Add(linearGradient.QualifiedName, linearGradient)
+                .Add(column.QualifiedName, column)
+                .Add(row.QualifiedName, row)
                 .Add(button.QualifiedName, button);
 
             QmlRegistry registry = new(
