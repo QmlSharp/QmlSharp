@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Compiler</AssemblyName>
+    <RootNamespace>QmlSharp.Compiler</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QmlSharp.Core\QmlSharp.Core.csproj" />
+    <ProjectReference Include="..\QmlSharp.Registry\QmlSharp.Registry.csproj" />
+    <ProjectReference Include="..\QmlSharp.Qml.Ast\QmlSharp.Qml.Ast.csproj" />
+    <ProjectReference Include="..\QmlSharp.Qml.Emitter\QmlSharp.Qml.Emitter.csproj" />
+    <ProjectReference Include="..\QmlSharp.Dsl\QmlSharp.Dsl.csproj" />
+    <ProjectReference Include="..\QmlSharp.Dsl.Generator\QmlSharp.Dsl.Generator.csproj" />
+    <ProjectReference Include="..\QmlSharp.Qt.Tools\QmlSharp.Qt.Tools.csproj" />
+  </ItemGroup>
+</Project>
