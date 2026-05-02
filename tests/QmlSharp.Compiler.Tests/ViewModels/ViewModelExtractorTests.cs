@@ -307,6 +307,35 @@ namespace QmlSharp.Compiler.Tests.ViewModels
 
         [Fact]
         [Trait("Category", TestCategories.Unit)]
+        public void ViewModelExtractor_CompilerSlotKeyUsesBoundViewClassName()
+        {
+            ProjectContext context = CreateContext("""
+                using QmlSharp.Core;
+                namespace TestApp;
+
+                [ViewModel]
+                public sealed class CounterViewModel
+                {
+                    [State] public int Count { get; set; }
+                }
+
+                public sealed class CounterView : View<CounterViewModel>
+                {
+                    public override object Build() => new object();
+                }
+                """);
+            DiscoveredViewModel viewModel = Assert.Single(analyzer.DiscoverViewModels(context));
+            DiscoveredView view = Assert.Single(analyzer.DiscoverViews(context));
+
+            ViewModelSchema schema = extractor.Extract(viewModel, context, new IdAllocator());
+            ViewModelSchema boundSchema = extractor.Extract(view, context, new IdAllocator());
+
+            Assert.Equal("CounterView::__qmlsharp_vm0", schema.CompilerSlotKey);
+            Assert.Equal(schema.CompilerSlotKey, boundSchema.CompilerSlotKey);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
         public void ViewModelExtractor_ExtractsListAndJsonSchemaTypes()
         {
             ViewModelSchema schema = ExtractSingle("""
@@ -354,6 +383,23 @@ namespace QmlSharp.Compiler.Tests.ViewModels
                 public sealed class BadStateViewModel
                 {
                     [State] private int Count { get; set; }
+                }
+                """);
+
+            Assert.Contains(diagnostics, HasCode(DiagnosticCodes.InvalidStateAttribute));
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
+        public void ViewModelExtractor_StateWithPrivateGetter_ReportsA001()
+        {
+            ImmutableArray<CompilerDiagnostic> diagnostics = ValidateSingle("""
+                using QmlSharp.Core;
+                namespace TestApp;
+                [ViewModel]
+                public sealed class BadStateViewModel
+                {
+                    [State] public int Count { private get; set; }
                 }
                 """);
 

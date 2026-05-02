@@ -15,6 +15,7 @@ namespace QmlSharp.Compiler
         private const string StateAttributeMetadataName = "QmlSharp.Core.StateAttribute";
         private const string CommandAttributeMetadataName = "QmlSharp.Core.CommandAttribute";
         private const string EffectAttributeMetadataName = "QmlSharp.Core.EffectAttribute";
+        private const string ViewMetadataName = "QmlSharp.Core.View`1";
 
         /// <inheritdoc />
         public ViewModelSchema Extract(DiscoveredViewModel viewModel, ProjectContext context, IIdAllocator idAllocator)
@@ -23,6 +24,31 @@ namespace QmlSharp.Compiler
             ArgumentNullException.ThrowIfNull(context);
             ArgumentNullException.ThrowIfNull(idAllocator);
 
+            ViewBinding viewBinding = ResolveViewBinding(viewModel, context);
+            return ExtractCore(viewModel, context, idAllocator, viewBinding);
+        }
+
+        /// <inheritdoc />
+        public ViewModelSchema Extract(DiscoveredView view, ProjectContext context, IIdAllocator idAllocator)
+        {
+            ArgumentNullException.ThrowIfNull(view);
+            ArgumentNullException.ThrowIfNull(context);
+            ArgumentNullException.ThrowIfNull(idAllocator);
+
+            DiscoveredViewModel viewModel = new(
+                view.ViewModelTypeName,
+                view.FilePath,
+                view.ViewModelSymbol);
+
+            return ExtractCore(viewModel, context, idAllocator, new ViewBinding(view.ClassName, 0));
+        }
+
+        private ViewModelSchema ExtractCore(
+            DiscoveredViewModel viewModel,
+            ProjectContext context,
+            IIdAllocator idAllocator,
+            ViewBinding viewBinding)
+        {
             ImmutableArray<CompilerDiagnostic> diagnostics = Validate(viewModel, context);
             foreach (CompilerDiagnostic diagnostic in diagnostics)
             {
@@ -41,7 +67,7 @@ namespace QmlSharp.Compiler
                 context.Options.ModuleUriPrefix,
                 context.Options.ModuleVersion,
                 InternalSchemaVersion,
-                idAllocator.GenerateSlotKey(viewModel.ClassName, 0),
+                idAllocator.GenerateSlotKey(viewBinding.ViewClassName, viewBinding.SlotIndex),
                 properties,
                 commands,
                 effects,
@@ -198,7 +224,9 @@ namespace QmlSharp.Compiler
                     continue;
                 }
 
-                if (property.DeclaredAccessibility != Accessibility.Public || property.GetMethod is null)
+                if (property.DeclaredAccessibility != Accessibility.Public
+                    || property.GetMethod is null
+                    || property.GetMethod.DeclaredAccessibility != Accessibility.Public)
                 {
                     AddDiagnostic(diagnostics, DiagnosticCodes.InvalidStateAttribute, property, $"'{property.Name}' must be a public instance property.");
                     continue;
@@ -254,12 +282,9 @@ namespace QmlSharp.Compiler
                 }
 
                 seenNames.Add(qmlName, method);
-                foreach (IParameterSymbol parameter in method.Parameters)
+                foreach (IParameterSymbol parameter in method.Parameters.Where(static parameter => MapType(parameter.Type) is null))
                 {
-                    if (MapType(parameter.Type) is null)
-                    {
-                        AddDiagnostic(diagnostics, DiagnosticCodes.InvalidCommandAttribute, method, $"Parameter '{parameter.Name}' has unsupported type '{parameter.Type.ToDisplayString()}'.");
-                    }
+                    AddDiagnostic(diagnostics, DiagnosticCodes.InvalidCommandAttribute, method, $"Parameter '{parameter.Name}' has unsupported type '{parameter.Type.ToDisplayString()}'.");
                 }
             }
         }
@@ -302,12 +327,9 @@ namespace QmlSharp.Compiler
                     continue;
                 }
 
-                foreach (ITypeSymbol payloadType in payloadTypes.Value)
+                foreach (ITypeSymbol payloadType in payloadTypes.Value.Where(static payloadType => MapType(payloadType) is null))
                 {
-                    if (MapType(payloadType) is null)
-                    {
-                        AddDiagnostic(diagnostics, DiagnosticCodes.InvalidEffectAttribute, eventSymbol, $"Payload type '{payloadType.ToDisplayString()}' is not supported.");
-                    }
+                    AddDiagnostic(diagnostics, DiagnosticCodes.InvalidEffectAttribute, eventSymbol, $"Payload type '{payloadType.ToDisplayString()}' is not supported.");
                 }
             }
         }
@@ -545,20 +567,10 @@ namespace QmlSharp.Compiler
         {
             AttributeData? attribute = symbol.GetAttributes()
                 .FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.AttributeClass?.ToDisplayString(), metadataName));
-            if (attribute is null)
-            {
-                return false;
-            }
-
-            foreach (KeyValuePair<string, TypedConstant> argument in attribute.NamedArguments)
-            {
-                if (StringComparer.Ordinal.Equals(argument.Key, argumentName) && argument.Value.Value is bool value)
-                {
-                    return value;
-                }
-            }
-
-            return false;
+            return attribute?.NamedArguments
+                .Where(argument => StringComparer.Ordinal.Equals(argument.Key, argumentName))
+                .Select(static argument => argument.Value.Value is bool value ? value : (bool?)null)
+                .FirstOrDefault(static value => value.HasValue) ?? false;
         }
 
         private static void AddDiagnostic(
@@ -612,5 +624,81 @@ namespace QmlSharp.Compiler
                     value.AsSpan(1).CopyTo(span[1..]);
                 });
         }
+
+        private static ViewBinding ResolveViewBinding(DiscoveredViewModel viewModel, ProjectContext context)
+        {
+            INamedTypeSymbol? viewBaseSymbol = context.Compilation.GetTypeByMetadataName(ViewMetadataName);
+            if (viewBaseSymbol is null)
+            {
+                return new ViewBinding(viewModel.ClassName, 0);
+            }
+
+            INamedTypeSymbol? boundView = EnumerateNamedTypes(context)
+                .Where(candidate => IsViewBoundTo(candidate, viewBaseSymbol, viewModel.TypeSymbol))
+                .OrderBy(static candidate => GetSourceFilePath(candidate), StringComparer.Ordinal)
+                .ThenBy(static candidate => candidate.Name, StringComparer.Ordinal)
+                .FirstOrDefault();
+
+            return new ViewBinding(boundView?.Name ?? viewModel.ClassName, 0);
+        }
+
+        private static IEnumerable<INamedTypeSymbol> EnumerateNamedTypes(ProjectContext context)
+        {
+            foreach (SyntaxTree syntaxTree in context.Compilation.SyntaxTrees.Where(syntaxTree => ContainsSourceFile(context, syntaxTree.FilePath)))
+            {
+                SemanticModel semanticModel = context.Compilation.GetSemanticModel(syntaxTree);
+                SyntaxNode root = syntaxTree.GetRoot();
+                foreach (INamedTypeSymbol symbol in root.DescendantNodes()
+                    .OfType<ClassDeclarationSyntax>()
+                    .Select(classDeclaration => semanticModel.GetDeclaredSymbol(classDeclaration))
+                    .Where(static declaredSymbol => declaredSymbol is INamedTypeSymbol)
+                    .Cast<INamedTypeSymbol>())
+                {
+                    yield return symbol;
+                }
+            }
+        }
+
+        private static bool IsViewBoundTo(
+            INamedTypeSymbol candidate,
+            INamedTypeSymbol viewBaseSymbol,
+            INamedTypeSymbol viewModelSymbol)
+        {
+            for (INamedTypeSymbol? current = candidate.BaseType; current is not null; current = current.BaseType)
+            {
+                if (SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, viewBaseSymbol)
+                    && current.TypeArguments.Length == 1
+                    && SymbolEqualityComparer.Default.Equals(current.TypeArguments[0], viewModelSymbol))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ContainsSourceFile(ProjectContext context, string filePath)
+        {
+            return context.SourceFiles.Any(sourceFile =>
+                StringComparer.Ordinal.Equals(NormalizePath(sourceFile), NormalizePath(filePath)));
+        }
+
+        private static string GetSourceFilePath(INamedTypeSymbol symbol)
+        {
+            return symbol.Locations
+                .Where(static location => location.IsInSource)
+                .OrderBy(static location => location.SourceTree?.FilePath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(static location => location.GetLineSpan().StartLinePosition.Line)
+                .ThenBy(static location => location.GetLineSpan().StartLinePosition.Character)
+                .Select(static location => location.SourceTree?.FilePath ?? string.Empty)
+                .FirstOrDefault() ?? string.Empty;
+        }
+
+        private static string NormalizePath(string path)
+        {
+            return path.Replace('\\', '/');
+        }
+
+        private sealed record ViewBinding(string ViewClassName, int SlotIndex);
     }
 }
