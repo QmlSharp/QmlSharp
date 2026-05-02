@@ -81,27 +81,25 @@ namespace QmlSharp.Compiler
 
         /// <inheritdoc />
         public async Task StartAsync(
-            CompilerOptions options,
+            CompilerOptions compilerOptions,
             Action<CompilationResult>? onCompiled = null,
             CancellationToken cancellationToken = default)
         {
-            ArgumentNullException.ThrowIfNull(options);
+            ArgumentNullException.ThrowIfNull(compilerOptions);
             ThrowIfDisposed();
             cancellationToken.ThrowIfCancellationRequested();
 
-            CompilerOptions normalizedOptions = options.ValidateAndNormalize();
+            CompilerOptions normalizedOptions = compilerOptions.ValidateAndNormalize();
             WatcherStartState startState = InitializeStart(normalizedOptions, onCompiled, cancellationToken);
-            CancellationTokenRegistration registration = default;
             try
             {
-                registration = RegisterExternalCancellation(startState, cancellationToken);
+                RegisterExternalCancellation(startState, cancellationToken);
                 startState.Token.ThrowIfCancellationRequested();
                 startState.Watcher.Start();
                 await CompileNowAsync(startState.Generation, startState.Token).ConfigureAwait(false);
             }
             catch
             {
-                registration.Dispose();
                 await StopAsync().ConfigureAwait(false);
                 throw;
             }
@@ -136,7 +134,7 @@ namespace QmlSharp.Compiler
             }
         }
 
-        private CancellationTokenRegistration RegisterExternalCancellation(
+        private void RegisterExternalCancellation(
             WatcherStartState startState,
             CancellationToken cancellationToken)
         {
@@ -152,7 +150,7 @@ namespace QmlSharp.Compiler
                     && status != WatcherStatus.Stopped)
                 {
                     cancellationRegistration = registration;
-                    return default;
+                    return;
                 }
             }
 
