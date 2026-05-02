@@ -49,8 +49,8 @@ namespace QmlSharp.Compiler.Tests.Options
         {
             EventBindingsIndex bindings = new(
                 "1.0",
-                ImmutableArray.Create(new CommandBindingEntry("CounterViewModel", "increment", 123, ImmutableArray<string>.Empty)),
-                ImmutableArray.Create(new EffectBindingEntry("TodoViewModel", "showToast", 456, "string")));
+                ImmutableArray.Create(new CommandBindingEntry("CounterViewModel", "CounterView::__qmlsharp_vm0", "increment", 123, ImmutableArray<string>.Empty)),
+                ImmutableArray.Create(new EffectBindingEntry("TodoViewModel", "TodoView::__qmlsharp_vm0", "showToast", 456, "string")));
 
             SourceMap sourceMap = new(
                 "1.0",
@@ -61,8 +61,10 @@ namespace QmlSharp.Compiler.Tests.Options
 
             Assert.Equal("increment", bindings.Commands.Single().CommandName);
             Assert.Empty(bindings.Commands.Single().ParameterTypes);
+            Assert.Equal("CounterView::__qmlsharp_vm0", bindings.Commands.Single().CompilerSlotKey);
             Assert.Equal("showToast", bindings.Effects.Single().EffectName);
             Assert.Equal("string", bindings.Effects.Single().PayloadType);
+            Assert.Equal("TodoView::__qmlsharp_vm0", bindings.Effects.Single().CompilerSlotKey);
             Assert.Equal(1, sourceMap.Mappings.Single().OutputLine);
             Assert.Equal(1, sourceMap.Mappings.Single().OutputColumn);
             Assert.Equal(sourceMap.OutputFilePath, qmlLocation.FilePath);
