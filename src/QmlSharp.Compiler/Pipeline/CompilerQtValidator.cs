@@ -45,10 +45,13 @@ namespace QmlSharp.Compiler
             string qmlFilePath = CreateGeneratedQmlPath(unit, options);
             ImmutableArray<CompilerDiagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<CompilerDiagnostic>();
             diagnostics.AddRange(unit.Diagnostics.IsDefault ? ImmutableArray<CompilerDiagnostic>.Empty : unit.Diagnostics);
+            bool qmlTextChanged = false;
 
             if (options.FormatQml)
             {
+                string originalQmlText = qmlText;
                 qmlText = RunFormat(qmlText, qmlFilePath, diagnostics);
+                qmlTextChanged = !StringComparer.Ordinal.Equals(originalQmlText, qmlText);
             }
 
             if (options.LintQml)
@@ -59,6 +62,7 @@ namespace QmlSharp.Compiler
             return unit with
             {
                 QmlText = qmlText,
+                SourceMap = qmlTextChanged ? null : unit.SourceMap,
                 Diagnostics = SortDiagnostics(diagnostics.ToImmutable()),
                 Stats = unit.Stats with
                 {

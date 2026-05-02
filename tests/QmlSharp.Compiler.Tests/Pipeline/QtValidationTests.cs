@@ -51,6 +51,7 @@ namespace QmlSharp.Compiler.Tests.Pipeline
             Assert.Equal(1, format.FormatStringCalls);
             Assert.Equal(0, lint.LintStringCalls);
             Assert.Equal("import QtQuick\n\nItem {}\n", unit.QmlText);
+            Assert.Null(unit.SourceMap);
         }
 
         [Fact]
@@ -126,6 +127,50 @@ namespace QmlSharp.Compiler.Tests.Pipeline
 
             Assert.True(result.Success);
             Assert.Equal("import QtQuick\nItem {}\n", lint.LastLintSource);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
+        public void QtValidation_FormatQml_PreservesSourceMapWhenTextIsUnchanged()
+        {
+            using ProjectContext context = CompilerTestFixtures.CreateCounterContext();
+            CompilationUnit baselineUnit = Assert.Single(CreateCompiler(context).Compile(CompilerTestFixtures.DefaultOptions).Units);
+            Assert.NotNull(baselineUnit.SourceMap);
+
+            FakeQmlFormat format = new()
+            {
+                FormatStringResult = CreateFormatResult(success: true, formattedSource: baselineUnit.QmlText),
+            };
+            ICompiler compiler = CreateCompiler(context, qmlFormat: format);
+            CompilerOptions options = CompilerTestFixtures.DefaultOptions with { FormatQml = true };
+
+            CompilationUnit formattedUnit = Assert.Single(compiler.Compile(options).Units);
+
+            Assert.True(formattedUnit.Success);
+            Assert.NotNull(formattedUnit.SourceMap);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
+        public void QtValidation_CompileFile_RunsConfiguredQtValidation()
+        {
+            using ProjectContext context = CompilerTestFixtures.CreateMultiViewModelContext();
+            FakeQmlFormat format = new()
+            {
+                FormatStringResult = CreateFormatResult(success: true, formattedSource: "import QtQuick\nItem {}\n"),
+            };
+            FakeQmlLint lint = new();
+            ICompiler compiler = CreateCompiler(context, qmlFormat: format, qmlLint: lint);
+            CompilerOptions options = CompilerTestFixtures.DefaultOptions with { FormatQml = true, LintQml = true };
+
+            CompilationUnit unit = compiler.CompileFile("TodoView.cs", context, options);
+
+            Assert.True(unit.Success);
+            Assert.Equal(1, format.FormatStringCalls);
+            Assert.Equal(1, lint.LintStringCalls);
+            Assert.Equal("import QtQuick\nItem {}\n", unit.QmlText);
+            Assert.Equal("import QtQuick\nItem {}\n", lint.LastLintSource);
+            Assert.Null(unit.SourceMap);
         }
 
         [RequiresQtFact("qmlformat")]

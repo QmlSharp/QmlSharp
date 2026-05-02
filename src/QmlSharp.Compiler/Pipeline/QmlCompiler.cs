@@ -182,7 +182,8 @@ namespace QmlSharp.Compiler
             }
 
             ImmutableDictionary<string, DiscoveredViewModel> viewModelsByMetadataName = CreateViewModelLookup(analyzer.DiscoverViewModels(context));
-            return CompileView(view, context, normalizedOptions, viewModelsByMetadataName, idAllocator);
+            CompilationUnit unit = CompileView(view, context, normalizedOptions, viewModelsByMetadataName, idAllocator);
+            return qtValidator.Validate(unit, normalizedOptions);
         }
 
         /// <inheritdoc />
