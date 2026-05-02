@@ -15,6 +15,7 @@ namespace QmlSharp.Compiler.Tests.Pipeline
         public void CompilerClosure_AllCompilerTestSpecIdsHaveImplementationEvidence()
         {
             ImmutableDictionary<string, string> evidence = ClosureEvidenceByTestId();
+            ImmutableHashSet<string> requiredIds = RequiredCompilerTestIds().ToImmutableHashSet(StringComparer.Ordinal);
             ImmutableArray<string> missingIds = RequiredCompilerTestIds()
                 .Where(id => !evidence.ContainsKey(id))
                 .ToImmutableArray();
@@ -24,7 +25,7 @@ namespace QmlSharp.Compiler.Tests.Pipeline
             foreach ((string id, string token) in evidence.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             {
                 Assert.Contains(token, sourceText, StringComparison.Ordinal);
-                Assert.Matches(@"^(CO|CA|VE|DT|ID|IM|PP|CU|SM|DR|IC|CP|CP-G|PF)-\d+$", id);
+                Assert.True(requiredIds.Contains(id), $"Evidence key is not a required compiler test id: {id}");
             }
         }
 
@@ -115,7 +116,7 @@ namespace QmlSharp.Compiler.Tests.Pipeline
                 .AddRange(Range("DR", 1, 10))
                 .AddRange(Range("IC", 1, 8))
                 .AddRange(Range("CP", 1, 10))
-                .AddRange(Range("CP-G", 1, 4))
+                .AddRange(GoldenRange())
                 .AddRange(Range("PF", 1, 7));
         }
 
@@ -165,9 +166,16 @@ namespace QmlSharp.Compiler.Tests.Pipeline
             AddRange(evidence, "CP", 1, 8, static number => $"CompilerPipeline_CP{number:00}");
             Add(evidence, "CP-09", "CompilerWatcher_CP09");
             Add(evidence, "CP-10", "CompilerWatcher_CP10");
-            AddRange(evidence, "CP-G", 1, 4, static number => $"Golden_CPG{number}");
+            AddGoldenRange(evidence);
 
             return evidence.ToImmutableDictionary(StringComparer.Ordinal);
+        }
+
+        private static ImmutableArray<string> GoldenRange()
+        {
+            return Enumerable.Range(1, 4)
+                .Select(static number => $"CP-G{number}")
+                .ToImmutableArray();
         }
 
         private static ImmutableArray<string> Range(string prefix, int first, int last)
@@ -175,6 +183,14 @@ namespace QmlSharp.Compiler.Tests.Pipeline
             return Enumerable.Range(first, last - first + 1)
                 .Select(number => $"{prefix}-{number:00}")
                 .ToImmutableArray();
+        }
+
+        private static void AddGoldenRange(Dictionary<string, string> evidence)
+        {
+            foreach (int number in Enumerable.Range(1, 4))
+            {
+                Add(evidence, $"CP-G{number}", $"Golden_CPG{number}");
+            }
         }
 
         private static void AddRange(Dictionary<string, string> evidence, string prefix, int first, int last, Func<int, string> tokenFactory)
@@ -194,9 +210,23 @@ namespace QmlSharp.Compiler.Tests.Pipeline
         {
             return string.Join(
                 "\n",
-                Directory.EnumerateFiles(CompilerTestsRoot, "*.cs", SearchOption.AllDirectories)
+                EnumerateCompilerTestSourceFiles()
                     .Order(StringComparer.Ordinal)
                     .Select(File.ReadAllText));
+        }
+
+        private static IEnumerable<string> EnumerateCompilerTestSourceFiles()
+        {
+            return Directory.EnumerateFiles(CompilerTestsRoot, "*.cs", SearchOption.AllDirectories)
+                .Where(static path => !StringComparer.Ordinal.Equals(Path.GetFileName(path), nameof(CompilerClosureTests) + ".cs"))
+                .Where(static path => !IsBuildOutputPath(path));
+        }
+
+        private static bool IsBuildOutputPath(string path)
+        {
+            return Path.GetRelativePath(CompilerTestsRoot, path)
+                .Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries)
+                .Any(static segment => StringComparer.Ordinal.Equals(segment, "bin") || StringComparer.Ordinal.Equals(segment, "obj"));
         }
 
         private static string RequireGolden(string goldenRoot, string fileName)
