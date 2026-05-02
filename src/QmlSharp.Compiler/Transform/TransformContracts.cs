@@ -37,6 +37,7 @@ namespace QmlSharp.Compiler
         ImmutableArray<DslGroupedCall> GroupedProperties,
         ImmutableArray<DslAttachedCall> AttachedProperties,
         ImmutableArray<DslCallNode> Children,
+        string? Id = null,
         SourceLocation? SourceLocation = null);
 
     /// <summary>A literal property setter call in the DSL IR.</summary>
@@ -46,13 +47,26 @@ namespace QmlSharp.Compiler
     public sealed record DslBindingCall(string Name, string Expression, SourceLocation? SourceLocation = null);
 
     /// <summary>A signal handler call in the DSL IR.</summary>
-    public sealed record DslSignalHandlerCall(string Name, string Body, SourceLocation? SourceLocation = null);
+    public sealed record DslSignalHandlerCall(
+        string Name,
+        string Body,
+        SourceLocation? SourceLocation = null,
+        DslCommandReference? CommandReference = null);
 
     /// <summary>A grouped property call in the DSL IR.</summary>
     public sealed record DslGroupedCall(string Name, ImmutableArray<DslPropertyCall> Properties, SourceLocation? SourceLocation = null);
 
     /// <summary>An attached property call in the DSL IR.</summary>
     public sealed record DslAttachedCall(string TypeName, ImmutableArray<DslPropertyCall> Properties, SourceLocation? SourceLocation = null);
+
+    /// <summary>A ViewModel state member reference captured from a DSL property value.</summary>
+    public sealed record DslStateReference(string ReceiverName, string MemberName, SourceLocation? SourceLocation = null);
+
+    /// <summary>A ViewModel command member reference captured from a DSL signal handler.</summary>
+    public sealed record DslCommandReference(string ReceiverName, string MethodName, SourceLocation? SourceLocation = null);
+
+    /// <summary>A generated DSL enum reference captured from a member access expression.</summary>
+    public sealed record DslEnumReference(string TypeName, string? EnumName, string MemberName, SourceLocation? SourceLocation = null);
 
     /// <summary>Allocates deterministic IDs and compiler slot keys.</summary>
     public interface IIdAllocator
