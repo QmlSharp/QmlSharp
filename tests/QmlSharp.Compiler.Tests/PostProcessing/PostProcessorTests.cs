@@ -384,7 +384,8 @@ namespace QmlSharp.Compiler.Tests.PostProcessing
 
         private static BindingNode FindBinding(ObjectDefinitionNode node, string propertyName)
         {
-            if (TryFindBinding(node, propertyName, out BindingNode? binding) && binding is not null)
+            BindingNode? binding = TryFindBinding(node, propertyName);
+            if (binding is not null)
             {
                 return binding;
             }
@@ -392,33 +393,26 @@ namespace QmlSharp.Compiler.Tests.PostProcessing
             throw new InvalidOperationException($"Binding '{propertyName}' was not found.");
         }
 
-        private static bool TryFindBinding(ObjectDefinitionNode node, string propertyName, out BindingNode? binding)
+        private static BindingNode? TryFindBinding(ObjectDefinitionNode node, string propertyName)
         {
-            foreach (BindingNode candidate in node.Members
+            BindingNode? directBinding = node.Members
                 .OfType<BindingNode>()
-                .Where(candidate => string.Equals(candidate.PropertyName, propertyName, StringComparison.Ordinal)))
+                .FirstOrDefault(candidate => string.Equals(candidate.PropertyName, propertyName, StringComparison.Ordinal));
+            if (directBinding is not null)
             {
-                binding = candidate;
-                return true;
+                return directBinding;
             }
 
-            foreach (ObjectDefinitionNode child in node.Members
-                .Where(member => member is ObjectDefinitionNode)
-                .Cast<ObjectDefinitionNode>())
-            {
-                if (TryFindBinding(child, propertyName, out binding))
-                {
-                    return true;
-                }
-            }
-
-            binding = null;
-            return false;
+            return node.Members
+                .OfType<ObjectDefinitionNode>()
+                .Select(child => TryFindBinding(child, propertyName))
+                .FirstOrDefault(candidate => candidate is not null);
         }
 
         private static SignalHandlerNode FindSignalHandler(ObjectDefinitionNode node, string handlerName)
         {
-            if (TryFindSignalHandler(node, handlerName, out SignalHandlerNode? handler) && handler is not null)
+            SignalHandlerNode? handler = TryFindSignalHandler(node, handlerName);
+            if (handler is not null)
             {
                 return handler;
             }
@@ -426,28 +420,20 @@ namespace QmlSharp.Compiler.Tests.PostProcessing
             throw new InvalidOperationException($"Handler '{handlerName}' was not found.");
         }
 
-        private static bool TryFindSignalHandler(ObjectDefinitionNode node, string handlerName, out SignalHandlerNode? handler)
+        private static SignalHandlerNode? TryFindSignalHandler(ObjectDefinitionNode node, string handlerName)
         {
-            foreach (SignalHandlerNode candidate in node.Members
+            SignalHandlerNode? directHandler = node.Members
                 .OfType<SignalHandlerNode>()
-                .Where(candidate => string.Equals(candidate.HandlerName, handlerName, StringComparison.Ordinal)))
+                .FirstOrDefault(candidate => string.Equals(candidate.HandlerName, handlerName, StringComparison.Ordinal));
+            if (directHandler is not null)
             {
-                handler = candidate;
-                return true;
+                return directHandler;
             }
 
-            foreach (ObjectDefinitionNode child in node.Members
-                .Where(member => member is ObjectDefinitionNode)
-                .Cast<ObjectDefinitionNode>())
-            {
-                if (TryFindSignalHandler(child, handlerName, out handler))
-                {
-                    return true;
-                }
-            }
-
-            handler = null;
-            return false;
+            return node.Members
+                .OfType<ObjectDefinitionNode>()
+                .Select(child => TryFindSignalHandler(child, handlerName))
+                .FirstOrDefault(candidate => candidate is not null);
         }
 
         private static string BindingCode(BindingNode binding)
