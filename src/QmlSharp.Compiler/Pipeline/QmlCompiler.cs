@@ -18,7 +18,7 @@ namespace QmlSharp.Compiler
 
         private readonly ICSharpAnalyzer analyzer;
         private readonly IViewModelExtractor viewModelExtractor;
-        private readonly IIdAllocator idAllocator;
+        private readonly Func<IIdAllocator> idAllocatorFactory;
         private readonly IDslTransformer dslTransformer;
         private readonly IImportResolver importResolver;
         private readonly IPostProcessor postProcessor;
@@ -45,7 +45,7 @@ namespace QmlSharp.Compiler
             : this(
                 new CSharpAnalyzer(),
                 new ViewModelExtractor(),
-                new IdAllocator(),
+                static () => new IdAllocator(),
                 new DslTransformer(),
                 new ImportResolver(),
                 new PostProcessor(),
@@ -63,7 +63,7 @@ namespace QmlSharp.Compiler
         public QmlCompiler(
             ICSharpAnalyzer analyzer,
             IViewModelExtractor viewModelExtractor,
-            IIdAllocator idAllocator,
+            Func<IIdAllocator> idAllocatorFactory,
             IDslTransformer dslTransformer,
             IImportResolver importResolver,
             IPostProcessor postProcessor,
@@ -75,7 +75,7 @@ namespace QmlSharp.Compiler
         {
             this.analyzer = analyzer ?? throw new ArgumentNullException(nameof(analyzer));
             this.viewModelExtractor = viewModelExtractor ?? throw new ArgumentNullException(nameof(viewModelExtractor));
-            this.idAllocator = idAllocator ?? throw new ArgumentNullException(nameof(idAllocator));
+            this.idAllocatorFactory = idAllocatorFactory ?? throw new ArgumentNullException(nameof(idAllocatorFactory));
             this.dslTransformer = dslTransformer ?? throw new ArgumentNullException(nameof(dslTransformer));
             this.importResolver = importResolver ?? throw new ArgumentNullException(nameof(importResolver));
             this.postProcessor = postProcessor ?? throw new ArgumentNullException(nameof(postProcessor));
@@ -93,6 +93,7 @@ namespace QmlSharp.Compiler
 
             Stopwatch stopwatch = Stopwatch.StartNew();
             CompilerOptions normalizedOptions = options.ValidateAndNormalize();
+            IIdAllocator idAllocator = CreateIdAllocator();
 
             Report(CompilationPhase.LoadingProject, 0, 0, normalizedOptions.ProjectPath);
             using ProjectContext context = analyzer.CreateProjectContext(normalizedOptions);
@@ -111,7 +112,7 @@ namespace QmlSharp.Compiler
             {
                 currentFile++;
                 Report(CompilationPhase.TransformingDsl, currentFile, views.Length, view.FilePath);
-                units.Add(CompileView(view, context, normalizedOptions, viewModelsByMetadataName));
+                units.Add(CompileView(view, context, normalizedOptions, viewModelsByMetadataName, idAllocator));
             }
 
             EventBindingsIndex eventBindings = eventBindingsBuilder.Build(units
@@ -139,9 +140,12 @@ namespace QmlSharp.Compiler
             ArgumentNullException.ThrowIfNull(options);
 
             CompilerOptions normalizedOptions = options.ValidateAndNormalize();
+            string projectDirectory = GetProjectDirectory(normalizedOptions);
+            string canonicalFilePath = CanonicalizePath(filePath, projectDirectory);
+            IIdAllocator idAllocator = CreateIdAllocator();
             ImmutableArray<DiscoveredView> views = analyzer.DiscoverViews(context);
             DiscoveredView? view = views
-                .Where(candidate => PathsEqual(candidate.FilePath, filePath))
+                .Where(candidate => PathsEqual(candidate.FilePath, canonicalFilePath, projectDirectory))
                 .OrderBy(static candidate => candidate.ClassName, StringComparer.Ordinal)
                 .FirstOrDefault();
 
@@ -157,7 +161,7 @@ namespace QmlSharp.Compiler
             }
 
             ImmutableDictionary<string, DiscoveredViewModel> viewModelsByMetadataName = CreateViewModelLookup(analyzer.DiscoverViewModels(context));
-            return CompileView(view, context, normalizedOptions, viewModelsByMetadataName);
+            return CompileView(view, context, normalizedOptions, viewModelsByMetadataName, idAllocator);
         }
 
         /// <inheritdoc />
@@ -183,7 +187,8 @@ namespace QmlSharp.Compiler
             DiscoveredView view,
             ProjectContext context,
             CompilerOptions options,
-            ImmutableDictionary<string, DiscoveredViewModel> viewModelsByMetadataName)
+            ImmutableDictionary<string, DiscoveredViewModel> viewModelsByMetadataName,
+            IIdAllocator idAllocator)
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
             ImmutableArray<CompilerDiagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<CompilerDiagnostic>();
@@ -197,7 +202,7 @@ namespace QmlSharp.Compiler
                     return CreateFailedUnit(view.FilePath, view.ClassName, view.ViewModelTypeName, diagnostics.ToImmutable(), stopwatch.ElapsedMilliseconds);
                 }
 
-                ViewCompilationArtifacts artifacts = BuildViewArtifacts(view, context, options, diagnostics);
+                ViewCompilationArtifacts artifacts = BuildViewArtifacts(view, context, options, diagnostics, idAllocator);
 
                 if (HasErrors(diagnostics))
                 {
@@ -247,9 +252,10 @@ namespace QmlSharp.Compiler
             DiscoveredView view,
             ProjectContext context,
             CompilerOptions options,
-            ImmutableArray<CompilerDiagnostic>.Builder diagnostics)
+            ImmutableArray<CompilerDiagnostic>.Builder diagnostics,
+            IIdAllocator idAllocator)
         {
-            ViewModelSchema schema = ExtractSchema(view, context, diagnostics);
+            ViewModelSchema schema = ExtractSchema(view, context, diagnostics, idAllocator);
             DslTransformResult transformResult = dslTransformer.Transform(view, context, registry);
             diagnostics.AddRange(transformResult.Diagnostics);
 
@@ -271,7 +277,8 @@ namespace QmlSharp.Compiler
         private ViewModelSchema ExtractSchema(
             DiscoveredView view,
             ProjectContext context,
-            ImmutableArray<CompilerDiagnostic>.Builder diagnostics)
+            ImmutableArray<CompilerDiagnostic>.Builder diagnostics,
+            IIdAllocator idAllocator)
         {
             ImmutableArray<CompilerDiagnostic> beforeExtractionDiagnostics = context.Diagnostics.GetDiagnostics();
             ViewModelSchema schema = viewModelExtractor.Extract(view, context, idAllocator);
@@ -533,17 +540,54 @@ namespace QmlSharp.Compiler
             throw new FileNotFoundException("The checked-in Qt 6.11 registry snapshot was not found.", DefaultSnapshotRelativePath);
         }
 
-        private static bool PathsEqual(string left, string right)
+        private IIdAllocator CreateIdAllocator()
+        {
+            IIdAllocator idAllocator = idAllocatorFactory();
+            return idAllocator ?? throw new InvalidOperationException("The ID allocator factory returned null.");
+        }
+
+        private static string GetProjectDirectory(CompilerOptions options)
+        {
+            string fullProjectPath = Path.GetFullPath(options.ProjectPath);
+            return Path.GetDirectoryName(fullProjectPath) ?? Directory.GetCurrentDirectory();
+        }
+
+        private static bool PathsEqual(string left, string right, string baseDirectory)
         {
             StringComparison comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
                 ? StringComparison.OrdinalIgnoreCase
                 : StringComparison.Ordinal;
-            return string.Equals(NormalizePath(left), NormalizePath(right), comparison);
+            return string.Equals(
+                CanonicalizePath(left, baseDirectory),
+                CanonicalizePath(right, baseDirectory),
+                comparison);
         }
 
-        private static string NormalizePath(string path)
+        private static string CanonicalizePath(string path, string baseDirectory)
         {
-            return path.Replace('\\', '/');
+            string normalizedPath = path
+                .Replace('\\', Path.DirectorySeparatorChar)
+                .Replace('/', Path.DirectorySeparatorChar);
+
+            try
+            {
+                string rootedPath = Path.IsPathRooted(normalizedPath)
+                    ? normalizedPath
+                    : Path.Join(baseDirectory, normalizedPath);
+                return Path.GetFullPath(rootedPath);
+            }
+            catch (ArgumentException)
+            {
+                return normalizedPath;
+            }
+            catch (NotSupportedException)
+            {
+                return normalizedPath;
+            }
+            catch (PathTooLongException)
+            {
+                return normalizedPath;
+            }
         }
 
         private static string NormalizeText(string text)

@@ -199,6 +199,43 @@ namespace QmlSharp.Compiler.Tests.Pipeline
 
         [Fact]
         [Trait("Category", TestCategories.Integration)]
+        public void CompilerPipeline_CP08B_CompileFileCanonicalizesEquivalentPath()
+        {
+            using ProjectContext context = CompilerTestFixtures.CreateMultiViewModelContext();
+            ICompiler compiler = CreateCompiler(context);
+            string equivalentPath = Path.Join(Directory.GetCurrentDirectory(), ".", "TodoView.cs");
+
+            CompilationUnit unit = compiler.CompileFile(equivalentPath, context, CompilerTestFixtures.DefaultOptions);
+
+            Assert.True(unit.Success);
+            Assert.Equal("TodoView", unit.ViewClassName);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Integration)]
+        public void CompilerPipeline_IdAllocator_IsCreatedForEachCompileRun()
+        {
+            using ProjectContext context = CompilerTestFixtures.CreateCounterContext();
+            int factoryCalls = 0;
+            ICompiler compiler = CreateCompiler(
+                context,
+                () =>
+                {
+                    factoryCalls++;
+                    return new IdAllocator();
+                });
+
+            CompilationResult first = compiler.Compile(CompilerTestFixtures.DefaultOptions);
+            CompilationResult second = compiler.Compile(CompilerTestFixtures.DefaultOptions);
+
+            Assert.Equal(2, factoryCalls);
+            Assert.Equal(
+                new ViewModelSchemaSerializer().Serialize(Assert.Single(first.Units).Schema!),
+                new ViewModelSchemaSerializer().Serialize(Assert.Single(second.Units).Schema!));
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Integration)]
         public void CompilerPipeline_GeneratedQmlContainsV2ShapeOnly()
         {
             using ProjectContext context = CompilerTestFixtures.CreateCounterContext();
@@ -261,12 +298,12 @@ namespace QmlSharp.Compiler.Tests.Pipeline
             return result;
         }
 
-        private static ICompiler CreateCompiler(ProjectContext context)
+        private static ICompiler CreateCompiler(ProjectContext context, Func<IIdAllocator>? idAllocatorFactory = null)
         {
             return new QmlSharp.Compiler.QmlCompiler(
                 new StaticAnalyzer(context),
                 new ViewModelExtractor(),
-                new IdAllocator(),
+                idAllocatorFactory ?? (static () => new IdAllocator()),
                 new DslTransformer(),
                 new ImportResolver(),
                 new PostProcessor(),
@@ -285,37 +322,37 @@ namespace QmlSharp.Compiler.Tests.Pipeline
 
         private sealed class StaticAnalyzer : ICSharpAnalyzer
         {
-            private readonly ProjectContext context;
+            private readonly ProjectContext _projectContext;
             private readonly CSharpAnalyzer inner = new();
 
             public StaticAnalyzer(ProjectContext context)
             {
-                this.context = context;
+                _projectContext = context;
             }
 
             public ProjectContext CreateProjectContext(CompilerOptions options)
             {
-                return context;
+                return _projectContext;
             }
 
-            public ImmutableArray<DiscoveredView> DiscoverViews(ProjectContext context)
+            public ImmutableArray<DiscoveredView> DiscoverViews(ProjectContext projectContext)
             {
-                return inner.DiscoverViews(context);
+                return inner.DiscoverViews(projectContext);
             }
 
-            public ImmutableArray<DiscoveredViewModel> DiscoverViewModels(ProjectContext context)
+            public ImmutableArray<DiscoveredViewModel> DiscoverViewModels(ProjectContext projectContext)
             {
-                return inner.DiscoverViewModels(context);
+                return inner.DiscoverViewModels(projectContext);
             }
 
-            public ImmutableArray<DiscoveredImport> DiscoverImports(ProjectContext context, string filePath)
+            public ImmutableArray<DiscoveredImport> DiscoverImports(ProjectContext projectContext, string filePath)
             {
-                return inner.DiscoverImports(context, filePath);
+                return inner.DiscoverImports(projectContext, filePath);
             }
 
-            public SemanticModel GetSemanticModel(ProjectContext context, string filePath)
+            public SemanticModel GetSemanticModel(ProjectContext projectContext, string filePath)
             {
-                return inner.GetSemanticModel(context, filePath);
+                return inner.GetSemanticModel(projectContext, filePath);
             }
         }
     }
