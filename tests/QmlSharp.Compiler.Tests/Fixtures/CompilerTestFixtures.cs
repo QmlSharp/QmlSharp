@@ -22,7 +22,7 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                 compilation,
                 ImmutableArray.Create("CounterViewModel.cs", "CounterView.cs"),
                 DefaultOptions,
-                new TestDiagnosticReporter());
+                new DiagnosticReporter());
         }
 
         public static ProjectContext CreateMultiViewModelContext()
@@ -34,7 +34,7 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                 compilation,
                 sources.Select(source => source.FileName).ToImmutableArray(),
                 DefaultOptions,
-                new TestDiagnosticReporter());
+                new DiagnosticReporter());
         }
 
         public static ProjectContext CreateNFileContext(int count)
@@ -46,7 +46,7 @@ namespace QmlSharp.Compiler.Tests.Fixtures
                 compilation,
                 sources.Select(source => source.FileName).ToImmutableArray(),
                 DefaultOptions,
-                new TestDiagnosticReporter());
+                new DiagnosticReporter());
         }
 
         public static CompilerOptions CreateCounterOptions()

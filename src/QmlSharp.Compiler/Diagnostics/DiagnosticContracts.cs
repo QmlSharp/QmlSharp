@@ -23,7 +23,7 @@ namespace QmlSharp.Compiler
     /// <summary>
     /// Source location with 1-based public line and column positions.
     /// </summary>
-    public sealed record SourceLocation(string FilePath, int Line, int Column);
+    public sealed record SourceLocation(string? FilePath = null, int? Line = null, int? Column = null);
 
     /// <summary>
     /// Source-to-output mapping captured during compiler transforms.
