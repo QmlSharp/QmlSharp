@@ -51,6 +51,7 @@ namespace QmlSharp.Compiler.Tests.Pipeline
             {
                 SourceFilePath = "BrokenView.cs",
                 ViewClassName = "BrokenView",
+                Schema = CompilerTestFixtures.CreateCounterSchema() with { ClassName = "BrokenViewModel" },
                 Diagnostics = ImmutableArray.Create(new CompilerDiagnostic(
                     DiagnosticCodes.EmitFailed,
                     DiagnosticSeverity.Error,
@@ -119,6 +120,64 @@ namespace QmlSharp.Compiler.Tests.Pipeline
             Assert.Equal(first.QmlFiles.ToArray(), second.QmlFiles.ToArray());
             Assert.Equal(first.SchemaFiles.ToArray(), second.SchemaFiles.ToArray());
             Assert.Equal(first.SourceMapFiles.ToArray(), second.SourceMapFiles.ToArray());
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
+        public void OutputWriter_RejectsUnsafeModuleUriBeforeWritingArtifacts()
+        {
+            using TempOutputDirectory temp = new();
+            CompilerOptions options = CreateOptions(temp.Path) with
+            {
+                ModuleUriPrefix = "../escape",
+            };
+            CompilationResult compilation = CompilationResult.FromUnits(ImmutableArray.Create(CreateCounterUnit()));
+
+            OutputResult result = new CompilerOutputWriter().WriteOutput(compilation, options);
+
+            CompilerDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.False(result.Success);
+            Assert.Equal(DiagnosticCodes.OutputWriteFailed, diagnostic.Code);
+            Assert.Contains("Module URI prefix", diagnostic.Message, StringComparison.Ordinal);
+            Assert.Empty(result.QmlFiles);
+            Assert.Empty(result.SchemaFiles);
+            Assert.Empty(result.SourceMapFiles);
+            Assert.False(File.Exists(Path.Join(temp.Path, "event-bindings.json")));
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Unit)]
+        public void OutputWriter_DetectsArtifactPathCollisionsBeforeWritingArtifacts()
+        {
+            using TempOutputDirectory temp = new();
+            CompilerOptions options = CreateOptions(temp.Path);
+            CompilationUnit first = CreateCounterUnit() with
+            {
+                SourceFilePath = "A/CounterView.cs",
+                QmlText = "Item { objectName: \"first\" }\n",
+                Schema = CompilerTestFixtures.CreateCounterSchema() with { ClassName = "FirstViewModel" },
+                SourceMap = null,
+            };
+            CompilationUnit second = CreateCounterUnit() with
+            {
+                SourceFilePath = "B/CounterView.cs",
+                QmlText = "Item { objectName: \"second\" }\n",
+                Schema = CompilerTestFixtures.CreateCounterSchema() with { ClassName = "SecondViewModel" },
+                SourceMap = null,
+            };
+            CompilationResult compilation = CompilationResult.FromUnits(ImmutableArray.Create(first, second));
+
+            OutputResult result = new CompilerOutputWriter().WriteOutput(compilation, options);
+
+            CompilerDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.False(result.Success);
+            Assert.Equal(DiagnosticCodes.OutputWriteFailed, diagnostic.Code);
+            Assert.Contains("Artifact path collision", diagnostic.Message, StringComparison.Ordinal);
+            Assert.Empty(result.QmlFiles);
+            Assert.Empty(result.SchemaFiles);
+            Assert.False(File.Exists(Path.Join(temp.Path, "qml", "QmlSharp", "TestApp", "CounterView.qml")));
+            Assert.False(File.Exists(Path.Join(temp.Path, "schemas", "FirstViewModel.schema.json")));
+            Assert.False(File.Exists(Path.Join(temp.Path, "schemas", "SecondViewModel.schema.json")));
         }
 
         [Fact]

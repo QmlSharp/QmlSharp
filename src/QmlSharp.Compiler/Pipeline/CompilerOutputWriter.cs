@@ -59,8 +59,14 @@ namespace QmlSharp.Compiler
             long totalBytes = 0;
             string? eventBindingsFile = null;
 
-            OutputLayout layout = OutputLayout.Create(normalizedOptions);
-            if (!TryCreateDirectories(layout, diagnostics))
+            OutputLayout? layout = OutputLayout.CreateOrReport(normalizedOptions, diagnostics);
+            if (layout is null)
+            {
+                return CreateResult(qmlFiles, schemaFiles, eventBindingsFile, sourceMapFiles, totalBytes, diagnostics);
+            }
+
+            if (!TryValidateArtifactPaths(result, normalizedOptions, layout, diagnostics)
+                || !TryCreateDirectories(layout, diagnostics))
             {
                 return CreateResult(qmlFiles, schemaFiles, eventBindingsFile, sourceMapFiles, totalBytes, diagnostics);
             }
@@ -71,12 +77,10 @@ namespace QmlSharp.Compiler
             }
 
             string eventPath = Path.Join(layout.OutputDir, EventBindingsFileName);
-            if (TrySerializeEventBindings(result.EventBindings, eventPath, diagnostics, out string eventBindingsJson))
+            if (TrySerializeEventBindings(result.EventBindings, eventPath, diagnostics, out string eventBindingsJson)
+                && TryWriteArtifact(eventPath, eventBindingsJson, DiagnosticCodes.OutputWriteFailed, diagnostics, ref totalBytes))
             {
-                if (TryWriteArtifact(eventPath, eventBindingsJson, DiagnosticCodes.OutputWriteFailed, diagnostics, ref totalBytes))
-                {
-                    eventBindingsFile = eventPath;
-                }
+                eventBindingsFile = eventPath;
             }
 
             return CreateResult(qmlFiles, schemaFiles, eventBindingsFile, sourceMapFiles, totalBytes, diagnostics);
@@ -185,6 +189,70 @@ namespace QmlSharp.Compiler
                     exception));
                 return false;
             }
+        }
+
+        private static bool TryValidateArtifactPaths(
+            CompilationResult result,
+            CompilerOptions options,
+            OutputLayout layout,
+            ImmutableArray<CompilerDiagnostic>.Builder diagnostics)
+        {
+            HashSet<string> artifactPaths = new(StringComparer.OrdinalIgnoreCase);
+            bool valid = TryReservePath(Path.Join(layout.OutputDir, EventBindingsFileName), artifactPaths, diagnostics);
+
+            foreach (CompilationUnit unit in OrderedUnits(result.Units))
+            {
+                if (unit.Schema is not null)
+                {
+                    valid &= TryReserveArtifactPath(layout.SchemaDir, unit.Schema.ClassName, ".schema.json", artifactPaths, diagnostics);
+                }
+
+                if (unit.Success && !string.IsNullOrEmpty(unit.QmlText))
+                {
+                    valid &= TryReserveArtifactPath(layout.QmlModuleDir, unit.ViewClassName, ".qml", artifactPaths, diagnostics);
+                }
+
+                if (options.GenerateSourceMaps && unit.SourceMap is not null)
+                {
+                    string mapBaseName = string.IsNullOrWhiteSpace(unit.ViewClassName)
+                        ? Path.GetFileNameWithoutExtension(unit.SourceMap.OutputFilePath)
+                        : unit.ViewClassName;
+                    valid &= TryReserveArtifactPath(layout.SourceMapDir, mapBaseName, ".qml.map", artifactPaths, diagnostics);
+                }
+            }
+
+            return valid;
+        }
+
+        private static bool TryReserveArtifactPath(
+            string directory,
+            string fileNameWithoutExtension,
+            string extension,
+            HashSet<string> artifactPaths,
+            ImmutableArray<CompilerDiagnostic>.Builder diagnostics)
+        {
+            string? path = TryBuildArtifactPath(directory, fileNameWithoutExtension, extension, diagnostics);
+            return path is not null && TryReservePath(path, artifactPaths, diagnostics);
+        }
+
+        private static bool TryReservePath(
+            string path,
+            HashSet<string> artifactPaths,
+            ImmutableArray<CompilerDiagnostic>.Builder diagnostics)
+        {
+            string normalizedPath = Path.GetFullPath(path);
+            if (artifactPaths.Add(normalizedPath))
+            {
+                return true;
+            }
+
+            diagnostics.Add(new CompilerDiagnostic(
+                DiagnosticCodes.OutputWriteFailed,
+                DiagnosticSeverity.Error,
+                $"Artifact path collision detected for '{path}'.",
+                SourceLocation.FileOnly(path),
+                PhaseName));
+            return false;
         }
 
         private bool TrySerializeSchema(
@@ -307,7 +375,7 @@ namespace QmlSharp.Compiler
             }
 
             Directory.CreateDirectory(directory);
-            string tempPath = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+            string tempPath = Path.Join(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
             try
             {
                 File.WriteAllBytes(tempPath, bytes);
@@ -355,6 +423,47 @@ namespace QmlSharp.Compiler
                 && !value.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
         }
 
+        private static bool IsSafePathSegment(string value)
+        {
+            return IsSafeFileNameStem(value)
+                && !StringComparer.Ordinal.Equals(value, ".")
+                && !StringComparer.Ordinal.Equals(value, "..");
+        }
+
+        private static bool TryBuildQmlModuleDir(
+            string outputDir,
+            string moduleUriPrefix,
+            ImmutableArray<CompilerDiagnostic>.Builder diagnostics,
+            out string? qmlModuleDir)
+        {
+            qmlModuleDir = null;
+            ImmutableArray<string>.Builder segments = ImmutableArray.CreateBuilder<string>();
+            foreach (string segment in moduleUriPrefix.Split('.'))
+            {
+                if (!IsSafePathSegment(segment))
+                {
+                    diagnostics.Add(new CompilerDiagnostic(
+                        DiagnosticCodes.OutputWriteFailed,
+                        DiagnosticSeverity.Error,
+                        $"Module URI prefix '{moduleUriPrefix}' is not safe for deterministic output layout.",
+                        SourceLocation.FileOnly(outputDir),
+                        PhaseName));
+                    return false;
+                }
+
+                segments.Add(segment);
+            }
+
+            string moduleDir = Path.Join(outputDir, "qml");
+            foreach (string segment in segments)
+            {
+                moduleDir = Path.Join(moduleDir, segment);
+            }
+
+            qmlModuleDir = moduleDir;
+            return true;
+        }
+
         private static CompilerDiagnostic CreateDiagnostic(string code, string path, string message, Exception exception)
         {
             return new CompilerDiagnostic(
@@ -396,10 +505,17 @@ namespace QmlSharp.Compiler
 
         private sealed record OutputLayout(string OutputDir, string QmlModuleDir, string SchemaDir, string SourceMapDir)
         {
-            public static OutputLayout Create(CompilerOptions options)
+            public static OutputLayout? CreateOrReport(
+                CompilerOptions options,
+                ImmutableArray<CompilerDiagnostic>.Builder diagnostics)
             {
                 string outputDir = options.OutputDir;
-                string qmlModuleDir = Path.Join(outputDir, "qml", options.ModuleUriPrefix.Replace('.', Path.DirectorySeparatorChar));
+                if (!TryBuildQmlModuleDir(outputDir, options.ModuleUriPrefix, diagnostics, out string? qmlModuleDir)
+                    || qmlModuleDir is null)
+                {
+                    return null;
+                }
+
                 string schemaDir = Path.Join(outputDir, "schemas");
                 string sourceMapDir = options.SourceMapDir ?? Path.Join(outputDir, "source-maps");
 
