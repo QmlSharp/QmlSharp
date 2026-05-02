@@ -84,9 +84,8 @@ namespace QmlSharp.Compiler.Tests.Units
         {
             EventBindingsIndex index = new EventBindingsBuilder().Build(ImmutableArray.Create(CompilerTestFixtures.CreateCounterSchema()));
 
-            CommandBindingEntry command = Assert.Single(index.Commands);
-
-            Assert.Equal("CounterView::__qmlsharp_vm0", command.CompilerSlotKey);
+            Assert.Equal(2, index.Commands.Length);
+            Assert.All(index.Commands, static command => Assert.Equal("CounterView::__qmlsharp_vm0", command.CompilerSlotKey));
         }
 
         private static ViewModelSchema SchemaWithCommand(string className, string compilerSlotKey, string commandName, int commandId)

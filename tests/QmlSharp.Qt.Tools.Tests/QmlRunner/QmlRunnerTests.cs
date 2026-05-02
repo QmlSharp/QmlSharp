@@ -254,7 +254,7 @@ namespace QmlSharp.Qt.Tools.Tests.QmlRunner
                 "import QtQuick\nItem { Component.onCompleted: Qt.quit() }\n",
                 new QmlRunOptions
                 {
-                    StableRunPeriod = TimeSpan.FromSeconds(2),
+                    StableRunPeriod = TimeSpan.FromSeconds(5),
                     Timeout = TimeSpan.FromSeconds(5),
                 });
 

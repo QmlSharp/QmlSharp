@@ -29,7 +29,7 @@ namespace QmlSharp.Compiler
                 WriteSchema(writer, schema);
             }
 
-            return Encoding.UTF8.GetString(stream.ToArray()) + "\n";
+            return NormalizeText(Encoding.UTF8.GetString(stream.ToArray()));
         }
 
         /// <summary>
@@ -257,6 +257,12 @@ namespace QmlSharp.Compiler
             }
 
             return value;
+        }
+
+        private static string NormalizeText(string text)
+        {
+            string normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+            return normalized.EndsWith("\n", StringComparison.Ordinal) ? normalized : normalized + "\n";
         }
 
         private static IEnumerable<StateEntry> Sort(ImmutableArray<StateEntry> values)
