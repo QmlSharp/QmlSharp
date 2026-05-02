@@ -57,6 +57,7 @@ namespace QmlSharp.Compiler.Tests.Options
                 "CounterView.cs",
                 "CounterView.qml",
                 ImmutableArray.Create(new SourceMapMapping(1, 1, "CounterView.cs", 10, 5)));
+            QmlLocation qmlLocation = new("CounterView.qml", 1, 1);
 
             Assert.Equal("increment", bindings.Commands.Single().CommandName);
             Assert.Empty(bindings.Commands.Single().ParameterTypes);
@@ -64,6 +65,7 @@ namespace QmlSharp.Compiler.Tests.Options
             Assert.Equal("string", bindings.Effects.Single().PayloadType);
             Assert.Equal(1, sourceMap.Mappings.Single().OutputLine);
             Assert.Equal(1, sourceMap.Mappings.Single().OutputColumn);
+            Assert.Equal(sourceMap.OutputFilePath, qmlLocation.FilePath);
         }
     }
 }

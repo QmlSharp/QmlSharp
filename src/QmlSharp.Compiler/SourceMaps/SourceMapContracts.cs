@@ -18,7 +18,7 @@ namespace QmlSharp.Compiler
         SourceLocation? FindSourceLocation(SourceMap sourceMap, string outputFilePath, int outputLine, int outputColumn);
 
         /// <summary>Finds a QML output location for an original source position.</summary>
-        SourceLocation? FindQmlLocation(SourceMap sourceMap, string sourceFilePath, int sourceLine, int sourceColumn);
+        QmlLocation? FindQmlLocation(SourceMap sourceMap, string sourceFilePath, int sourceLine, int sourceColumn);
     }
 
     /// <summary>Builds a source map incrementally.</summary>
@@ -37,6 +37,9 @@ namespace QmlSharp.Compiler
         string SourceFilePath,
         string OutputFilePath,
         ImmutableArray<SourceMapMapping> Mappings);
+
+    /// <summary>A 1-based generated QML output location.</summary>
+    public sealed record QmlLocation(string FilePath, int Line, int Column);
 
     /// <summary>One source-map mapping entry.</summary>
     public sealed record SourceMapMapping(

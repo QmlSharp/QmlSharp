@@ -25,5 +25,16 @@ namespace QmlSharp.Compiler.Tests.PostProcessing
             Assert.NotNull(registry.FindTypeByQmlName("QtQuick", "Rectangle"));
             Assert.NotNull(registry.FindTypeByQmlName("QtQuick.Controls", "Button"));
         }
+
+        [Fact]
+        [Trait("Category", TestCategories.Contract)]
+        public void RegistryFixture_InheritsFromMatchesProductionQuerySemantics()
+        {
+            IRegistryQuery registry = RegistryFixture.CreateQtQuickAndControlsRegistry();
+
+            Assert.True(registry.InheritsFrom("QtQuick.Rectangle", "QtQuick.Item"));
+            Assert.False(registry.InheritsFrom("QtQuick.Rectangle", "QtQuick.Rectangle"));
+            Assert.False(registry.InheritsFrom("QtQuick.Item", "QtQuick.Rectangle"));
+        }
     }
 }

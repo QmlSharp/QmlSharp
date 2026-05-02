@@ -127,7 +127,16 @@ namespace QmlSharp.Compiler.Tests.Fixtures
 
         public bool InheritsFrom(string qualifiedName, string baseQualifiedName)
         {
-            return GetInheritanceChain(qualifiedName).Any(type => StringComparer.Ordinal.Equals(type.QualifiedName, baseQualifiedName));
+            if (string.IsNullOrEmpty(qualifiedName)
+                || string.IsNullOrEmpty(baseQualifiedName)
+                || StringComparer.Ordinal.Equals(qualifiedName, baseQualifiedName))
+            {
+                return false;
+            }
+
+            return GetInheritanceChain(qualifiedName)
+                .Skip(1)
+                .Any(type => StringComparer.Ordinal.Equals(type.QualifiedName, baseQualifiedName));
         }
     }
 }
