@@ -86,6 +86,22 @@ namespace QmlSharp.Compiler
             _ = dependents.Add(viewFilePath);
         }
 
+        /// <summary>Gets all tracked View file paths in deterministic order.</summary>
+        public ImmutableArray<string> GetViewFiles()
+        {
+            return dependenciesByViewFile.Keys
+                .Order(StringComparer.Ordinal)
+                .ToImmutableArray();
+        }
+
+        /// <summary>Gets all tracked file content hashes in deterministic order.</summary>
+        public ImmutableArray<KeyValuePair<string, string>> GetContentHashes()
+        {
+            return contentHashesByFile
+                .OrderBy(static pair => pair.Key, StringComparer.Ordinal)
+                .ToImmutableArray();
+        }
+
         /// <summary>Gets a cached content hash for a file.</summary>
         public string? GetContentHash(string filePath)
         {
@@ -99,6 +115,28 @@ namespace QmlSharp.Compiler
             ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
             ArgumentException.ThrowIfNullOrWhiteSpace(hash);
             contentHashesByFile[filePath] = hash;
+        }
+
+        /// <summary>Removes a cached content hash for a file.</summary>
+        public void RemoveContentHash(string filePath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+            _ = contentHashesByFile.Remove(filePath);
+        }
+
+        /// <summary>Removes all dependency and hash state.</summary>
+        public void Clear()
+        {
+            dependentsByViewModel.Clear();
+            dependenciesByViewFile.Clear();
+            contentHashesByFile.Clear();
+        }
+
+        /// <summary>Removes all View to ViewModel dependency edges.</summary>
+        public void ClearDependencies()
+        {
+            dependentsByViewModel.Clear();
+            dependenciesByViewFile.Clear();
         }
     }
 }
