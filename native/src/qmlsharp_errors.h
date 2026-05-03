@@ -6,6 +6,7 @@ namespace qmlsharp {
 constexpr int QmlSharpSuccess = 0;
 constexpr int QmlSharpGeneralFailure = -1;
 constexpr int QmlSharpInvalidArgument = -2;
+constexpr int QmlSharpInstanceNotFound = -3;
 constexpr int QmlSharpEngineNotInitialized = -4;
 constexpr int QmlSharpTypeRegistrationFailure = -6;
 

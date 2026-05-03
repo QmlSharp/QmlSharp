@@ -223,7 +223,7 @@ int engine_exec(void* engine) noexcept {
     }
 }
 
-void post_to_main_thread(void (*callback)(void* user_data), void* user_data) noexcept {
+void post_to_main_thread(qmlsharp_main_thread_callback callback, void* user_data) noexcept {
     try {
         std::lock_guard<std::mutex> lock(engine_mutex);
 

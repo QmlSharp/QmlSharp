@@ -4,6 +4,7 @@
 
 #include <QCoreApplication>
 #include <QEventLoop>
+#include <QMetaObject>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QThread>
@@ -14,17 +15,42 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
+#include <set>
+#include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "RegistrationCounterViewModel.h"
 #include "RegistrationStatusViewModel.h"
+#include "qmlsharp_instances.h"
 
 namespace {
 struct CallbackProbe {
     bool called = false;
     bool ran_on_main_thread = false;
 };
+
+struct InstanceEvent {
+    std::string instance_id;
+    std::string class_name;
+    std::string compiler_slot_key;
+};
+
+struct CommandEvent {
+    std::string instance_id;
+    std::string command_name;
+    std::string args_json;
+};
+
+struct InstanceCommandProbe {
+    std::vector<InstanceEvent> created;
+    std::vector<std::string> destroyed;
+    std::vector<CommandEvent> commands;
+    bool throw_on_command = false;
+};
+
+InstanceCommandProbe* current_instance_probe = nullptr;
 
 int fail(const char* test_name, const std::string& message) {
     std::cerr << test_name << ": " << message << '\n';
@@ -49,20 +75,63 @@ void pump_events_until(const CallbackProbe& probe) {
     }
 }
 
-void main_thread_probe_callback(void* user_data) {
+void QMLSHARP_CALL main_thread_probe_callback(void* user_data) {
     auto* probe = static_cast<CallbackProbe*>(user_data);
     probe->called = true;
     probe->ran_on_main_thread =
         QCoreApplication::instance() != nullptr && QThread::currentThread() == QCoreApplication::instance()->thread();
 }
 
-void quit_callback(void* user_data) {
+void QMLSHARP_CALL quit_callback(void* user_data) {
     Q_UNUSED(user_data);
     QCoreApplication::quit();
 }
 
-void shutdown_callback(void* user_data) {
+void QMLSHARP_CALL shutdown_callback(void* user_data) {
     qmlsharp_engine_shutdown(user_data);
+}
+
+void QMLSHARP_CALL instance_created_callback(const char* instance_id, const char* class_name,
+                                             const char* compiler_slot_key) {
+    if (current_instance_probe == nullptr) {
+        return;
+    }
+
+    current_instance_probe->created.push_back(InstanceEvent{
+        instance_id == nullptr ? std::string() : std::string(instance_id),
+        class_name == nullptr ? std::string() : std::string(class_name),
+        compiler_slot_key == nullptr ? std::string() : std::string(compiler_slot_key),
+    });
+}
+
+void QMLSHARP_CALL instance_destroyed_callback(const char* instance_id) {
+    if (current_instance_probe == nullptr) {
+        return;
+    }
+
+    current_instance_probe->destroyed.push_back(instance_id == nullptr ? std::string() : std::string(instance_id));
+}
+
+void QMLSHARP_CALL command_callback(const char* instance_id, const char* command_name, const char* args_json) {
+    if (current_instance_probe == nullptr) {
+        return;
+    }
+
+    if (current_instance_probe->throw_on_command) {
+        throw std::runtime_error("simulated managed command failure");
+    }
+
+    current_instance_probe->commands.push_back(CommandEvent{
+        instance_id == nullptr ? std::string() : std::string(instance_id),
+        command_name == nullptr ? std::string() : std::string(command_name),
+        args_json == nullptr ? std::string() : std::string(args_json),
+    });
+}
+
+void clear_instance_command_callbacks() {
+    qmlsharp_set_command_callback(nullptr);
+    qmlsharp_set_instance_callbacks(nullptr, nullptr);
+    current_instance_probe = nullptr;
 }
 
 void configure_headless_qt() {
@@ -71,18 +140,18 @@ void configure_headless_qt() {
     }
 }
 
-int32_t register_counter_type(const char* module_uri, int32_t version_major, int32_t version_minor,
-                              const char* type_name) {
+int32_t QMLSHARP_CALL register_counter_type(const char* module_uri, int32_t version_major, int32_t version_minor,
+                                            const char* type_name) {
     return qmlRegisterType<RegistrationCounterViewModel>(module_uri, version_major, version_minor, type_name);
 }
 
-int32_t register_status_type(const char* module_uri, int32_t version_major, int32_t version_minor,
-                             const char* type_name) {
+int32_t QMLSHARP_CALL register_status_type(const char* module_uri, int32_t version_major, int32_t version_minor,
+                                           const char* type_name) {
     return qmlRegisterType<RegistrationStatusViewModel>(module_uri, version_major, version_minor, type_name);
 }
 
-int32_t register_status_type_after_one_failure(const char* module_uri, int32_t version_major, int32_t version_minor,
-                                               const char* type_name) {
+int32_t QMLSHARP_CALL register_status_type_after_one_failure(const char* module_uri, int32_t version_major,
+                                                             int32_t version_minor, const char* type_name) {
     static int attempts = 0;
     ++attempts;
     if (attempts == 1) {
@@ -101,6 +170,34 @@ std::unique_ptr<QObject> create_qml_object(QQmlEngine& qml_engine, const char* q
     }
 
     return object;
+}
+
+int register_instance_counter_type(void* engine, const char* module_uri, const char* type_name) {
+    return qmlsharp_register_type(engine, module_uri, 1, 0, type_name, "schema-instance-counter",
+                                  "RegistrationView::__qmlsharp_vm0", register_counter_type);
+}
+
+std::unique_ptr<QObject> create_counter_instance(QQmlEngine& qml_engine, const char* module_uri, const char* type_name,
+                                                 std::string& error) {
+    const std::string qml_source = std::string("import ") + module_uri + " 1.0\n" + type_name + " {}\n";
+    return create_qml_object(qml_engine, qml_source.c_str(), error);
+}
+
+bool invoke_no_arg_command(QObject* object, const char* command_name) {
+    return QMetaObject::invokeMethod(object, command_name, Qt::DirectConnection);
+}
+
+bool invoke_int_command(QObject* object, const char* command_name, int value) {
+    return QMetaObject::invokeMethod(object, command_name, Qt::DirectConnection, Q_ARG(int, value));
+}
+
+bool invoke_string_command(QObject* object, const char* command_name, const QString& value) {
+    return QMetaObject::invokeMethod(object, command_name, Qt::DirectConnection, Q_ARG(QString, value));
+}
+
+bool invoke_mixed_command(QObject* object, int number, const QString& text, bool enabled) {
+    return QMetaObject::invokeMethod(object, "commandMixed", Qt::DirectConnection, Q_ARG(int, number),
+                                     Q_ARG(QString, text), Q_ARG(bool, enabled));
 }
 
 int test_abi_version_and_initial_error() {
@@ -582,6 +679,717 @@ int test_registration_preserves_schema_metadata() {
     return EXIT_SUCCESS;
 }
 
+int test_instance_created_callback_receives_identity() {
+    constexpr const char* test_name = "INS-01 instance creation callback";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeInstance.Created";
+    const char* type_name = "InstanceCreatedCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    const std::string object_id = object->property("instanceId").toString().toStdString();
+    const bool found_native_object = qmlsharp::find_instance_object(object_id.c_str()) == object.get();
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (probe.created.size() != 1U) {
+        return fail(test_name, "creation callback should fire exactly once.");
+    }
+
+    if (probe.created[0].instance_id.empty() || probe.created[0].instance_id != object_id) {
+        return fail(test_name, "creation callback did not receive the generated instanceId.");
+    }
+
+    if (probe.created[0].class_name != "RegistrationCounterViewModel") {
+        return fail(test_name, "creation callback did not receive the fixture className.");
+    }
+
+    if (probe.created[0].compiler_slot_key != "RegistrationView::__qmlsharp_vm0") {
+        return fail(test_name, "creation callback did not receive the compilerSlotKey.");
+    }
+
+    if (!found_native_object) {
+        return fail(test_name, "native instance lookup did not return the generated QObject handle.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_instance_destroyed_callback_receives_same_instance_id() {
+    constexpr const char* test_name = "INS-02 instance destruction callback";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeInstance.Destroyed";
+    const char* type_name = "InstanceDestroyedCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    const std::string instance_id = probe.created[0].instance_id;
+    object.reset();
+    const bool lookup_cleared = qmlsharp::find_instance_object(instance_id.c_str()) == nullptr;
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (probe.destroyed.size() != 1U || probe.destroyed[0] != instance_id) {
+        return fail(test_name, "destruction callback should receive the same instanceId from creation.");
+    }
+
+    if (!lookup_cleared) {
+        return fail(test_name, "destroyed instances should be removed from native lookup.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_instance_ready_opens_gate_for_immediate_commands() {
+    constexpr const char* test_name = "INS-03 instance_ready opens ready gate";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(command_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeInstance.Ready";
+    const char* type_name = "InstanceReadyCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    qmlsharp_instance_ready(probe.created[0].instance_id.c_str());
+    const bool invoked = invoke_no_arg_command(object.get(), "commandNoArgs");
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (!invoked) {
+        return fail(test_name, "QMetaObject could not invoke the generated-test command.");
+    }
+
+    if (probe.commands.size() != 1U || probe.commands[0].command_name != "commandNoArgs") {
+        return fail(test_name, "command callback should fire immediately after the ready gate opens.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_commands_before_ready_are_queued() {
+    constexpr const char* test_name = "INS-04 commands before ready are queued";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(command_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeInstance.Queue";
+    const char* type_name = "InstanceQueueCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    const bool invoked = invoke_no_arg_command(object.get(), "commandNoArgs");
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (!invoked) {
+        return fail(test_name, "QMetaObject could not invoke the queued command.");
+    }
+
+    if (!probe.commands.empty()) {
+        return fail(test_name, "pre-ready command should not dispatch before instance_ready.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_queued_commands_flush_in_order_on_ready() {
+    constexpr const char* test_name = "INS-05 queued commands flush in order";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(command_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeInstance.Flush";
+    const char* type_name = "InstanceFlushCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    const bool first = invoke_int_command(object.get(), "commandInt", 1);
+    const bool second = invoke_string_command(object.get(), "commandString", QStringLiteral("two"));
+    const bool third = invoke_mixed_command(object.get(), 3, QStringLiteral("four"), true);
+    if (!first || !second || !third) {
+        object.reset();
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, "QMetaObject could not invoke queued commands.");
+    }
+
+    if (!probe.commands.empty()) {
+        object.reset();
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, "commands should remain queued until instance_ready.");
+    }
+
+    qmlsharp_instance_ready(probe.created[0].instance_id.c_str());
+    qmlsharp_instance_ready(probe.created[0].instance_id.c_str());
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (probe.commands.size() != 3U) {
+        return fail(test_name, "ready should flush each queued command exactly once.");
+    }
+
+    if (probe.commands[0].command_name != "commandInt" || probe.commands[0].args_json != "[1]") {
+        return fail(test_name, "first queued command did not preserve name and payload.");
+    }
+
+    if (probe.commands[1].command_name != "commandString" || probe.commands[1].args_json != "[\"two\"]") {
+        return fail(test_name, "second queued command did not preserve name and payload.");
+    }
+
+    if (probe.commands[2].command_name != "commandMixed" || probe.commands[2].args_json != "[3,\"four\",true]") {
+        return fail(test_name, "third queued command did not preserve name, payload, and order.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_multiple_instances_get_unique_ids() {
+    constexpr const char* test_name = "INS-06 multiple instances get unique instanceIds";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeInstance.Unique";
+    const char* type_name = "InstanceUniqueCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string first_error;
+    std::unique_ptr<QObject> first = create_counter_instance(qml_engine, module_uri, type_name, first_error);
+    std::string second_error;
+    std::unique_ptr<QObject> second = create_counter_instance(qml_engine, module_uri, type_name, second_error);
+    std::string third_error;
+    std::unique_ptr<QObject> third = create_counter_instance(qml_engine, module_uri, type_name, third_error);
+    if (first == nullptr || second == nullptr || third == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, first_error + second_error + third_error);
+    }
+
+    const int active_count = qmlsharp::active_instance_count();
+    first.reset();
+    second.reset();
+    third.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    std::set<std::string> instance_ids;
+    for (const InstanceEvent& event : probe.created) {
+        instance_ids.insert(event.instance_id);
+    }
+
+    if (probe.created.size() != 3U || instance_ids.size() != 3U) {
+        return fail(test_name, "three active instances should produce three distinct instanceIds.");
+    }
+
+    if (active_count < 3) {
+        return fail(test_name, "native registry did not retain all active instances before destruction.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_instance_ready_unknown_instance_is_safe() {
+    constexpr const char* test_name = "INS-07 instance_ready with unknown instanceId";
+    qmlsharp_instance_ready("unknown-instance-id");
+    const std::string error = read_last_error();
+    clear_instance_command_callbacks();
+
+    if (!error.empty()) {
+        return fail(test_name, "unknown instance_ready should be ignored without a stable error.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_command_dispatch_invocable_fires_callback() {
+    constexpr const char* test_name = "CMD-01 QML invocable command callback";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(command_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeCommand.Callback";
+    const char* type_name = "CommandCallbackCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    qmlsharp_instance_ready(probe.created[0].instance_id.c_str());
+    const bool invoked = invoke_no_arg_command(object.get(), "increment");
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (!invoked || probe.commands.size() != 1U) {
+        return fail(test_name, "increment should invoke the command callback once.");
+    }
+
+    if (probe.commands[0].instance_id != probe.created[0].instance_id ||
+        probe.commands[0].command_name != "increment" || probe.commands[0].args_json != "[]") {
+        return fail(test_name, "command callback did not receive the expected instanceId, commandName, and argsJson.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_command_dispatch_no_arguments_uses_empty_json_array() {
+    constexpr const char* test_name = "CMD-02 command with no arguments";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(command_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeCommand.NoArgs";
+    const char* type_name = "CommandNoArgsCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    qmlsharp_instance_ready(probe.created[0].instance_id.c_str());
+    const bool invoked = invoke_no_arg_command(object.get(), "commandNoArgs");
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (!invoked || probe.commands.empty() || probe.commands[0].args_json != "[]") {
+        return fail(test_name, "no-argument command should dispatch an empty JSON array.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_command_dispatch_int_argument_serializes_payload() {
+    constexpr const char* test_name = "CMD-03 command with int argument";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(command_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeCommand.Int";
+    const char* type_name = "CommandIntCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    qmlsharp_instance_ready(probe.created[0].instance_id.c_str());
+    const bool invoked = invoke_int_command(object.get(), "commandInt", 42);
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (!invoked || probe.commands.empty() || probe.commands[0].args_json != "[42]") {
+        return fail(test_name, "int command should dispatch a numeric JSON array payload.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_command_dispatch_string_argument_serializes_payload() {
+    constexpr const char* test_name = "CMD-04 command with string argument";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(command_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeCommand.String";
+    const char* type_name = "CommandStringCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    qmlsharp_instance_ready(probe.created[0].instance_id.c_str());
+    const bool invoked = invoke_string_command(object.get(), "commandString", QStringLiteral("hello"));
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (!invoked || probe.commands.empty() || probe.commands[0].args_json != "[\"hello\"]") {
+        return fail(test_name, "string command should dispatch a quoted JSON array payload.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_command_dispatch_multiple_arguments_preserves_order() {
+    constexpr const char* test_name = "CMD-05 command with multiple arguments";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(command_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeCommand.Mixed";
+    const char* type_name = "CommandMixedCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    qmlsharp_instance_ready(probe.created[0].instance_id.c_str());
+    const bool invoked = invoke_mixed_command(object.get(), 1, QStringLiteral("two"), true);
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (!invoked || probe.commands.empty() || probe.commands[0].args_json != "[1,\"two\",true]") {
+        return fail(test_name, "multi-argument command should preserve argument order in argsJson.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_command_dispatch_without_callback_does_not_crash() {
+    constexpr const char* test_name = "CMD-06 command callback not set";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(nullptr);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeCommand.NoCallback";
+    const char* type_name = "CommandNoCallbackCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    qmlsharp_instance_ready(probe.created[0].instance_id.c_str());
+    const bool invoked = invoke_no_arg_command(object.get(), "commandNoArgs");
+    const std::string last_error = read_last_error();
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (!invoked) {
+        return fail(test_name, "QMetaObject could not invoke command without callback.");
+    }
+
+    if (!last_error.empty()) {
+        return fail(test_name, "missing command callback should not produce a native error.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_command_callback_failure_is_reported_without_crash() {
+    constexpr const char* test_name = "command callback failure is surfaced";
+    InstanceCommandProbe probe;
+    probe.throw_on_command = true;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(command_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeCommand.Failure";
+    const char* type_name = "CommandFailureCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    qmlsharp_instance_ready(probe.created[0].instance_id.c_str());
+    const bool invoked = invoke_no_arg_command(object.get(), "commandNoArgs");
+    const std::string callback_error = read_last_error();
+    object.reset();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (!invoked) {
+        return fail(test_name, "QMetaObject command invocation should complete even when callback fails.");
+    }
+
+    if (callback_error.find("Command callback failed") == std::string::npos) {
+        return fail(test_name, "callback failure should be surfaced through qmlsharp_get_last_error.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_destroyed_instance_teardown_is_idempotent_and_drops_commands() {
+    constexpr const char* test_name = "after-dispose command behavior";
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+    qmlsharp_set_command_callback(command_callback);
+
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeInstance.Dispose";
+    const char* type_name = "InstanceDisposeCounter";
+    if (register_instance_counter_type(engine, module_uri, type_name) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string error;
+    std::unique_ptr<QObject> object = create_counter_instance(qml_engine, module_uri, type_name, error);
+    if (object == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        clear_instance_command_callbacks();
+        return fail(test_name, error);
+    }
+
+    const std::string instance_id = probe.created[0].instance_id;
+    qmlsharp_instance_ready(instance_id.c_str());
+    object.reset();
+    qmlsharp::notify_instance_destroyed(QString::fromStdString(instance_id));
+    qmlsharp::dispatch_command(QString::fromStdString(instance_id), QStringLiteral("commandNoArgs"),
+                               QStringLiteral("[]"));
+    qmlsharp_instance_ready(instance_id.c_str());
+    const std::string last_error = read_last_error();
+    qmlsharp_engine_shutdown(engine);
+    clear_instance_command_callbacks();
+
+    if (probe.destroyed.size() != 1U) {
+        return fail(test_name, "teardown should notify destruction exactly once.");
+    }
+
+    if (!probe.commands.empty()) {
+        return fail(test_name, "commands for destroyed instances should be dropped.");
+    }
+
+    if (!last_error.empty()) {
+        return fail(test_name, "idempotent teardown and after-dispose calls should not leave a native error.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int run_test(int (*test)()) {
     const int result = test();
     if (result != EXIT_SUCCESS) {
@@ -614,6 +1422,21 @@ int main() {
     result |= run_test(test_register_module_callback_failure_is_retry_safe);
     result |= run_test(test_register_module_valid_entries_registers_all_types);
     result |= run_test(test_registration_preserves_schema_metadata);
+    result |= run_test(test_instance_created_callback_receives_identity);
+    result |= run_test(test_instance_destroyed_callback_receives_same_instance_id);
+    result |= run_test(test_instance_ready_opens_gate_for_immediate_commands);
+    result |= run_test(test_commands_before_ready_are_queued);
+    result |= run_test(test_queued_commands_flush_in_order_on_ready);
+    result |= run_test(test_multiple_instances_get_unique_ids);
+    result |= run_test(test_instance_ready_unknown_instance_is_safe);
+    result |= run_test(test_command_dispatch_invocable_fires_callback);
+    result |= run_test(test_command_dispatch_no_arguments_uses_empty_json_array);
+    result |= run_test(test_command_dispatch_int_argument_serializes_payload);
+    result |= run_test(test_command_dispatch_string_argument_serializes_payload);
+    result |= run_test(test_command_dispatch_multiple_arguments_preserves_order);
+    result |= run_test(test_command_dispatch_without_callback_does_not_crash);
+    result |= run_test(test_command_callback_failure_is_reported_without_crash);
+    result |= run_test(test_destroyed_instance_teardown_is_idempotent_and_drops_commands);
 
     return result;
 }

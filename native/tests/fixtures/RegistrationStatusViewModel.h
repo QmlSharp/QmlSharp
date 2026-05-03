@@ -12,6 +12,7 @@ class RegistrationStatusViewModel : public QObject {
 
 public:
     explicit RegistrationStatusViewModel(QObject* parent = nullptr);
+    ~RegistrationStatusViewModel() override;
 
     QString instanceId() const;
     QString compilerSlotKey() const;

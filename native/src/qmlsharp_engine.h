@@ -1,5 +1,7 @@
 #pragma once
 
+#include "qmlsharp/qmlsharp_abi.h"
+
 #include <QObject>
 #include <QQmlEngine>
 #include <memory>
@@ -21,6 +23,6 @@ private:
 void* engine_init(int argc, const char** argv) noexcept;
 void engine_shutdown(void* engine) noexcept;
 int engine_exec(void* engine) noexcept;
-void post_to_main_thread(void (*callback)(void* user_data), void* user_data) noexcept;
+void post_to_main_thread(qmlsharp_main_thread_callback callback, void* user_data) noexcept;
 bool validate_engine_call(void* engine, const char* operation) noexcept;
 }  // namespace qmlsharp
