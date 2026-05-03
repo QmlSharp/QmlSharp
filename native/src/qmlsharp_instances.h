@@ -3,7 +3,9 @@
 #include "qmlsharp/qmlsharp_abi.h"
 
 #include <QObject>
+#include <QPointer>
 #include <QString>
+#include <vector>
 
 namespace qmlsharp {
 void set_instance_callbacks(qmlsharp_instance_created_cb on_created,
@@ -17,5 +19,6 @@ void notify_instance_destroyed(const QString& instance_id) noexcept;
 void dispatch_command(const QString& instance_id, const QString& command_name, const QString& args_json) noexcept;
 
 QObject* find_instance_object(const char* instance_id) noexcept;
+std::vector<QPointer<QObject>> find_instance_objects_by_class(const char* class_name) noexcept;
 int active_instance_count() noexcept;
 }  // namespace qmlsharp

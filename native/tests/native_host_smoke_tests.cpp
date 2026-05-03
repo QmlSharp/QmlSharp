@@ -11,6 +11,7 @@
 #include <QUrl>
 #include <QVariant>
 #include <QtGlobal>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -41,6 +42,11 @@ struct CommandEvent {
     std::string instance_id;
     std::string command_name;
     std::string args_json;
+};
+
+struct EffectEvent {
+    std::string effect_name;
+    std::string payload_json;
 };
 
 struct InstanceCommandProbe {
@@ -133,6 +139,40 @@ void clear_instance_command_callbacks() {
     qmlsharp_set_instance_callbacks(nullptr, nullptr);
     current_instance_probe = nullptr;
 }
+
+class CounterFixture final {
+public:
+    CounterFixture() {
+        engine_ = qmlsharp_engine_init(0, nullptr);
+        if (engine_ == nullptr) {
+            return;
+        }
+
+        counter_ = std::make_unique<RegistrationCounterViewModel>();
+        instance_id_ = counter_->instanceId().toStdString();
+    }
+
+    ~CounterFixture() {
+        counter_.reset();
+        if (engine_ != nullptr) {
+            qmlsharp_engine_shutdown(engine_);
+        }
+    }
+
+    CounterFixture(const CounterFixture&) = delete;
+    CounterFixture& operator=(const CounterFixture&) = delete;
+
+    bool valid() const noexcept { return engine_ != nullptr && counter_ != nullptr; }
+
+    RegistrationCounterViewModel* counter() const noexcept { return counter_.get(); }
+
+    const std::string& instance_id() const noexcept { return instance_id_; }
+
+private:
+    void* engine_ = nullptr;
+    std::unique_ptr<RegistrationCounterViewModel> counter_;
+    std::string instance_id_;
+};
 
 void configure_headless_qt() {
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
@@ -1390,6 +1430,483 @@ int test_destroyed_instance_teardown_is_idempotent_and_drops_commands() {
     return EXIT_SUCCESS;
 }
 
+int test_state_sync_int_updates_property_and_notify() {
+    constexpr const char* test_name = "SSY-01 int state sync updates property";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    int notify_count = 0;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::countChanged,
+                     [&notify_count]() { ++notify_count; });
+
+    const int result = qmlsharp_sync_state_int(fixture.instance_id().c_str(), "count", 41);
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    if (fixture.counter()->count() != 41 || notify_count != 1) {
+        return fail(test_name, "count state sync should update the property and emit one NOTIFY signal.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_double_updates_property_and_notify() {
+    constexpr const char* test_name = "SSY-02 double state sync updates property";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    int notify_count = 0;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::ratioChanged,
+                     [&notify_count]() { ++notify_count; });
+
+    const int result = qmlsharp_sync_state_double(fixture.instance_id().c_str(), "ratio", 3.25);
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    if (!qFuzzyCompare(fixture.counter()->ratio() + 1.0, 4.25) || notify_count != 1) {
+        return fail(test_name, "double state sync should update ratio and emit one NOTIFY signal.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_bool_true_updates_property_and_notify() {
+    constexpr const char* test_name = "SSY-03 bool true state sync updates property";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    int notify_count = 0;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::enabledChanged,
+                     [&notify_count]() { ++notify_count; });
+
+    const int result = qmlsharp_sync_state_bool(fixture.instance_id().c_str(), "enabled", 1);
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    if (!fixture.counter()->enabled() || notify_count != 1) {
+        return fail(test_name, "bool true state sync should update enabled and emit one NOTIFY signal.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_bool_false_updates_property_and_notify() {
+    constexpr const char* test_name = "SSY-04 bool false state sync updates property";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    fixture.counter()->setEnabled(true);
+    int notify_count = 0;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::enabledChanged,
+                     [&notify_count]() { ++notify_count; });
+
+    const int result = qmlsharp_sync_state_bool(fixture.instance_id().c_str(), "enabled", 0);
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    if (fixture.counter()->enabled() || notify_count != 1) {
+        return fail(test_name, "bool false state sync should update enabled and emit one NOTIFY signal.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_string_updates_property_and_handles_null_as_empty() {
+    constexpr const char* test_name = "SSY-05 string state sync updates property";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    int notify_count = 0;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::titleChanged,
+                     [&notify_count]() { ++notify_count; });
+
+    int result = qmlsharp_sync_state_string(fixture.instance_id().c_str(), "title", "ready");
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    result = qmlsharp_sync_state_string(fixture.instance_id().c_str(), "title", nullptr);
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    if (!fixture.counter()->title().isEmpty() || notify_count != 2) {
+        return fail(test_name, "string state sync should set UTF-8 strings and map null to an empty QString.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_string_preserves_utf8() {
+    constexpr const char* test_name = "SSY-06 string state sync preserves UTF-8";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    const char* unicode_text =
+        "state "
+        "\xE6\xBC\xA2\xE5\xAD\x97"
+        " "
+        "\xF0\x9F\x9A\x80";
+    const int result = qmlsharp_sync_state_string(fixture.instance_id().c_str(), "title", unicode_text);
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    if (fixture.counter()->title() != QString::fromUtf8(unicode_text)) {
+        return fail(test_name, "UTF-8 state sync should preserve non-ASCII text.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_json_updates_complex_property() {
+    constexpr const char* test_name = "SSY-07 JSON fallback state sync updates complex property";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    int notify_count = 0;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::metadataChanged,
+                     [&notify_count]() { ++notify_count; });
+
+    const int result =
+        qmlsharp_sync_state_json(fixture.instance_id().c_str(), "metadata", "{\"answer\":42,\"nested\":{\"ok\":true}}");
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    const QVariantMap metadata = fixture.counter()->metadata().toMap();
+    const QVariantMap nested = metadata.value(QStringLiteral("nested")).toMap();
+    if (metadata.value(QStringLiteral("answer")).toInt() != 42 || !nested.value(QStringLiteral("ok")).toBool() ||
+        notify_count != 1) {
+        return fail(test_name, "JSON state sync should store the complex payload and emit one NOTIFY signal.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_batch_updates_properties_deterministically() {
+    constexpr const char* test_name = "SSY-08 batch state sync updates properties";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    int count_notifications = 0;
+    int enabled_notifications = 0;
+    int metadata_notifications = 0;
+    int ratio_notifications = 0;
+    int title_notifications = 0;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::countChanged,
+                     [&count_notifications]() { ++count_notifications; });
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::enabledChanged,
+                     [&enabled_notifications]() { ++enabled_notifications; });
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::metadataChanged,
+                     [&metadata_notifications]() { ++metadata_notifications; });
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::ratioChanged,
+                     [&ratio_notifications]() { ++ratio_notifications; });
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::titleChanged,
+                     [&title_notifications]() { ++title_notifications; });
+
+    const char* updates =
+        "{\"title\":\"batch\",\"ratio\":2.5,\"metadata\":{\"key\":\"value\"},\"enabled\":true,"
+        "\"count\":7}";
+    const int result = qmlsharp_sync_state_batch(fixture.instance_id().c_str(), updates);
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    const QVariantMap metadata = fixture.counter()->metadata().toMap();
+    if (fixture.counter()->count() != 7 || !fixture.counter()->enabled() ||
+        !qFuzzyCompare(fixture.counter()->ratio() + 1.0, 3.5) ||
+        fixture.counter()->title() != QStringLiteral("batch") ||
+        metadata.value(QStringLiteral("key")).toString() != QStringLiteral("value")) {
+        return fail(test_name, "batch state sync did not apply all expected property values.");
+    }
+
+    if (count_notifications != 1 || enabled_notifications != 1 || metadata_notifications != 1 ||
+        ratio_notifications != 1 || title_notifications != 1) {
+        return fail(test_name, "batch state sync should emit one NOTIFY signal for each changed property.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_batch_partial_failure_is_all_or_nothing() {
+    constexpr const char* test_name = "SSY-08B batch state sync partial failure";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    fixture.counter()->setCount(3);
+    fixture.counter()->setTitle(QStringLiteral("stable"));
+    int count_notifications = 0;
+    int title_notifications = 0;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::countChanged,
+                     [&count_notifications]() { ++count_notifications; });
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::titleChanged,
+                     [&title_notifications]() { ++title_notifications; });
+
+    const int result =
+        qmlsharp_sync_state_batch(fixture.instance_id().c_str(), "{\"count\":9,\"missing\":true,\"title\":\"bad\"}");
+    const std::string error = read_last_error();
+    if (result != -7 || error.find("missing") == std::string::npos) {
+        return fail(test_name, "batch partial failure should report the unknown property.");
+    }
+
+    if (fixture.counter()->count() != 3 || fixture.counter()->title() != QStringLiteral("stable") ||
+        count_notifications != 0 || title_notifications != 0) {
+        return fail(test_name, "batch partial failure should leave all properties unchanged.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_unknown_instance_reports_error() {
+    constexpr const char* test_name = "SSY-09 unknown instance state sync";
+    const int result = qmlsharp_sync_state_int("missing-instance", "count", 1);
+    const std::string error = read_last_error();
+
+    if (result != -3 || error.find("missing-instance") == std::string::npos) {
+        return fail(test_name, "unknown instance state sync should return the instance-not-found error.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_unknown_property_reports_error() {
+    constexpr const char* test_name = "SSY-10 unknown property state sync";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    fixture.counter()->setCount(5);
+    const int result = qmlsharp_sync_state_int(fixture.instance_id().c_str(), "missingProperty", 99);
+    const std::string error = read_last_error();
+
+    if (result != -7 || error.find("missingProperty") == std::string::npos) {
+        return fail(test_name, "unknown property state sync should return the property-not-found error.");
+    }
+
+    if (fixture.counter()->count() != 5) {
+        return fail(test_name, "unknown property state sync should leave existing properties unchanged.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_state_sync_from_background_thread_marshal_to_qobject_thread() {
+    constexpr const char* test_name = "SSY-01B state sync marshals to QObject thread";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    bool notify_on_object_thread = false;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::countChanged,
+                     [&fixture, &notify_on_object_thread]() {
+                         notify_on_object_thread = QThread::currentThread() == fixture.counter()->thread();
+                     });
+
+    std::atomic_bool done = false;
+    int result = -1;
+    std::thread worker([&fixture, &done, &result]() {
+        result = qmlsharp_sync_state_int(fixture.instance_id().c_str(), "count", 84);
+        done = true;
+    });
+
+    for (int attempt = 0; attempt < 100 && !done; ++attempt) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(1);
+    }
+
+    worker.join();
+
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    if (fixture.counter()->count() != 84 || !notify_on_object_thread) {
+        return fail(test_name, "background state sync should update the QObject on its owning thread.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_effect_dispatch_emits_signal_and_preserves_order() {
+    constexpr const char* test_name = "EFF-01 effect dispatch emits signal";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    std::vector<EffectEvent> events;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::effectDispatched,
+                     [&events](const QString& effectName, const QString& payloadJson) {
+                         events.push_back(EffectEvent{effectName.toStdString(), payloadJson.toStdString()});
+                     });
+
+    const int first = qmlsharp_dispatch_effect(fixture.instance_id().c_str(), "showToast", "{\"message\":\"first\"}");
+    const int second = qmlsharp_dispatch_effect(fixture.instance_id().c_str(), "showToast", "{\"message\":\"second\"}");
+    if (first != 0 || second != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    if (events.size() != 2U || events[0].effect_name != "showToast" ||
+        events[0].payload_json != "{\"message\":\"first\"}" || events[1].payload_json != "{\"message\":\"second\"}") {
+        return fail(test_name, "effect dispatch should emit signals in payload order.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_effect_dispatch_empty_payload_defaults_to_object() {
+    constexpr const char* test_name = "EFF-02 effect dispatch empty payload";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    std::vector<EffectEvent> events;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::effectDispatched,
+                     [&events](const QString& effectName, const QString& payloadJson) {
+                         events.push_back(EffectEvent{effectName.toStdString(), payloadJson.toStdString()});
+                     });
+
+    const int result = qmlsharp_dispatch_effect(fixture.instance_id().c_str(), "emptyPayload", "");
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    if (events.size() != 1U || events[0].payload_json != "{}") {
+        return fail(test_name, "empty effect payload should dispatch as an empty JSON object.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_effect_dispatch_unknown_instance_reports_error() {
+    constexpr const char* test_name = "EFF-03 unknown instance effect dispatch";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    std::vector<EffectEvent> events;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::effectDispatched,
+                     [&events](const QString& effectName, const QString& payloadJson) {
+                         events.push_back(EffectEvent{effectName.toStdString(), payloadJson.toStdString()});
+                     });
+
+    const int result = qmlsharp_dispatch_effect("missing-instance", "showToast", "{}");
+    const std::string error = read_last_error();
+    if (result != -3 || error.find("missing-instance") == std::string::npos) {
+        return fail(test_name, "unknown instance effect dispatch should return the instance-not-found error.");
+    }
+
+    if (!events.empty()) {
+        return fail(test_name, "unknown instance effect dispatch should not emit any signal.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_effect_broadcast_emits_to_all_class_instances() {
+    constexpr const char* test_name = "EFF-04 broadcast effect emits to all class instances";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    auto first = std::make_unique<RegistrationCounterViewModel>();
+    auto second = std::make_unique<RegistrationCounterViewModel>();
+    auto third = std::make_unique<RegistrationCounterViewModel>();
+    std::vector<EffectEvent> first_events;
+    std::vector<EffectEvent> second_events;
+    std::vector<EffectEvent> third_events;
+    QObject::connect(first.get(), &RegistrationCounterViewModel::effectDispatched,
+                     [&first_events](const QString& effectName, const QString& payloadJson) {
+                         first_events.push_back(EffectEvent{effectName.toStdString(), payloadJson.toStdString()});
+                     });
+    QObject::connect(second.get(), &RegistrationCounterViewModel::effectDispatched,
+                     [&second_events](const QString& effectName, const QString& payloadJson) {
+                         second_events.push_back(EffectEvent{effectName.toStdString(), payloadJson.toStdString()});
+                     });
+    QObject::connect(third.get(), &RegistrationCounterViewModel::effectDispatched,
+                     [&third_events](const QString& effectName, const QString& payloadJson) {
+                         third_events.push_back(EffectEvent{effectName.toStdString(), payloadJson.toStdString()});
+                     });
+
+    const int result = qmlsharp_broadcast_effect("RegistrationCounterViewModel", "broadcast", "{\"value\":1}");
+    const std::string error = read_last_error();
+    first.reset();
+    second.reset();
+    third.reset();
+    qmlsharp_engine_shutdown(engine);
+
+    if (result != 0) {
+        return fail(test_name, error);
+    }
+
+    if (first_events.size() != 1U || second_events.size() != 1U || third_events.size() != 1U ||
+        first_events[0].payload_json != "{\"value\":1}" || second_events[0].effect_name != "broadcast" ||
+        third_events[0].effect_name != "broadcast") {
+        return fail(test_name, "broadcast effect should emit to every active instance of the class.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_effect_broadcast_with_no_active_instances_is_success() {
+    constexpr const char* test_name = "EFF-05 broadcast effect without active instances";
+    const int result = qmlsharp_broadcast_effect("RegistrationCounterViewModel", "broadcast", "{}");
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    const std::string error = read_last_error();
+    if (!error.empty()) {
+        return fail(test_name, "broadcast without active instances should not leave a native error.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_effect_dispatch_invalid_payload_reports_json_error() {
+    constexpr const char* test_name = "EFF-01B effect dispatch invalid payload";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    const int result = qmlsharp_dispatch_effect(fixture.instance_id().c_str(), "showToast", "{invalid");
+    const std::string error = read_last_error();
+    if (result != -8 || error.find("invalid JSON") == std::string::npos) {
+        return fail(test_name, "invalid effect payload should return the JSON parse error.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int run_test(int (*test)()) {
     const int result = test();
     if (result != EXIT_SUCCESS) {
@@ -1437,6 +1954,24 @@ int main() {
     result |= run_test(test_command_dispatch_without_callback_does_not_crash);
     result |= run_test(test_command_callback_failure_is_reported_without_crash);
     result |= run_test(test_destroyed_instance_teardown_is_idempotent_and_drops_commands);
+    result |= run_test(test_state_sync_int_updates_property_and_notify);
+    result |= run_test(test_state_sync_double_updates_property_and_notify);
+    result |= run_test(test_state_sync_bool_true_updates_property_and_notify);
+    result |= run_test(test_state_sync_bool_false_updates_property_and_notify);
+    result |= run_test(test_state_sync_string_updates_property_and_handles_null_as_empty);
+    result |= run_test(test_state_sync_string_preserves_utf8);
+    result |= run_test(test_state_sync_json_updates_complex_property);
+    result |= run_test(test_state_sync_batch_updates_properties_deterministically);
+    result |= run_test(test_state_sync_batch_partial_failure_is_all_or_nothing);
+    result |= run_test(test_state_sync_unknown_instance_reports_error);
+    result |= run_test(test_state_sync_unknown_property_reports_error);
+    result |= run_test(test_state_sync_from_background_thread_marshal_to_qobject_thread);
+    result |= run_test(test_effect_dispatch_emits_signal_and_preserves_order);
+    result |= run_test(test_effect_dispatch_empty_payload_defaults_to_object);
+    result |= run_test(test_effect_dispatch_unknown_instance_reports_error);
+    result |= run_test(test_effect_broadcast_emits_to_all_class_instances);
+    result |= run_test(test_effect_broadcast_with_no_active_instances_is_success);
+    result |= run_test(test_effect_dispatch_invalid_payload_reports_json_error);
 
     return result;
 }

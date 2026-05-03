@@ -298,6 +298,23 @@ QObject* find_instance_object(const char* instance_id) noexcept {
     return existing->second.object.data();
 }
 
+std::vector<QPointer<QObject>> find_instance_objects_by_class(const char* class_name) noexcept {
+    std::vector<QPointer<QObject>> matches;
+    if (is_blank(class_name)) {
+        return matches;
+    }
+
+    std::lock_guard<std::mutex> lock(instance_mutex);
+    for (const auto& [unused_instance_id, record] : instances) {
+        Q_UNUSED(unused_instance_id);
+        if (record.class_name == class_name && !record.object.isNull()) {
+            matches.push_back(record.object);
+        }
+    }
+
+    return matches;
+}
+
 int active_instance_count() noexcept {
     std::lock_guard<std::mutex> lock(instance_mutex);
     return static_cast<int>(instances.size());

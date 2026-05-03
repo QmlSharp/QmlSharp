@@ -5,9 +5,11 @@
 #include <new>
 #include <string>
 
+#include "qmlsharp_effects.h"
 #include "qmlsharp_engine.h"
 #include "qmlsharp_errors.h"
 #include "qmlsharp_instances.h"
+#include "qmlsharp_state.h"
 #include "qmlsharp_type_registry.h"
 
 namespace {
@@ -69,6 +71,47 @@ extern "C" QMLSHARP_API void QMLSHARP_CALL qmlsharp_instance_ready(const char* i
 
 extern "C" QMLSHARP_API void QMLSHARP_CALL qmlsharp_set_command_callback(qmlsharp_command_cb callback) {
     qmlsharp::set_command_callback(callback);
+}
+
+extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_string(const char* instance_id,
+                                                                         const char* property_name, const char* value) {
+    return qmlsharp::sync_state_string(instance_id, property_name, value);
+}
+
+extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_int(const char* instance_id,
+                                                                      const char* property_name, int32_t value) {
+    return qmlsharp::sync_state_int(instance_id, property_name, value);
+}
+
+extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_double(const char* instance_id,
+                                                                         const char* property_name, double value) {
+    return qmlsharp::sync_state_double(instance_id, property_name, value);
+}
+
+extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_bool(const char* instance_id,
+                                                                       const char* property_name, int32_t value) {
+    return qmlsharp::sync_state_bool(instance_id, property_name, value);
+}
+
+extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_json(const char* instance_id,
+                                                                       const char* property_name,
+                                                                       const char* json_value) {
+    return qmlsharp::sync_state_json(instance_id, property_name, json_value);
+}
+
+extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_batch(const char* instance_id,
+                                                                        const char* properties_json) {
+    return qmlsharp::sync_state_batch(instance_id, properties_json);
+}
+
+extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_dispatch_effect(const char* instance_id, const char* effect_name,
+                                                                       const char* payload_json) {
+    return qmlsharp::dispatch_effect(instance_id, effect_name, payload_json);
+}
+
+extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_broadcast_effect(const char* class_name, const char* effect_name,
+                                                                        const char* payload_json) {
+    return qmlsharp::broadcast_effect(class_name, effect_name, payload_json);
 }
 
 extern "C" QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_get_last_error(void) {

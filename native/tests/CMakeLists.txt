@@ -1,12 +1,16 @@
 add_executable(qmlsharp_native_tests
   native_host_smoke_tests.cpp
   ../src/qmlsharp_abi.cpp
+  ../src/qmlsharp_effects.cpp
+  ../src/qmlsharp_effects.h
   ../src/qmlsharp_engine.cpp
   ../src/qmlsharp_engine.h
   ../src/qmlsharp_errors.cpp
   ../src/qmlsharp_errors.h
   ../src/qmlsharp_instances.cpp
   ../src/qmlsharp_instances.h
+  ../src/qmlsharp_state.cpp
+  ../src/qmlsharp_state.h
   ../src/qmlsharp_type_registry.cpp
   ../src/qmlsharp_type_registry.h
   fixtures/RegistrationCounterViewModel.cpp

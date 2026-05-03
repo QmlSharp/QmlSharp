@@ -52,6 +52,23 @@ typedef void(QMLSHARP_CALL* qmlsharp_command_cb)(const char* instance_id, const 
 
 QMLSHARP_API void QMLSHARP_CALL qmlsharp_set_command_callback(qmlsharp_command_cb callback);
 
+QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_string(const char* instance_id, const char* property_name,
+                                                              const char* value);
+QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_int(const char* instance_id, const char* property_name,
+                                                           int32_t value);
+QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_double(const char* instance_id, const char* property_name,
+                                                              double value);
+QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_bool(const char* instance_id, const char* property_name,
+                                                            int32_t value);
+QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_json(const char* instance_id, const char* property_name,
+                                                            const char* json_value);
+QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_sync_state_batch(const char* instance_id, const char* properties_json);
+
+QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_dispatch_effect(const char* instance_id, const char* effect_name,
+                                                            const char* payload_json);
+QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_broadcast_effect(const char* class_name, const char* effect_name,
+                                                             const char* payload_json);
+
 QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_get_last_error(void);
 QMLSHARP_API void QMLSHARP_CALL qmlsharp_free_string(const char* str);
 
