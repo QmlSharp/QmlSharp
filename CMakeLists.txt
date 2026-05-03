@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 4.2 FATAL_ERROR)
 option(ENABLE_ASAN "Enable address sanitizer for native targets." OFF)
 option(ENABLE_CLANG_TIDY "Enable clang-tidy during native builds." OFF)
 option(USE_WERROR "Treat native compiler warnings as errors." OFF)
+option(QMLSHARP_BUILD_NATIVE_TESTS "Build native C++ tests." ON)
 
 project(QmlSharp LANGUAGES CXX)
 
@@ -20,8 +21,13 @@ endif()
 
 include(cmake/CompileCommands.cmake)
 include(cmake/CompilerWarnings.cmake)
+include(cmake/Qt.cmake)
 include(cmake/Sanitizers.cmake)
 include(cmake/StaticAnalysis.cmake)
+
+if(QMLSHARP_BUILD_NATIVE_TESTS)
+  include(CTest)
+endif()
 
 add_subdirectory(native)
 

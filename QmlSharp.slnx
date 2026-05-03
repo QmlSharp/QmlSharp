@@ -9,6 +9,7 @@
     <Project Path="src/QmlSharp.Dsl.Generator/QmlSharp.Dsl.Generator.csproj" />
     <Project Path="src/QmlSharp.Dsl/QmlSharp.Dsl.csproj" />
     <Project Path="src/QmlSharp.Compiler/QmlSharp.Compiler.csproj" />
+    <Project Path="src/QmlSharp.Host/QmlSharp.Host.csproj" />
     <Project Path="src/QmlSharp.Qml.Ast/QmlSharp.Qml.Ast.csproj" />
     <Project Path="src/QmlSharp.Qml.Emitter/QmlSharp.Qml.Emitter.csproj" />
     <Project Path="src/QmlSharp.Qt.Tools/QmlSharp.Qt.Tools.csproj" />
@@ -22,6 +23,7 @@
     <Project Path="tests/QmlSharp.Dsl.Generator.Tests/QmlSharp.Dsl.Generator.Tests.csproj" />
     <Project Path="tests/QmlSharp.Dsl.Tests/QmlSharp.Dsl.Tests.csproj" />
     <Project Path="tests/QmlSharp.Compiler.Tests/QmlSharp.Compiler.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Host.Tests/QmlSharp.Host.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qml.Ast.Tests/QmlSharp.Qml.Ast.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qml.Emitter.Tests/QmlSharp.Qml.Emitter.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qt.Tools.Tests/QmlSharp.Qt.Tools.Tests.csproj" />

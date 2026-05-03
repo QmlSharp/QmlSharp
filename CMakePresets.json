@@ -13,6 +13,7 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": true,
         "ENABLE_ASAN": false,
         "ENABLE_CLANG_TIDY": false,
+        "QMLSHARP_BUILD_NATIVE_TESTS": true,
         "USE_WERROR": true
       },
       "warnings": {
@@ -219,6 +220,13 @@
       "targets": ["all"]
     },
     {
+      "name": "windows-debug",
+      "configurePreset": "windows-debug",
+      "displayName": "Windows Debug",
+      "nativeToolOptions": ["-cache", "-summary"],
+      "targets": ["all"]
+    },
+    {
       "name": "release",
       "configurePreset": "windows-release",
       "displayName": "Release",
@@ -287,6 +295,56 @@
       "displayName": "macOS CI",
       "nativeToolOptions": ["-cache", "-summary"],
       "targets": ["all"]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows-debug",
+      "displayName": "Windows Debug CTest",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-ci",
+      "configurePreset": "windows-ci",
+      "displayName": "Windows CI CTest",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-debug",
+      "configurePreset": "linux-debug",
+      "displayName": "Linux Debug CTest",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-ci",
+      "configurePreset": "linux-ci",
+      "displayName": "Linux CI CTest",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "macos-debug",
+      "configurePreset": "macos-debug",
+      "displayName": "macOS Debug CTest",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "macos-ci",
+      "configurePreset": "macos-ci",
+      "displayName": "macOS CI CTest",
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }

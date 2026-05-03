@@ -22,6 +22,8 @@ jobs:
     name: Windows x64 (FASTBuild)
     runs-on: windows-2022
     timeout-minutes: 120
+    env:
+      MSBUILDDISABLENODEREUSE: "1"
 
     steps:
       - name: Checkout
@@ -194,14 +196,6 @@ jobs:
       - name: Build .NET solution
         run: dotnet build QmlSharp.slnx --configuration Debug --no-restore
 
-      - name: Test .NET solution
-        run: dotnet test QmlSharp.slnx --configuration Debug --no-build --verbosity normal
-
-      - name: Check .NET formatting
-        run: |
-          $env:MSBUILDDISABLENODEREUSE = "1"
-          dotnet format QmlSharp.slnx --verify-no-changes --no-restore --verbosity minimal
-
       - name: Configure (CMake)
         env:
           CC: clang-cl
@@ -213,6 +207,17 @@ jobs:
           CC: clang-cl
           CXX: clang-cl
         run: cmake --build --preset ci
+
+      - name: Test native target
+        run: ctest --preset windows-ci
+
+      - name: Test .NET solution
+        run: dotnet test QmlSharp.slnx --configuration Debug --no-build --verbosity normal
+
+      - name: Check .NET formatting
+        run: |
+          $env:MSBUILDDISABLENODEREUSE = "1"
+          dotnet format QmlSharp.slnx --verify-no-changes --no-restore --verbosity minimal
 
       - name: Trim FASTBuild cache
         if: always()
