@@ -21,13 +21,12 @@ namespace QmlSharp.Host.Tests.Fixtures
                 CombineUnder(repositoryRoot, "build", "release", "bin")
             ];
 
-            foreach (string candidateDirectory in candidateDirectories)
+            string? existingCandidate = candidateDirectories
+                .Select(directory => Path.Join(directory, libraryFileName))
+                .FirstOrDefault(File.Exists);
+            if (existingCandidate is not null)
             {
-                string candidate = Path.Join(candidateDirectory, libraryFileName);
-                if (File.Exists(candidate))
-                {
-                    return candidate;
-                }
+                return existingCandidate;
             }
 
             string candidates = string.Join(Environment.NewLine, candidateDirectories.Select(
@@ -40,12 +39,10 @@ namespace QmlSharp.Host.Tests.Fixtures
 
         private static string CombineUnder(string basePath, params string[] relativeSegments)
         {
-            foreach (string segment in relativeSegments)
+            string? rootedSegment = relativeSegments.Where(Path.IsPathRooted).FirstOrDefault();
+            if (rootedSegment is not null)
             {
-                if (Path.IsPathRooted(segment))
-                {
-                    throw new ArgumentException("Native test library candidate path segments must be relative.", nameof(relativeSegments));
-                }
+                throw new ArgumentException("Native test library candidate path segments must be relative.", nameof(relativeSegments));
             }
 
             return Path.Join([basePath, .. relativeSegments]);
