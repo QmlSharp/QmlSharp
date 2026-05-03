@@ -11,6 +11,10 @@ void set_last_error(std::string message) {
     current_last_error = std::move(message);
 }
 
+void clear_last_error() {
+    current_last_error.clear();
+}
+
 std::string last_error() {
     return current_last_error;
 }

@@ -5,6 +5,7 @@
 #include <new>
 #include <string>
 
+#include "qmlsharp_engine.h"
 #include "qmlsharp_errors.h"
 
 namespace {
@@ -22,6 +23,22 @@ const char* qmlsharp_allocate_string(const std::string& value) noexcept {
 
 extern "C" QMLSHARP_API int32_t qmlsharp_get_abi_version(void) {
     return QMLSHARP_ABI_VERSION;
+}
+
+extern "C" QMLSHARP_API void* qmlsharp_engine_init(int32_t argc, const char** argv) {
+    return qmlsharp::engine_init(argc, argv);
+}
+
+extern "C" QMLSHARP_API void qmlsharp_engine_shutdown(void* engine) {
+    qmlsharp::engine_shutdown(engine);
+}
+
+extern "C" QMLSHARP_API int32_t qmlsharp_engine_exec(void* engine) {
+    return qmlsharp::engine_exec(engine);
+}
+
+extern "C" QMLSHARP_API void qmlsharp_post_to_main_thread(void (*callback)(void* user_data), void* user_data) {
+    qmlsharp::post_to_main_thread(callback, user_data);
 }
 
 extern "C" QMLSHARP_API const char* qmlsharp_get_last_error(void) {
