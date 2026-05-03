@@ -13,6 +13,7 @@
 
 #include "qmlsharp_engine.h"
 #include "qmlsharp_errors.h"
+#include "qmlsharp_metrics.h"
 
 namespace qmlsharp {
 namespace {
@@ -171,6 +172,7 @@ int register_validated_type(const ValidatedRegistrationEntry& entry, bool skip_m
     }
 
     registered_types.emplace(entry.key, make_metadata(entry, qt_type_id));
+    record_type_registration();
     return QmlSharpSuccess;
 }
 }  // namespace

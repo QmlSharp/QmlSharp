@@ -15,6 +15,7 @@
 
 #include "qmlsharp_errors.h"
 #include "qmlsharp_instances.h"
+#include "qmlsharp_metrics.h"
 
 namespace qmlsharp {
 namespace {
@@ -98,6 +99,7 @@ int emit_effect_on_object(QObject* object, const std::string& effect_name, const
         return QmlSharpGeneralFailure;
     }
 
+    record_effect_dispatch();
     clear_last_error();
     return QmlSharpSuccess;
 }

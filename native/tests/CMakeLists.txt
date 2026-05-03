@@ -1,14 +1,22 @@
 add_executable(qmlsharp_native_tests
   native_host_smoke_tests.cpp
   ../src/qmlsharp_abi.cpp
+  ../src/qmlsharp_diagnostics.cpp
+  ../src/qmlsharp_diagnostics.h
   ../src/qmlsharp_effects.cpp
   ../src/qmlsharp_effects.h
   ../src/qmlsharp_engine.cpp
   ../src/qmlsharp_engine.h
+  ../src/qmlsharp_error_overlay.cpp
+  ../src/qmlsharp_error_overlay.h
   ../src/qmlsharp_errors.cpp
   ../src/qmlsharp_errors.h
+  ../src/qmlsharp_hot_reload.cpp
+  ../src/qmlsharp_hot_reload.h
   ../src/qmlsharp_instances.cpp
   ../src/qmlsharp_instances.h
+  ../src/qmlsharp_metrics.cpp
+  ../src/qmlsharp_metrics.h
   ../src/qmlsharp_state.cpp
   ../src/qmlsharp_state.h
   ../src/qmlsharp_type_registry.cpp

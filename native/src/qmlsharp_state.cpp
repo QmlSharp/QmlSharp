@@ -20,6 +20,7 @@
 
 #include "qmlsharp_errors.h"
 #include "qmlsharp_instances.h"
+#include "qmlsharp_metrics.h"
 
 namespace qmlsharp {
 namespace {
@@ -188,9 +189,14 @@ int sync_single_state_value(const char* instance_id, const char* property_name, 
         }
 
         const std::string property_name_utf8(property_name);
-        return run_on_object_thread(object, [object, property_name_utf8, value = std::move(value)]() {
+        const int result = run_on_object_thread(object, [object, property_name_utf8, value = std::move(value)]() {
             return set_property(object, property_name_utf8, value);
         });
+        if (result == QmlSharpSuccess) {
+            record_state_sync();
+        }
+
+        return result;
     } catch (const std::exception& error) {
         set_last_error(std::string(operation) + " failed: " + error.what());
         return QmlSharpGeneralFailure;
@@ -274,7 +280,7 @@ int sync_state_batch(const char* instance_id, const char* properties_json) noexc
             });
         }
 
-        return run_on_object_thread(object, [object, updates = std::move(updates)]() {
+        const int result = run_on_object_thread(object, [object, updates = std::move(updates)]() {
             std::vector<StateUpdate> validated_updates;
             validated_updates.reserve(updates.size());
             for (StateUpdate update : updates) {
@@ -303,6 +309,11 @@ int sync_state_batch(const char* instance_id, const char* properties_json) noexc
             clear_last_error();
             return QmlSharpSuccess;
         });
+        if (result == QmlSharpSuccess) {
+            record_state_sync();
+        }
+
+        return result;
     } catch (const std::exception& error) {
         set_last_error(std::string("qmlsharp_sync_state_batch failed: ") + error.what());
         return QmlSharpGeneralFailure;
