@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using QmlSharp.Compiler;
 using QmlSharp.Host.Engine;
@@ -8,13 +7,15 @@ namespace QmlSharp.Integration.Tests.Fixtures
     internal sealed class NativeRoundTripFixture : IDisposable
     {
         private const string NativeLibraryToken = "__QMLSHARP_NATIVE_LIBRARY__";
+        // Qt keeps QML type registrations process-global, including native type factories.
+        private static readonly Lazy<SharedArtifacts> Shared = new(
+            CreateSharedArtifacts,
+            LazyThreadSafetyMode.ExecutionAndPublication);
 
-        private readonly string tempRoot;
         private readonly NativeFixtureRegistrations registrations;
         private bool disposed;
 
         private NativeRoundTripFixture(
-            string tempRoot,
             string distDirectory,
             string mainQmlPath,
             string reloadQmlPath,
@@ -23,7 +24,6 @@ namespace QmlSharp.Integration.Tests.Fixtures
             IReadOnlyList<ViewModelSchema> schemas,
             NativeFixtureRegistrations registrations)
         {
-            this.tempRoot = tempRoot;
             DistDirectory = distDirectory;
             MainQmlPath = mainQmlPath;
             ReloadQmlPath = reloadQmlPath;
@@ -48,7 +48,39 @@ namespace QmlSharp.Integration.Tests.Fixtures
         public static NativeRoundTripFixture Create()
         {
             ConfigureQtEnvironment();
+            SharedArtifacts artifacts = Shared.Value;
 
+            return new NativeRoundTripFixture(
+                artifacts.DistDirectory,
+                artifacts.MainQmlPath,
+                artifacts.ReloadQmlPath,
+                artifacts.QuitQmlPath,
+                artifacts.NativeLibraryPath,
+                artifacts.Schemas,
+                artifacts.Registrations);
+        }
+
+        public QmlSharpEngine CreateEngine()
+        {
+            ThrowIfDisposed();
+            return new QmlSharpEngine(
+                NativeLibraryPath,
+                registrations.RegisterRegistrationCounterViewModel);
+        }
+
+        public void QueueApplicationQuit()
+        {
+            ThrowIfDisposed();
+            registrations.QueueApplicationQuit();
+        }
+
+        public void Dispose()
+        {
+            disposed = true;
+        }
+
+        private static SharedArtifacts CreateSharedArtifacts()
+        {
             string repositoryRoot = FindRepositoryRoot(AppContext.BaseDirectory);
             string fixtureRoot = Path.Join(repositoryRoot, "tests", "fixtures", "native-host", "integration");
             string nativeLibrarySource = ResolveBuiltIntegrationLibrary(repositoryRoot);
@@ -86,8 +118,7 @@ namespace QmlSharp.Integration.Tests.Fixtures
             string schemaJson = File.ReadAllText(Path.Join(schemasDirectory, "RegistrationCounterViewModel.schema.json"));
             NativeFixtureRegistrations registrations = NativeFixtureRegistrations.ForLibrary(artifactNativeLibraryPath);
 
-            return new NativeRoundTripFixture(
-                tempRoot,
+            return new SharedArtifacts(
                 distDirectory,
                 Path.Join(qmlDirectory, "Main.qml"),
                 Path.Join(qmlDirectory, "Reload.qml"),
@@ -95,29 +126,6 @@ namespace QmlSharp.Integration.Tests.Fixtures
                 artifactNativeLibraryPath,
                 [serializer.Deserialize(schemaJson)],
                 registrations);
-        }
-
-        public QmlSharpEngine CreateEngine()
-        {
-            ThrowIfDisposed();
-            return new QmlSharpEngine(
-                NativeLibraryPath,
-                registrations.RegisterRegistrationCounterViewModel);
-        }
-
-        public void QueueApplicationQuit()
-        {
-            ThrowIfDisposed();
-            registrations.QueueApplicationQuit();
-        }
-
-        public void Dispose()
-        {
-            if (!disposed)
-            {
-                TryDeleteDirectory(tempRoot);
-                disposed = true;
-            }
         }
 
         private static void ConfigureQtEnvironment()
@@ -208,34 +216,18 @@ namespace QmlSharp.Integration.Tests.Fixtures
             return "libqmlsharp_native.so";
         }
 
-        private static void TryDeleteDirectory(string path)
-        {
-            try
-            {
-                if (Directory.Exists(path))
-                {
-                    Directory.Delete(path, recursive: true);
-                }
-            }
-            catch (IOException exception)
-            {
-                Trace.TraceWarning(
-                    "Could not delete native integration fixture directory '{0}': {1}",
-                    path,
-                    exception.Message);
-            }
-            catch (UnauthorizedAccessException exception)
-            {
-                Trace.TraceWarning(
-                    "Could not delete native integration fixture directory '{0}': {1}",
-                    path,
-                    exception.Message);
-            }
-        }
-
         private void ThrowIfDisposed()
         {
             ObjectDisposedException.ThrowIf(disposed, this);
         }
+
+        private sealed record SharedArtifacts(
+            string DistDirectory,
+            string MainQmlPath,
+            string ReloadQmlPath,
+            string QuitQmlPath,
+            string NativeLibraryPath,
+            IReadOnlyList<ViewModelSchema> Schemas,
+            NativeFixtureRegistrations Registrations);
     }
 }
