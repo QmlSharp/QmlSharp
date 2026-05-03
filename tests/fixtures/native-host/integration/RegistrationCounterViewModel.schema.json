@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "1.0",
+  "className": "RegistrationCounterViewModel",
+  "moduleName": "IntegrationTests",
+  "moduleUri": "QmlSharp.Integration.Tests",
+  "moduleVersion": {
+    "major": 1,
+    "minor": 0
+  },
+  "compilerSlotKey": "RegistrationView::__qmlsharp_vm0",
+  "properties": [
+    {
+      "name": "count",
+      "type": "int",
+      "defaultValue": "0",
+      "readOnly": false,
+      "memberId": 1001
+    },
+    {
+      "name": "enabled",
+      "type": "bool",
+      "defaultValue": "false",
+      "readOnly": false,
+      "memberId": 1002
+    },
+    {
+      "name": "metadata",
+      "type": "json",
+      "readOnly": false,
+      "memberId": 1003
+    },
+    {
+      "name": "ratio",
+      "type": "double",
+      "defaultValue": "0",
+      "readOnly": false,
+      "memberId": 1004
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "defaultValue": "\"created\"",
+      "readOnly": false,
+      "memberId": 1005
+    }
+  ],
+  "commands": [
+    {
+      "name": "commandInt",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "int"
+        }
+      ],
+      "commandId": 7001
+    },
+    {
+      "name": "commandNoArgs",
+      "parameters": [],
+      "commandId": 7002
+    }
+  ],
+  "effects": [
+    {
+      "name": "showToast",
+      "payloadType": "json",
+      "effectId": 2001
+    }
+  ],
+  "lifecycle": {
+    "onMounted": false,
+    "onUnmounting": false,
+    "hotReload": true
+  }
+}

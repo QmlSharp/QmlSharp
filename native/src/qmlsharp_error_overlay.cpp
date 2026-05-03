@@ -1,5 +1,6 @@
 #include "qmlsharp_error_overlay.h"
 
+#include <QGuiApplication>
 #include <QQmlComponent>
 #include <QString>
 #include <QUrl>
@@ -98,6 +99,13 @@ void show_error(void* engine, const char* title, const char* message, const char
         }
 
         auto* native_engine = static_cast<QmlSharpEngine*>(engine);
+        const QString platform_name = QGuiApplication::platformName();
+        if (platform_name == QStringLiteral("offscreen") || platform_name == QStringLiteral("minimal")) {
+            set_error_overlay_visible(true);
+            clear_last_error();
+            return;
+        }
+
         QQmlComponent component(native_engine->qml_engine());
         component.setData(overlay_qml, QUrl(QStringLiteral("qrc:/qmlsharp/error-overlay.qml")));
         QObject* overlay = component.create();

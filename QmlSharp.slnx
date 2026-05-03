@@ -24,6 +24,7 @@
     <Project Path="tests/QmlSharp.Dsl.Tests/QmlSharp.Dsl.Tests.csproj" />
     <Project Path="tests/QmlSharp.Compiler.Tests/QmlSharp.Compiler.Tests.csproj" />
     <Project Path="tests/QmlSharp.Host.Tests/QmlSharp.Host.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Integration.Tests/QmlSharp.Integration.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qml.Ast.Tests/QmlSharp.Qml.Ast.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qml.Emitter.Tests/QmlSharp.Qml.Emitter.Tests.csproj" />
     <Project Path="tests/QmlSharp.Qt.Tools.Tests/QmlSharp.Qt.Tools.Tests.csproj" />
