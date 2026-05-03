@@ -21,6 +21,8 @@ std::unique_ptr<QmlSharpEngine> current_engine;
 std::vector<std::string> argument_storage;
 std::vector<char*> argument_pointers;
 QThread* qt_main_thread = nullptr;
+bool event_loop_running = false;
+bool shutdown_requested = false;
 
 bool is_qt_main_thread() noexcept {
     return qt_main_thread != nullptr && QThread::currentThread() == qt_main_thread;
@@ -52,6 +54,15 @@ bool validate_qt_main_thread(const char* operation) noexcept {
 void reset_argument_storage() {
     argument_pointers.clear();
     argument_storage.clear();
+}
+
+void reset_engine_state() {
+    current_engine.reset();
+    application.reset();
+    qt_main_thread = nullptr;
+    event_loop_running = false;
+    shutdown_requested = false;
+    reset_argument_storage();
 }
 }  // namespace
 
@@ -111,6 +122,7 @@ void* engine_init(int argc, const char** argv) noexcept {
         int qt_argc = static_cast<int>(argument_pointers.size());
         application = std::make_unique<QGuiApplication>(qt_argc, argument_pointers.data());
         qt_main_thread = QThread::currentThread();
+        shutdown_requested = false;
 
         auto qml_engine = std::make_unique<QQmlEngine>();
         current_engine = std::make_unique<QmlSharpEngine>(std::move(qml_engine));
@@ -118,17 +130,11 @@ void* engine_init(int argc, const char** argv) noexcept {
         clear_last_error();
         return current_engine.get();
     } catch (const std::exception& error) {
-        current_engine.reset();
-        application.reset();
-        qt_main_thread = nullptr;
-        reset_argument_storage();
+        reset_engine_state();
         set_last_error(std::string("Failed to initialize QmlSharp engine: ") + error.what());
         return nullptr;
     } catch (...) {
-        current_engine.reset();
-        application.reset();
-        qt_main_thread = nullptr;
-        reset_argument_storage();
+        reset_engine_state();
         set_last_error("Failed to initialize QmlSharp engine due to an unknown native exception.");
         return nullptr;
     }
@@ -152,10 +158,14 @@ void engine_shutdown(void* engine) noexcept {
             return;
         }
 
-        current_engine.reset();
-        application.reset();
-        qt_main_thread = nullptr;
-        reset_argument_storage();
+        if (event_loop_running) {
+            shutdown_requested = true;
+            application->quit();
+            clear_last_error();
+            return;
+        }
+
+        reset_engine_state();
         clear_last_error();
     } catch (const std::exception& error) {
         set_last_error(std::string("Failed to shut down QmlSharp engine: ") + error.what());
@@ -183,12 +193,26 @@ int engine_exec(void* engine) noexcept {
 
         QGuiApplication* app = application.get();
         clear_last_error();
+        event_loop_running = true;
         lock.unlock();
-        return app->exec();
+        const int exit_code = app->exec();
+        lock.lock();
+        event_loop_running = false;
+        if (shutdown_requested) {
+            reset_engine_state();
+        }
+
+        return exit_code;
     } catch (const std::exception& error) {
+        std::lock_guard<std::mutex> lock(engine_mutex);
+        event_loop_running = false;
+        shutdown_requested = false;
         set_last_error(std::string("QmlSharp engine event loop failed: ") + error.what());
         return QmlSharpGeneralFailure;
     } catch (...) {
+        std::lock_guard<std::mutex> lock(engine_mutex);
+        event_loop_running = false;
+        shutdown_requested = false;
         set_last_error("QmlSharp engine event loop failed due to an unknown native exception.");
         return QmlSharpGeneralFailure;
     }

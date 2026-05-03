@@ -51,6 +51,10 @@ void quit_callback(void* user_data) {
     QCoreApplication::quit();
 }
 
+void shutdown_callback(void* user_data) {
+    qmlsharp_engine_shutdown(user_data);
+}
+
 void configure_headless_qt() {
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
         qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -214,6 +218,27 @@ int test_exec_policy_quits_cleanly() {
     return EXIT_SUCCESS;
 }
 
+int test_shutdown_during_exec_defers_teardown_until_loop_returns() {
+    constexpr const char* test_name = "shutdown during exec defers teardown";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    qmlsharp_post_to_main_thread(shutdown_callback, engine);
+    const int exit_code = qmlsharp_engine_exec(engine);
+    if (exit_code != 0) {
+        return fail(test_name, "event loop should return success after shutdown callback quits it.");
+    }
+
+    if (qmlsharp_engine_exec(engine) != -4) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, "engine handle should be invalid after deferred shutdown completes.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int test_null_argument_validation() {
     constexpr const char* test_name = "null argument validation";
     void* engine = qmlsharp_engine_init(1, nullptr);
@@ -291,6 +316,7 @@ int main() {
     result |= run_test(test_post_to_main_thread_from_background_thread);
     result |= run_test(test_double_init_returns_existing_handle);
     result |= run_test(test_exec_policy_quits_cleanly);
+    result |= run_test(test_shutdown_during_exec_defers_teardown_until_loop_returns);
     result |= run_test(test_null_argument_validation);
     result |= run_test(test_last_error_and_string_lifetime);
 
