@@ -1,0 +1,18 @@
+{
+  "projectName": "TestApp",
+  "version": "1.0.0",
+  "buildMode": "debug",
+  "buildTimestamp": "2026-05-03T00:00:00Z",
+  "qtVersion": "6.11.0",
+  "dotNetVersion": ".NET 10.0",
+  "qmlModules": [
+    "QmlSharp.TestApp"
+  ],
+  "viewModels": [
+    "CounterViewModel",
+    "TodoViewModel"
+  ],
+  "fileHashes": {},
+  "nativeLib": "native/qmlsharp_native.dll",
+  "managedAssembly": "managed/TestApp.dll"
+}

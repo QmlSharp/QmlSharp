@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0",
+  "className": "TodoViewModel",
+  "moduleName": "TestApp",
+  "moduleUri": "QmlSharp.TestApp",
+  "moduleVersion": {
+    "major": 1,
+    "minor": 0
+  },
+  "compilerSlotKey": "TodoView::__qmlsharp_vm0",
+  "properties": [
+    {
+      "name": "items",
+      "type": "json",
+      "readOnly": false,
+      "memberId": 390511601
+    }
+  ],
+  "commands": [
+    {
+      "name": "removeItem",
+      "parameters": [
+        {
+          "name": "index",
+          "type": "int"
+        }
+      ],
+      "commandId": 1743999692
+    }
+  ],
+  "effects": [
+    {
+      "name": "showToast",
+      "payloadType": "string",
+      "effectId": 118435790
+    }
+  ],
+  "lifecycle": {
+    "onMounted": false,
+    "onUnmounting": false,
+    "hotReload": true
+  }
+}
