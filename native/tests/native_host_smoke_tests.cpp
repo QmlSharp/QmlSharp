@@ -75,23 +75,24 @@ void pump_events_until(const CallbackProbe& probe) {
     }
 }
 
-void main_thread_probe_callback(void* user_data) {
+void QMLSHARP_CALL main_thread_probe_callback(void* user_data) {
     auto* probe = static_cast<CallbackProbe*>(user_data);
     probe->called = true;
     probe->ran_on_main_thread =
         QCoreApplication::instance() != nullptr && QThread::currentThread() == QCoreApplication::instance()->thread();
 }
 
-void quit_callback(void* user_data) {
+void QMLSHARP_CALL quit_callback(void* user_data) {
     Q_UNUSED(user_data);
     QCoreApplication::quit();
 }
 
-void shutdown_callback(void* user_data) {
+void QMLSHARP_CALL shutdown_callback(void* user_data) {
     qmlsharp_engine_shutdown(user_data);
 }
 
-void instance_created_callback(const char* instance_id, const char* class_name, const char* compiler_slot_key) {
+void QMLSHARP_CALL instance_created_callback(const char* instance_id, const char* class_name,
+                                             const char* compiler_slot_key) {
     if (current_instance_probe == nullptr) {
         return;
     }
@@ -103,7 +104,7 @@ void instance_created_callback(const char* instance_id, const char* class_name, 
     });
 }
 
-void instance_destroyed_callback(const char* instance_id) {
+void QMLSHARP_CALL instance_destroyed_callback(const char* instance_id) {
     if (current_instance_probe == nullptr) {
         return;
     }
@@ -111,7 +112,7 @@ void instance_destroyed_callback(const char* instance_id) {
     current_instance_probe->destroyed.push_back(instance_id == nullptr ? std::string() : std::string(instance_id));
 }
 
-void command_callback(const char* instance_id, const char* command_name, const char* args_json) {
+void QMLSHARP_CALL command_callback(const char* instance_id, const char* command_name, const char* args_json) {
     if (current_instance_probe == nullptr) {
         return;
     }
@@ -139,18 +140,18 @@ void configure_headless_qt() {
     }
 }
 
-int32_t register_counter_type(const char* module_uri, int32_t version_major, int32_t version_minor,
-                              const char* type_name) {
+int32_t QMLSHARP_CALL register_counter_type(const char* module_uri, int32_t version_major, int32_t version_minor,
+                                            const char* type_name) {
     return qmlRegisterType<RegistrationCounterViewModel>(module_uri, version_major, version_minor, type_name);
 }
 
-int32_t register_status_type(const char* module_uri, int32_t version_major, int32_t version_minor,
-                             const char* type_name) {
+int32_t QMLSHARP_CALL register_status_type(const char* module_uri, int32_t version_major, int32_t version_minor,
+                                           const char* type_name) {
     return qmlRegisterType<RegistrationStatusViewModel>(module_uri, version_major, version_minor, type_name);
 }
 
-int32_t register_status_type_after_one_failure(const char* module_uri, int32_t version_major, int32_t version_minor,
-                                               const char* type_name) {
+int32_t QMLSHARP_CALL register_status_type_after_one_failure(const char* module_uri, int32_t version_major,
+                                                             int32_t version_minor, const char* type_name) {
     static int attempts = 0;
     ++attempts;
     if (attempts == 1) {
