@@ -62,7 +62,8 @@ repos:
         name: dotnet format
         entry: >-
           pwsh -NoLogo -NoProfile -Command
-          "& { if ($args.Count -gt 0) { dotnet format QmlSharp.slnx --include $args --verbosity minimal } else { dotnet format QmlSharp.slnx --verbosity minimal } }"
+          "& { $env:MSBUILDDISABLENODEREUSE = '1'; dotnet format QmlSharp.slnx --verify-no-changes --no-restore --verbosity minimal }"
         language: system
-        pass_filenames: true
+        pass_filenames: false
+        require_serial: true
         files: \.cs$
