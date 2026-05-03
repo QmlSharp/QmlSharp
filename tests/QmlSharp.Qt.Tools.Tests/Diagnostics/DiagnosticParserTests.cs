@@ -338,16 +338,39 @@ namespace QmlSharp.Qt.Tools.Tests.Diagnostics
         [Trait("Category", TestCategories.Performance)]
         public void Performance_ParseJson_HandlesLargeDiagnosticPayloadWithLinearBudget()
         {
+            string smallJson = CreateLargeQmlLintJson(diagnosticCount: 100);
             string json = CreateLargeQmlLintJson(diagnosticCount: 1_000);
-            Stopwatch stopwatch = Stopwatch.StartNew();
 
+            _ = parser.ParseJson(smallJson);
+            _ = parser.ParseJson(json);
+
+            TimeSpan smallElapsed = MeasureBestParseJson(smallJson);
+            TimeSpan largeElapsed = MeasureBestParseJson(json);
             ImmutableArray<QtDiagnostic> diagnostics = parser.ParseJson(json);
 
-            stopwatch.Stop();
             Assert.Equal(1_000, diagnostics.Length);
             Assert.True(
-                stopwatch.Elapsed < TimeSpan.FromSeconds(2),
-                $"Expected parser to handle 1,000 diagnostics within a generous CI budget, actual: {stopwatch.Elapsed}.");
+                largeElapsed <= TimeSpan.FromMilliseconds(Math.Max(500, smallElapsed.TotalMilliseconds * 25)),
+                $"Expected parser to scale linearly from 100 to 1,000 diagnostics; 100 actual: {smallElapsed}, 1,000 actual: {largeElapsed}.");
+        }
+
+        private TimeSpan MeasureBestParseJson(string json)
+        {
+            TimeSpan bestElapsed = TimeSpan.MaxValue;
+            for (int sample = 0; sample < 5; sample++)
+            {
+                Stopwatch stopwatch = Stopwatch.StartNew();
+                ImmutableArray<QtDiagnostic> diagnostics = parser.ParseJson(json);
+                stopwatch.Stop();
+
+                Assert.NotEmpty(diagnostics);
+                if (stopwatch.Elapsed < bestElapsed)
+                {
+                    bestElapsed = stopwatch.Elapsed;
+                }
+            }
+
+            return bestElapsed;
         }
 
         private static string CreateLargeQmlLintJson(int diagnosticCount)
