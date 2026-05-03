@@ -178,7 +178,7 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
                 Path.GetTempPath(),
                 "qmlsharp-toolrunner-child-" + Guid.NewGuid().ToString("N") + ".txt");
             TimeSpan timeout = TimeSpan.FromSeconds(3);
-            TimeSpan childDelay = TimeSpan.FromSeconds(4);
+            TimeSpan childDelay = TimeSpan.FromSeconds(30);
             ProbeInvocation probe = CreateProbeInvocation(
                 "spawn-child-sleep",
                 markerPath,
@@ -195,8 +195,11 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
 
                 Assert.True(File.Exists(childStartedPath), "The probe did not start its child before timeout.");
 
-                await Task.Delay(childDelay + TimeSpan.FromSeconds(1));
+                string childStarted = await File.ReadAllTextAsync(childStartedPath);
+                int childProcessId = int.Parse(childStarted, CultureInfo.InvariantCulture);
+                bool childExited = await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(10));
 
+                Assert.True(childExited, $"Child process {childProcessId} was still running after timeout.");
                 Assert.False(File.Exists(markerPath));
             }
             finally
@@ -210,6 +213,47 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
                 {
                     File.Delete(markerPath);
                 }
+            }
+        }
+
+        private static async Task<bool> WaitForProcessExitAsync(int processId, TimeSpan timeout)
+        {
+            try
+            {
+                using Process process = Process.GetProcessById(processId);
+                try
+                {
+                    await process.WaitForExitAsync().WaitAsync(timeout);
+                    return true;
+                }
+                catch (TimeoutException)
+                {
+                    TryKillProcessTree(process);
+                    return false;
+                }
+            }
+            catch (ArgumentException)
+            {
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return true;
+            }
+        }
+
+        private static void TryKillProcessTree(Process process)
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // The child may exit between HasExited and Kill.
             }
         }
 

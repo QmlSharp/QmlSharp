@@ -8,5 +8,12 @@ namespace QmlSharp.Host.Metrics
         long TotalStateSyncs,
         long TotalCommandsDispatched,
         long TotalEffectsEmitted,
-        TimeSpan Uptime);
+        TimeSpan Uptime)
+    {
+        /// <summary>Number of destroyed instances retained for diagnostics.</summary>
+        public int DestroyedInstanceCount { get; init; }
+
+        /// <summary>Total queued commands across active instances.</summary>
+        public int QueuedCommandCount { get; init; }
+    }
 }
