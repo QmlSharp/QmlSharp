@@ -48,6 +48,37 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install Qt 6.11.0
+        if: matrix.language == 'c-cpp'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.11.0'
+          target: desktop
+          arch: linux_gcc_64
+          modules: >-
+            qt5compat qt3d qtcharts qtconnectivity qtgraphs qtgrpc
+            qthttpserver qtimageformats qtlottie qtmultimedia
+            qtnetworkauth qtpositioning qtquick3d qtquick3dphysics
+            qtquicktimeline qtremoteobjects qtscxml qtsensors
+            qtserialbus qtserialport qtshadertools qtspeech
+            qtvirtualkeyboard qtwebchannel qtwebsockets qtwebview
+            qtlocation
+          cache: true
+          setup-python: true
+          install-deps: true
+
+      - name: Export Qt environment
+        if: matrix.language == 'c-cpp'
+        run: |
+          set -euo pipefail
+          test -d "${QT_ROOT_DIR}"
+          qt6_dir="${QT_ROOT_DIR}/lib/cmake/Qt6"
+          test -f "${qt6_dir}/Qt6Config.cmake"
+          echo "QT_DIR=${QT_ROOT_DIR}" >> "${GITHUB_ENV}"
+          echo "Qt6_DIR=${qt6_dir}" >> "${GITHUB_ENV}"
+          echo "QT_DIR=${QT_ROOT_DIR}"
+          echo "Qt6_DIR=${qt6_dir}"
+
       - name: Verify hosted native tools
         if: matrix.language == 'c-cpp'
         run: |
@@ -147,8 +178,13 @@ jobs:
 
       - name: Trim FASTBuild cache
         if: always() && matrix.language == 'c-cpp'
-        run: FBuild -cachetrim 10240
-        working-directory: ${{ github.workspace }}/build/linux-ci
+        run: |
+          if [[ -d "${GITHUB_WORKSPACE}/build/linux-ci" ]]; then
+            (
+              cd "${GITHUB_WORKSPACE}/build/linux-ci"
+              FBuild -cachetrim 10240
+            )
+          fi
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4

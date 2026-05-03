@@ -22,6 +22,8 @@ jobs:
     name: macOS (FASTBuild)
     runs-on: macos-latest
     timeout-minutes: 120
+    env:
+      MSBUILDDISABLENODEREUSE: "1"
 
     steps:
       - name: Checkout
@@ -156,14 +158,6 @@ jobs:
       - name: Build .NET solution
         run: dotnet build QmlSharp.slnx --configuration Debug --no-restore
 
-      - name: Test .NET solution
-        run: dotnet test QmlSharp.slnx --configuration Debug --no-build --verbosity normal
-
-      - name: Check .NET formatting
-        run: |
-          export MSBUILDDISABLENODEREUSE=1
-          dotnet format QmlSharp.slnx --verify-no-changes --no-restore --verbosity minimal
-
       - name: Configure (CMake)
         env:
           CC: clang
@@ -176,8 +170,22 @@ jobs:
           CXX: clang++
         run: cmake --build --preset macos-ci
 
+      - name: Test native target
+        run: ctest --preset macos-ci
+
+      - name: Test .NET solution
+        run: dotnet test QmlSharp.slnx --configuration Debug --no-build --verbosity normal
+
+      - name: Check .NET formatting
+        run: |
+          export MSBUILDDISABLENODEREUSE=1
+          dotnet format QmlSharp.slnx --verify-no-changes --no-restore --verbosity minimal
+
       - name: Run pre-commit hooks
         run: |
+          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          toolchain_dir="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain"
+          export CPLUS_INCLUDE_PATH="${toolchain_dir}/usr/include/c++/v1${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}}"
           set +e
           pre-commit run --all-files --show-diff-on-failure --color=always
           status=$?
