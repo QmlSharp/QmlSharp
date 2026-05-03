@@ -108,6 +108,18 @@ namespace QmlSharp.Host.Interop
             return LoadLazyDelegate<QmlsharpSyncStateBatchDelegate>("qmlsharp_sync_state_batch")(instanceId, propertiesJson);
         }
 
+        public int DispatchEffect(string instanceId, string effectName, string payloadJson)
+        {
+            ThrowIfDisposed();
+            return LoadLazyDelegate<QmlsharpDispatchEffectDelegate>("qmlsharp_dispatch_effect")(instanceId, effectName, payloadJson);
+        }
+
+        public int BroadcastEffect(string className, string effectName, string payloadJson)
+        {
+            ThrowIfDisposed();
+            return LoadLazyDelegate<QmlsharpBroadcastEffectDelegate>("qmlsharp_broadcast_effect")(className, effectName, payloadJson);
+        }
+
         public void Dispose()
         {
             if (!disposed)
@@ -190,5 +202,17 @@ namespace QmlSharp.Host.Interop
         private delegate int QmlsharpSyncStateBatchDelegate(
             [MarshalAs(UnmanagedType.LPUTF8Str)] string instanceId,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string propertiesJson);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int QmlsharpDispatchEffectDelegate(
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string instanceId,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string effectName,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string payloadJson);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int QmlsharpBroadcastEffectDelegate(
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string className,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string effectName,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string payloadJson);
     }
 }

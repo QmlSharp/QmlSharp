@@ -88,6 +88,40 @@ namespace QmlSharp.Host.Exceptions
         {
         }
     }
+
+    /// <summary>Thrown when command routing registration fails before native callback dispatch.</summary>
+    public sealed class CommandRoutingException : NativeHostException
+    {
+        public CommandRoutingException(string instanceId, int commandId, string message)
+            : base(-9, message)
+        {
+            InstanceId = instanceId;
+            CommandId = commandId;
+        }
+
+        /// <summary>The instance identifier associated with the command registration.</summary>
+        public string InstanceId { get; }
+
+        /// <summary>The command identifier associated with the registration failure.</summary>
+        public int CommandId { get; }
+    }
+
+    /// <summary>Thrown when effect routing registration fails before native dispatch.</summary>
+    public sealed class EffectRoutingException : NativeHostException
+    {
+        public EffectRoutingException(string instanceId, int effectId, string message)
+            : base(-10, message)
+        {
+            InstanceId = instanceId;
+            EffectId = effectId;
+        }
+
+        /// <summary>The instance identifier associated with the effect registration.</summary>
+        public string InstanceId { get; }
+
+        /// <summary>The effect identifier associated with the registration failure.</summary>
+        public int EffectId { get; }
+    }
 }
 
 #pragma warning restore MA0048

@@ -87,6 +87,18 @@ namespace QmlSharp.Host.Tests.StateSynchronization
             return NextResultCode;
         }
 
+        public int DispatchEffect(string instanceId, string effectName, string payloadJson)
+        {
+            AddCall(new SyncCall("effect", instanceId, effectName, payloadJson));
+            return NextResultCode;
+        }
+
+        public int BroadcastEffect(string className, string effectName, string payloadJson)
+        {
+            AddCall(new SyncCall("broadcast", className, effectName, payloadJson));
+            return NextResultCode;
+        }
+
         private void AddCall(SyncCall call)
         {
             lock (syncRoot)
