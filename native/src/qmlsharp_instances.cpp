@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "qmlsharp_errors.h"
+#include "qmlsharp_metrics.h"
 
 namespace qmlsharp {
 namespace {
@@ -95,6 +96,7 @@ bool invoke_command(qmlsharp_command_cb callback, const std::string& instance_id
 
     try {
         callback(instance_id.c_str(), command_name.c_str(), args_json.c_str());
+        record_command_dispatch();
         clear_last_error();
         return true;
     } catch (const std::exception& error) {
@@ -313,6 +315,39 @@ std::vector<QPointer<QObject>> find_instance_objects_by_class(const char* class_
     }
 
     return matches;
+}
+
+std::vector<NativeInstanceRecordSnapshot> snapshot_instances() noexcept {
+    std::vector<NativeInstanceRecordSnapshot> snapshots;
+    std::lock_guard<std::mutex> lock(instance_mutex);
+    snapshots.reserve(instances.size());
+    for (const auto& [instance_id, record] : instances) {
+        snapshots.push_back(NativeInstanceRecordSnapshot{
+            instance_id,
+            record.class_name,
+            record.compiler_slot_key,
+            record.ready,
+            record.object,
+        });
+    }
+
+    return snapshots;
+}
+
+std::string find_instance_id_by_class_slot(const char* class_name, const char* compiler_slot_key) noexcept {
+    if (is_blank(class_name) || is_blank(compiler_slot_key)) {
+        return {};
+    }
+
+    std::lock_guard<std::mutex> lock(instance_mutex);
+    for (const auto& [instance_id, record] : instances) {
+        if (record.class_name == class_name && record.compiler_slot_key == compiler_slot_key &&
+            !record.object.isNull()) {
+            return instance_id;
+        }
+    }
+
+    return {};
 }
 
 int active_instance_count() noexcept {

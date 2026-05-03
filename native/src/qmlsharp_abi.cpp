@@ -5,9 +5,12 @@
 #include <new>
 #include <string>
 
+#include "qmlsharp_diagnostics.h"
 #include "qmlsharp_effects.h"
 #include "qmlsharp_engine.h"
+#include "qmlsharp_error_overlay.h"
 #include "qmlsharp_errors.h"
+#include "qmlsharp_hot_reload.h"
 #include "qmlsharp_instances.h"
 #include "qmlsharp_state.h"
 #include "qmlsharp_type_registry.h"
@@ -112,6 +115,39 @@ extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_dispatch_effect(const cha
 extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_broadcast_effect(const char* class_name, const char* effect_name,
                                                                         const char* payload_json) {
     return qmlsharp::broadcast_effect(class_name, effect_name, payload_json);
+}
+
+extern "C" QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_capture_snapshot(void* engine) {
+    return qmlsharp::capture_snapshot(engine);
+}
+
+extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_reload_qml(void* engine, const char* qml_source_path) {
+    return qmlsharp::reload_qml(engine, qml_source_path);
+}
+
+extern "C" QMLSHARP_API void QMLSHARP_CALL qmlsharp_restore_snapshot(void* engine, const char* snapshot_json) {
+    qmlsharp::restore_snapshot(engine, snapshot_json);
+}
+
+extern "C" QMLSHARP_API void QMLSHARP_CALL qmlsharp_show_error(void* engine, const char* title, const char* message,
+                                                               const char* file_path, int32_t line, int32_t column) {
+    qmlsharp::show_error(engine, title, message, file_path, line, column);
+}
+
+extern "C" QMLSHARP_API void QMLSHARP_CALL qmlsharp_hide_error(void* engine) {
+    qmlsharp::hide_error(engine);
+}
+
+extern "C" QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_get_instance_info(const char* instance_id) {
+    return qmlsharp::get_instance_info(instance_id);
+}
+
+extern "C" QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_get_all_instances(void) {
+    return qmlsharp::get_all_instances();
+}
+
+extern "C" QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_get_metrics(void) {
+    return qmlsharp::get_metrics();
 }
 
 extern "C" QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_get_last_error(void) {

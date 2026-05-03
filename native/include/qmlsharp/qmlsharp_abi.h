@@ -69,6 +69,18 @@ QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_dispatch_effect(const char* instance
 QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_broadcast_effect(const char* class_name, const char* effect_name,
                                                              const char* payload_json);
 
+QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_capture_snapshot(void* engine);
+QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_reload_qml(void* engine, const char* qml_source_path);
+QMLSHARP_API void QMLSHARP_CALL qmlsharp_restore_snapshot(void* engine, const char* snapshot_json);
+
+QMLSHARP_API void QMLSHARP_CALL qmlsharp_show_error(void* engine, const char* title, const char* message,
+                                                    const char* file_path, int32_t line, int32_t column);
+QMLSHARP_API void QMLSHARP_CALL qmlsharp_hide_error(void* engine);
+
+QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_get_instance_info(const char* instance_id);
+QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_get_all_instances(void);
+QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_get_metrics(void);
+
 QMLSHARP_API const char* QMLSHARP_CALL qmlsharp_get_last_error(void);
 QMLSHARP_API void QMLSHARP_CALL qmlsharp_free_string(const char* str);
 

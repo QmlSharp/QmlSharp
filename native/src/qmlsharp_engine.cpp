@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QMetaObject>
+#include <QQmlEngine>
 #include <QThread>
 #include <exception>
 #include <memory>
@@ -76,6 +77,59 @@ QmlSharpEngine::QmlSharpEngine(std::unique_ptr<QQmlEngine> engine, QObject* pare
 
 QQmlEngine* QmlSharpEngine::qml_engine() const noexcept {
     return engine_.get();
+}
+
+QObject* QmlSharpEngine::primary_root_object() const noexcept {
+    for (const QPointer<QObject>& object : root_objects_) {
+        if (!object.isNull()) {
+            return object.data();
+        }
+    }
+
+    return nullptr;
+}
+
+QObject* QmlSharpEngine::error_overlay() const noexcept {
+    return error_overlay_.data();
+}
+
+void QmlSharpEngine::replace_root_object(QObject* object) {
+    clear_root_objects();
+    if (object == nullptr) {
+        return;
+    }
+
+    QQmlEngine::setObjectOwnership(object, QQmlEngine::CppOwnership);
+    object->setParent(this);
+    root_objects_.push_back(object);
+}
+
+void QmlSharpEngine::clear_root_objects() noexcept {
+    for (const QPointer<QObject>& object : root_objects_) {
+        if (!object.isNull()) {
+            delete object.data();
+        }
+    }
+
+    root_objects_.clear();
+}
+
+void QmlSharpEngine::set_error_overlay(QObject* object) {
+    clear_error_overlay();
+    if (object == nullptr) {
+        return;
+    }
+
+    QQmlEngine::setObjectOwnership(object, QQmlEngine::CppOwnership);
+    object->setParent(this);
+    error_overlay_ = object;
+}
+
+void QmlSharpEngine::clear_error_overlay() noexcept {
+    if (!error_overlay_.isNull()) {
+        delete error_overlay_.data();
+        error_overlay_.clear();
+    }
 }
 
 void* engine_init(int argc, const char** argv) noexcept {

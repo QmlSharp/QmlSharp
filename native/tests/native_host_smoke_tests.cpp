@@ -4,13 +4,20 @@
 
 #include <QCoreApplication>
 #include <QEventLoop>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QMetaObject>
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QTemporaryDir>
 #include <QThread>
 #include <QUrl>
 #include <QVariant>
 #include <QtGlobal>
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
@@ -72,6 +79,73 @@ std::string read_last_error() {
     std::string result(message);
     qmlsharp_free_string(message);
     return result;
+}
+
+std::string take_native_string(const char* value) {
+    if (value == nullptr) {
+        return {};
+    }
+
+    std::string result(value);
+    qmlsharp_free_string(value);
+    return result;
+}
+
+QJsonDocument parse_json_text(const std::string& text, std::string& error) {
+    QJsonParseError parse_error;
+    const QJsonDocument document =
+        QJsonDocument::fromJson(QByteArray(text.data(), static_cast<qsizetype>(text.size())), &parse_error);
+    if (parse_error.error != QJsonParseError::NoError || document.isNull()) {
+        error = parse_error.errorString().toStdString();
+    }
+
+    return document;
+}
+
+QJsonDocument read_native_json_document(const char* value, std::string& error) {
+    const std::string json = take_native_string(value);
+    if (json.empty()) {
+        error = read_last_error();
+        if (error.empty()) {
+            error = "native JSON string was null or empty";
+        }
+
+        return {};
+    }
+
+    return parse_json_text(json, error);
+}
+
+QJsonObject read_metrics_object(std::string& error) {
+    const QJsonDocument document = read_native_json_document(qmlsharp_get_metrics(), error);
+    if (!document.isObject() && error.empty()) {
+        error = "metrics payload should be a JSON object";
+    }
+
+    return document.object();
+}
+
+QString write_qml_file(QTemporaryDir& directory, const QString& file_name, const QString& qml_source,
+                       std::string& error) {
+    const QString file_path = directory.filePath(file_name);
+    QFile file(file_path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        error = file.errorString().toStdString();
+        return {};
+    }
+
+    const QByteArray source_utf8 = qml_source.toUtf8();
+    if (file.write(source_utf8) != source_utf8.size()) {
+        error = file.errorString().toStdString();
+        return {};
+    }
+
+    return file_path;
+}
+
+int reload_qml_file(void* engine, const QString& qml_path) {
+    const QByteArray qml_path_utf8 = qml_path.toUtf8();
+    return qmlsharp_reload_qml(engine, qml_path_utf8.constData());
 }
 
 void pump_events_until(const CallbackProbe& probe) {
@@ -215,6 +289,11 @@ std::unique_ptr<QObject> create_qml_object(QQmlEngine& qml_engine, const char* q
 int register_instance_counter_type(void* engine, const char* module_uri, const char* type_name) {
     return qmlsharp_register_type(engine, module_uri, 1, 0, type_name, "schema-instance-counter",
                                   "RegistrationView::__qmlsharp_vm0", register_counter_type);
+}
+
+int register_counter_type_for_test(void* engine, const char* module_uri, const char* type_name, const char* schema_id) {
+    return qmlsharp_register_type(engine, module_uri, 1, 0, type_name, schema_id, "RegistrationView::__qmlsharp_vm0",
+                                  register_counter_type);
 }
 
 std::unique_ptr<QObject> create_counter_instance(QQmlEngine& qml_engine, const char* module_uri, const char* type_name,
@@ -1943,6 +2022,683 @@ int test_effect_dispatch_invalid_payload_reports_json_error() {
     return EXIT_SUCCESS;
 }
 
+int test_hot_reload_capture_snapshot_returns_state_json() {
+    constexpr const char* test_name = "HRL-01 capture snapshot returns state JSON";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeHotReload.Capture";
+    const char* type_name = "HotReloadCaptureCounter";
+    if (register_counter_type_for_test(engine, module_uri, type_name, "schema-hot-reload-capture") != 0) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    QTemporaryDir directory;
+    std::string error;
+    const QString qml_path = write_qml_file(directory, QStringLiteral("Capture.qml"),
+                                            QStringLiteral("import QtQuick\n"
+                                                           "import %1 1.0\n"
+                                                           "Item { width: 320; height: 240; %2 { count: 11 } }\n")
+                                                .arg(QString::fromLatin1(module_uri))
+                                                .arg(QString::fromLatin1(type_name)),
+                                            error);
+    if (qml_path.isEmpty()) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    if (reload_qml_file(engine, qml_path) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const QJsonDocument snapshot = read_native_json_document(qmlsharp_capture_snapshot(engine), error);
+    qmlsharp_engine_shutdown(engine);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    const QJsonObject root = snapshot.object();
+    const QJsonObject window = root.value(QStringLiteral("window")).toObject();
+    const QJsonArray instances = root.value(QStringLiteral("instances")).toArray();
+    if (window.value(QStringLiteral("width")).toInt() != 320 || window.value(QStringLiteral("height")).toInt() != 240 ||
+        instances.size() != 1) {
+        return fail(test_name, "snapshot should include root geometry and active instance state.");
+    }
+
+    if (instances.at(0)
+            .toObject()
+            .value(QStringLiteral("properties"))
+            .toObject()
+            .value(QStringLiteral("count"))
+            .toInt() != 11) {
+        return fail(test_name, "snapshot should include readable generated QObject state.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_hot_reload_reload_qml_replaces_instances() {
+    constexpr const char* test_name = "HRL-02 reload QML replaces instances";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeHotReload.Replace";
+    const char* type_name = "HotReloadReplaceCounter";
+    if (register_counter_type_for_test(engine, module_uri, type_name, "schema-hot-reload-replace") != 0) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+
+    QTemporaryDir directory;
+    std::string error;
+    const QString first_path = write_qml_file(directory, QStringLiteral("First.qml"),
+                                              QStringLiteral("import QtQuick\nimport %1 1.0\nItem { %2 {} }\n")
+                                                  .arg(QString::fromLatin1(module_uri))
+                                                  .arg(QString::fromLatin1(type_name)),
+                                              error);
+    const QString second_path =
+        write_qml_file(directory, QStringLiteral("Second.qml"), QStringLiteral("import QtQuick\nItem {}\n"), error);
+    if (first_path.isEmpty() || second_path.isEmpty()) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    if (reload_qml_file(engine, first_path) != 0 || probe.created.empty()) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const std::string old_instance_id = probe.created.front().instance_id;
+    if (reload_qml_file(engine, second_path) != 0) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    clear_instance_command_callbacks();
+    qmlsharp_engine_shutdown(engine);
+    if (std::find(probe.destroyed.begin(), probe.destroyed.end(), old_instance_id) == probe.destroyed.end()) {
+        return fail(test_name, "reload should destroy instances owned by the previous QML root.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_hot_reload_reload_qml_creates_instances() {
+    constexpr const char* test_name = "HRL-03/04 reload QML creates instances";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeHotReload.Create";
+    const char* type_name = "HotReloadCreateCounter";
+    if (register_counter_type_for_test(engine, module_uri, type_name, "schema-hot-reload-create") != 0) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+
+    QTemporaryDir directory;
+    std::string error;
+    const QString qml_path = write_qml_file(directory, QStringLiteral("Create.qml"),
+                                            QStringLiteral("import QtQuick\nimport %1 1.0\nItem { %2 {} }\n")
+                                                .arg(QString::fromLatin1(module_uri))
+                                                .arg(QString::fromLatin1(type_name)),
+                                            error);
+    if (qml_path.isEmpty()) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    const int result = reload_qml_file(engine, qml_path);
+    clear_instance_command_callbacks();
+    qmlsharp_engine_shutdown(engine);
+    if (result != 0) {
+        return fail(test_name, read_last_error());
+    }
+
+    if (probe.created.size() != 1U || probe.created[0].class_name != "RegistrationCounterViewModel") {
+        return fail(test_name, "reload should create generated QObject instances from the new QML root.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_hot_reload_invalid_path_reports_qml_load_failure() {
+    constexpr const char* test_name = "HRL-05 invalid QML path reports load failure";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    const int result = qmlsharp_reload_qml(engine, "Z:/missing/qmlsharp/Nope.qml");
+    const std::string error = read_last_error();
+    qmlsharp_engine_shutdown(engine);
+    if (result != -5 || error.find("not found") == std::string::npos) {
+        return fail(test_name, "invalid path should fail with a stable QML load error.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_hot_reload_syntax_error_reports_qml_error() {
+    constexpr const char* test_name = "HRL-06 syntax error reports QML error";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    QTemporaryDir directory;
+    std::string error;
+    const QString qml_path =
+        write_qml_file(directory, QStringLiteral("SyntaxError.qml"), QStringLiteral("import QtQuick\nItem {\n"), error);
+    if (qml_path.isEmpty()) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    const int result = reload_qml_file(engine, qml_path);
+    const std::string native_error = read_last_error();
+    qmlsharp_engine_shutdown(engine);
+    if (result != -5 || native_error.find("failed to create QML root") == std::string::npos) {
+        return fail(test_name, "syntax errors should surface through the QML load failure channel.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_hot_reload_restore_snapshot_restores_root_geometry() {
+    constexpr const char* test_name = "HRL-07 restore snapshot restores root geometry";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    QTemporaryDir directory;
+    std::string error;
+    const QString qml_path =
+        write_qml_file(directory, QStringLiteral("Geometry.qml"),
+                       QStringLiteral("import QtQuick\nItem { width: 10; height: 20; visible: true }\n"), error);
+    if (qml_path.isEmpty()) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    if (reload_qml_file(engine, qml_path) != 0) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    qmlsharp_restore_snapshot(engine, "{\"window\":{\"width\":444,\"height\":222,\"visible\":false},\"instances\":[]}");
+    if (!read_last_error().empty()) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, "restore snapshot should accept root-only geometry payloads.");
+    }
+
+    const QJsonDocument snapshot = read_native_json_document(qmlsharp_capture_snapshot(engine), error);
+    qmlsharp_engine_shutdown(engine);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    const QJsonObject window = snapshot.object().value(QStringLiteral("window")).toObject();
+    if (window.value(QStringLiteral("width")).toInt() != 444 || window.value(QStringLiteral("height")).toInt() != 222 ||
+        window.value(QStringLiteral("visible")).toBool()) {
+        return fail(test_name, "restored snapshot should update supported root properties.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_hot_reload_restore_snapshot_preserves_matching_instance_state() {
+    constexpr const char* test_name = "HRL-08 restore snapshot preserves matching instance state";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeHotReload.Preserve";
+    const char* type_name = "HotReloadPreserveCounter";
+    if (register_counter_type_for_test(engine, module_uri, type_name, "schema-hot-reload-preserve") != 0) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+
+    QTemporaryDir directory;
+    std::string error;
+    const QString qml_path =
+        write_qml_file(directory, QStringLiteral("Preserve.qml"),
+                       QStringLiteral("import QtQuick\nimport %1 1.0\nItem { width: 100; height: 100; %2 {} }\n")
+                           .arg(QString::fromLatin1(module_uri))
+                           .arg(QString::fromLatin1(type_name)),
+                       error);
+    if (qml_path.isEmpty()) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    if (reload_qml_file(engine, qml_path) != 0 || probe.created.empty()) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const std::string old_instance_id = probe.created.back().instance_id;
+    if (qmlsharp_sync_state_int(old_instance_id.c_str(), "count", 42) != 0 ||
+        qmlsharp_sync_state_string(old_instance_id.c_str(), "title", "preserved") != 0) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const char* snapshot = qmlsharp_capture_snapshot(engine);
+    if (snapshot == nullptr) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    if (reload_qml_file(engine, qml_path) != 0 || probe.created.size() < 2U) {
+        qmlsharp_free_string(snapshot);
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const std::string new_instance_id = probe.created.back().instance_id;
+    qmlsharp_restore_snapshot(engine, snapshot);
+    qmlsharp_free_string(snapshot);
+    if (!read_last_error().empty()) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, "restore snapshot should hydrate matching new instances.");
+    }
+
+    const QJsonDocument info = read_native_json_document(qmlsharp_get_instance_info(new_instance_id.c_str()), error);
+    clear_instance_command_callbacks();
+    qmlsharp_engine_shutdown(engine);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    const QJsonObject properties = info.object().value(QStringLiteral("properties")).toObject();
+    if (new_instance_id == old_instance_id || properties.value(QStringLiteral("count")).toInt() != 42 ||
+        properties.value(QStringLiteral("title")).toString() != QStringLiteral("preserved")) {
+        return fail(test_name, "restore should rehydrate state onto the replacement instance.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_hot_reload_restore_snapshot_consumes_duplicate_slot_matches() {
+    constexpr const char* test_name = "HRL-08B restore snapshot consumes duplicate slot matches";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeHotReload.Duplicates";
+    const char* type_name = "HotReloadDuplicateCounter";
+    if (register_counter_type_for_test(engine, module_uri, type_name, "schema-hot-reload-duplicates") != 0) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+
+    QTemporaryDir directory;
+    std::string error;
+    const QString qml_path = write_qml_file(directory, QStringLiteral("Duplicates.qml"),
+                                            QStringLiteral("import QtQuick\nimport %1 1.0\nItem { %2 {} %2 {} }\n")
+                                                .arg(QString::fromLatin1(module_uri))
+                                                .arg(QString::fromLatin1(type_name)),
+                                            error);
+    if (qml_path.isEmpty()) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    if (reload_qml_file(engine, qml_path) != 0 || probe.created.size() < 2U) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const std::string first_old_id = probe.created[0].instance_id;
+    const std::string second_old_id = probe.created[1].instance_id;
+    if (qmlsharp_sync_state_int(first_old_id.c_str(), "count", 10) != 0 ||
+        qmlsharp_sync_state_string(first_old_id.c_str(), "title", "first") != 0 ||
+        qmlsharp_sync_state_int(second_old_id.c_str(), "count", 20) != 0 ||
+        qmlsharp_sync_state_string(second_old_id.c_str(), "title", "second") != 0) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const char* snapshot = qmlsharp_capture_snapshot(engine);
+    if (snapshot == nullptr) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    if (reload_qml_file(engine, qml_path) != 0 || probe.created.size() < 4U) {
+        qmlsharp_free_string(snapshot);
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const std::string first_new_id = probe.created[2].instance_id;
+    const std::string second_new_id = probe.created[3].instance_id;
+    qmlsharp_restore_snapshot(engine, snapshot);
+    qmlsharp_free_string(snapshot);
+    if (!read_last_error().empty()) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, "restore snapshot should hydrate duplicate matching instances.");
+    }
+
+    const QJsonDocument first_info = read_native_json_document(qmlsharp_get_instance_info(first_new_id.c_str()), error);
+    const QJsonDocument second_info =
+        read_native_json_document(qmlsharp_get_instance_info(second_new_id.c_str()), error);
+    clear_instance_command_callbacks();
+    qmlsharp_engine_shutdown(engine);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    std::vector<int> counts{
+        first_info.object().value(QStringLiteral("properties")).toObject().value(QStringLiteral("count")).toInt(),
+        second_info.object().value(QStringLiteral("properties")).toObject().value(QStringLiteral("count")).toInt(),
+    };
+    std::sort(counts.begin(), counts.end());
+    if (counts.size() != 2U || counts[0] != 10 || counts[1] != 20) {
+        return fail(test_name,
+                    "restore should distribute duplicate slot snapshots across distinct replacement objects.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_error_overlay_show_hide_and_repeated_hide() {
+    constexpr const char* test_name = "error overlay show/hide";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    qmlsharp_show_error(engine, "Compile error", "Something failed", "Main.qml", 12, 5);
+    std::string error;
+    QJsonObject metrics = read_metrics_object(error);
+    if (!error.empty()) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    if (!metrics.value(QStringLiteral("errorOverlayVisible")).toBool()) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, "show_error should mark the overlay visible.");
+    }
+
+    qmlsharp_hide_error(engine);
+    qmlsharp_hide_error(engine);
+    const std::string hide_error = read_last_error();
+    metrics = read_metrics_object(error);
+    qmlsharp_engine_shutdown(engine);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    if (metrics.value(QStringLiteral("errorOverlayVisible")).toBool() || !hide_error.empty()) {
+        return fail(test_name, "hide_error should be idempotent and clear overlay visibility.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_error_overlay_invalid_payload_reports_error() {
+    constexpr const char* test_name = "error overlay invalid payload";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    std::string error;
+    const QJsonObject before = read_metrics_object(error);
+    if (!error.empty()) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    qmlsharp_show_error(engine, "", "missing title", "Main.qml", -1, 0);
+    const std::string native_error = read_last_error();
+    const QJsonObject after = read_metrics_object(error);
+    qmlsharp_engine_shutdown(engine);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    if (native_error.find("title") == std::string::npos ||
+        after.value(QStringLiteral("errorCount")).toDouble() <= before.value(QStringLiteral("errorCount")).toDouble()) {
+        return fail(test_name, "invalid overlay payload should report a native payload error.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_devtools_instance_lookup_reports_properties() {
+    constexpr const char* test_name = "dev-tools instance lookup";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    fixture.counter()->setCount(77);
+    fixture.counter()->setTitle(QStringLiteral("inspectable"));
+    std::string error;
+    const QJsonDocument info =
+        read_native_json_document(qmlsharp_get_instance_info(fixture.instance_id().c_str()), error);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    const QJsonObject root = info.object();
+    const QJsonObject properties = root.value(QStringLiteral("properties")).toObject();
+    if (root.value(QStringLiteral("instanceId")).toString().toStdString() != fixture.instance_id() ||
+        root.value(QStringLiteral("className")).toString() != QStringLiteral("RegistrationCounterViewModel") ||
+        properties.value(QStringLiteral("count")).toInt() != 77 ||
+        properties.value(QStringLiteral("title")).toString() != QStringLiteral("inspectable")) {
+        return fail(test_name, "instance info should expose identity and readable state.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_devtools_instance_lookup_from_background_thread_reads_on_owner_thread() {
+    constexpr const char* test_name = "dev-tools instance lookup marshals property reads";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    fixture.counter()->setCount(88);
+    fixture.counter()->resetCountReadProbe();
+
+    std::atomic_bool done = false;
+    std::string json;
+    std::string worker_error;
+    std::thread worker([&fixture, &done, &json, &worker_error]() {
+        const char* payload = qmlsharp_get_instance_info(fixture.instance_id().c_str());
+        if (payload == nullptr) {
+            worker_error = read_last_error();
+        } else {
+            json = take_native_string(payload);
+        }
+
+        done = true;
+    });
+
+    for (int attempt = 0; attempt < 200 && !done; ++attempt) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(1);
+    }
+
+    worker.join();
+    if (!worker_error.empty()) {
+        return fail(test_name, worker_error);
+    }
+
+    std::string error;
+    const QJsonDocument info = parse_json_text(json, error);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    const int count =
+        info.object().value(QStringLiteral("properties")).toObject().value(QStringLiteral("count")).toInt();
+    if (count != 88 || !fixture.counter()->wasCountReadOnOwnerThread()) {
+        return fail(test_name, "background diagnostics should read QObject properties on the owning thread.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_devtools_instance_enumeration_lists_active_instances() {
+    constexpr const char* test_name = "dev-tools instance enumeration";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    auto first = std::make_unique<RegistrationCounterViewModel>();
+    auto second = std::make_unique<RegistrationCounterViewModel>();
+    const std::string first_id = first->instanceId().toStdString();
+    const std::string second_id = second->instanceId().toStdString();
+
+    std::string error;
+    const QJsonDocument instances = read_native_json_document(qmlsharp_get_all_instances(), error);
+    first.reset();
+    second.reset();
+    qmlsharp_engine_shutdown(engine);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    bool saw_first = false;
+    bool saw_second = false;
+    for (const QJsonValue& instance : instances.array()) {
+        const std::string instance_id =
+            instance.toObject().value(QStringLiteral("instanceId")).toString().toStdString();
+        saw_first = saw_first || instance_id == first_id;
+        saw_second = saw_second || instance_id == second_id;
+    }
+
+    if (!saw_first || !saw_second) {
+        return fail(test_name, "instance enumeration should include all active generated objects.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_metrics_include_stable_native_counters() {
+    constexpr const char* test_name = "native metrics counters";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    std::string error;
+    const QJsonObject before = read_metrics_object(error);
+    if (!error.empty()) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    if (register_counter_type_for_test(engine, "QmlSharp.NativeMetrics.Counters", "MetricsCounter",
+                                       "schema-native-metrics") != 0) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    auto counter = std::make_unique<RegistrationCounterViewModel>();
+    const std::string instance_id = counter->instanceId().toStdString();
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_command_callback(command_callback);
+    qmlsharp_instance_ready(instance_id.c_str());
+
+    if (!invoke_no_arg_command(counter.get(), "commandNoArgs") ||
+        qmlsharp_sync_state_int(instance_id.c_str(), "count", 5) != 0 ||
+        qmlsharp_dispatch_effect(instance_id.c_str(), "metricsEffect", "{}") != 0) {
+        clear_instance_command_callbacks();
+        counter.reset();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    QTemporaryDir directory;
+    const QString qml_path =
+        write_qml_file(directory, QStringLiteral("Metrics.qml"), QStringLiteral("import QtQuick\nItem {}\n"), error);
+    if (qml_path.isEmpty() || reload_qml_file(engine, qml_path) != 0) {
+        clear_instance_command_callbacks();
+        counter.reset();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error.empty() ? read_last_error() : error);
+    }
+
+    const QJsonObject after = read_metrics_object(error);
+    clear_instance_command_callbacks();
+    counter.reset();
+    qmlsharp_engine_shutdown(engine);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    if (after.value(QStringLiteral("typeRegistrationCount")).toDouble() <=
+            before.value(QStringLiteral("typeRegistrationCount")).toDouble() ||
+        after.value(QStringLiteral("stateSyncCount")).toDouble() <=
+            before.value(QStringLiteral("stateSyncCount")).toDouble() ||
+        after.value(QStringLiteral("commandDispatchCount")).toDouble() <=
+            before.value(QStringLiteral("commandDispatchCount")).toDouble() ||
+        after.value(QStringLiteral("effectDispatchCount")).toDouble() <=
+            before.value(QStringLiteral("effectDispatchCount")).toDouble() ||
+        after.value(QStringLiteral("hotReloadCount")).toDouble() <=
+            before.value(QStringLiteral("hotReloadCount")).toDouble() ||
+        after.value(QStringLiteral("activeInstanceCount")).toDouble() <=
+            before.value(QStringLiteral("activeInstanceCount")).toDouble() ||
+        after.value(QStringLiteral("lastHotReloadDurationMs")).toDouble() < 0.0) {
+        return fail(test_name, "metrics should advance for type, instance, state, command, effect, and reload work.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int run_test(int (*test)()) {
     const int result = test();
     if (result != EXIT_SUCCESS) {
@@ -2009,6 +2765,20 @@ int main() {
     result |= run_test(test_effect_broadcast_emits_to_all_class_instances);
     result |= run_test(test_effect_broadcast_with_no_active_instances_is_success);
     result |= run_test(test_effect_dispatch_invalid_payload_reports_json_error);
+    result |= run_test(test_hot_reload_capture_snapshot_returns_state_json);
+    result |= run_test(test_hot_reload_reload_qml_replaces_instances);
+    result |= run_test(test_hot_reload_reload_qml_creates_instances);
+    result |= run_test(test_hot_reload_invalid_path_reports_qml_load_failure);
+    result |= run_test(test_hot_reload_syntax_error_reports_qml_error);
+    result |= run_test(test_hot_reload_restore_snapshot_restores_root_geometry);
+    result |= run_test(test_hot_reload_restore_snapshot_preserves_matching_instance_state);
+    result |= run_test(test_hot_reload_restore_snapshot_consumes_duplicate_slot_matches);
+    result |= run_test(test_error_overlay_show_hide_and_repeated_hide);
+    result |= run_test(test_error_overlay_invalid_payload_reports_error);
+    result |= run_test(test_devtools_instance_lookup_reports_properties);
+    result |= run_test(test_devtools_instance_lookup_from_background_thread_reads_on_owner_thread);
+    result |= run_test(test_devtools_instance_enumeration_lists_active_instances);
+    result |= run_test(test_metrics_include_stable_native_counters);
 
     return result;
 }
