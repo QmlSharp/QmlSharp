@@ -3,6 +3,9 @@
 #include <qqml.h>
 #include <stdint.h>
 
+#include <QCoreApplication>
+#include <QMetaObject>
+
 #include "RegistrationCounterViewModel.h"
 
 extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_test_register_registration_counter_view_model(
@@ -12,4 +15,15 @@ extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_test_register_registratio
     }
 
     return qmlRegisterType<RegistrationCounterViewModel>(module_uri, version_major, version_minor, type_name);
+}
+
+extern "C" QMLSHARP_API int32_t QMLSHARP_CALL qmlsharp_test_queue_application_quit() {
+    QCoreApplication* application = QCoreApplication::instance();
+    if (application == nullptr) {
+        return -4;
+    }
+
+    const bool posted =
+        QMetaObject::invokeMethod(application, []() { QCoreApplication::quit(); }, Qt::QueuedConnection);
+    return posted ? 0 : -1;
 }

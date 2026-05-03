@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using QmlSharp.Compiler;
 using QmlSharp.Host.Engine;
@@ -83,7 +84,7 @@ namespace QmlSharp.Integration.Tests.Fixtures
 
             ViewModelSchemaSerializer serializer = new();
             string schemaJson = File.ReadAllText(Path.Join(schemasDirectory, "RegistrationCounterViewModel.schema.json"));
-            NativeFixtureRegistrations registrations = NativeFixtureRegistrations.ForLibrary(nativeLibrarySource);
+            NativeFixtureRegistrations registrations = NativeFixtureRegistrations.ForLibrary(artifactNativeLibraryPath);
 
             return new NativeRoundTripFixture(
                 tempRoot,
@@ -91,7 +92,7 @@ namespace QmlSharp.Integration.Tests.Fixtures
                 Path.Join(qmlDirectory, "Main.qml"),
                 Path.Join(qmlDirectory, "Reload.qml"),
                 Path.Join(qmlDirectory, "Quit.qml"),
-                nativeLibrarySource,
+                artifactNativeLibraryPath,
                 [serializer.Deserialize(schemaJson)],
                 registrations);
         }
@@ -102,6 +103,12 @@ namespace QmlSharp.Integration.Tests.Fixtures
             return new QmlSharpEngine(
                 NativeLibraryPath,
                 registrations.RegisterRegistrationCounterViewModel);
+        }
+
+        public void QueueApplicationQuit()
+        {
+            ThrowIfDisposed();
+            registrations.QueueApplicationQuit();
         }
 
         public void Dispose()
@@ -210,11 +217,19 @@ namespace QmlSharp.Integration.Tests.Fixtures
                     Directory.Delete(path, recursive: true);
                 }
             }
-            catch (IOException)
+            catch (IOException exception)
             {
+                Trace.TraceWarning(
+                    "Could not delete native integration fixture directory '{0}': {1}",
+                    path,
+                    exception.Message);
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException exception)
             {
+                Trace.TraceWarning(
+                    "Could not delete native integration fixture directory '{0}': {1}",
+                    path,
+                    exception.Message);
             }
         }
 

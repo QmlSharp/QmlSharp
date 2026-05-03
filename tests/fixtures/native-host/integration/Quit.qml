@@ -7,7 +7,7 @@ Item {
     }
 
     Timer {
-        interval: 0
+        interval: 10
         running: true
         repeat: false
         onTriggered: Qt.quit()

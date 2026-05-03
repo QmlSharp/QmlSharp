@@ -12,6 +12,7 @@ namespace QmlSharp.Integration.Tests.Fixtures
 
         private readonly IntPtr libraryHandle;
         private readonly RegisterCounterViewModelDelegate registerCounterViewModel;
+        private readonly QueueApplicationQuitDelegate queueApplicationQuit;
 
         private NativeFixtureRegistrations(string fullNativeLibraryPath)
         {
@@ -22,6 +23,10 @@ namespace QmlSharp.Integration.Tests.Fixtures
                     libraryHandle,
                     "qmlsharp_test_register_registration_counter_view_model");
                 registerCounterViewModel = Marshal.GetDelegateForFunctionPointer<RegisterCounterViewModelDelegate>(export);
+                IntPtr quitExport = NativeLibrary.GetExport(
+                    libraryHandle,
+                    "qmlsharp_test_queue_application_quit");
+                queueApplicationQuit = Marshal.GetDelegateForFunctionPointer<QueueApplicationQuitDelegate>(quitExport);
             }
             catch
             {
@@ -58,11 +63,24 @@ namespace QmlSharp.Integration.Tests.Fixtures
             return result;
         }
 
+        public void QueueApplicationQuit()
+        {
+            int result = queueApplicationQuit();
+            GC.KeepAlive(libraryHandle);
+            if (result != 0)
+            {
+                throw new InvalidOperationException("Failed to queue Qt application quit for the integration fixture.");
+            }
+        }
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate int RegisterCounterViewModelDelegate(
             [MarshalAs(UnmanagedType.LPUTF8Str)] string moduleUri,
             int versionMajor,
             int versionMinor,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string typeName);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int QueueApplicationQuitDelegate();
     }
 }

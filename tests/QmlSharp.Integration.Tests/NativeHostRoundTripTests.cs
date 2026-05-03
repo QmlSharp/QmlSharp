@@ -33,24 +33,18 @@ namespace QmlSharp.Integration.Tests
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.RequiresQt)]
         [Trait("Category", TestCategories.RequiresNative)]
-        public async Task Run_FromQuitFixture_EntersEventLoopAndExitsCleanly_INT_01()
+        public void Run_FromQuitFixture_EntersEventLoopAndExitsCleanly_INT_01()
         {
             using NativeRoundTripFixture fixture = NativeRoundTripFixture.Create();
             using QmlSharpEngine engine = fixture.CreateEngine();
             engine.Initialize(fixture.DistDirectory, [], fixture.QuitQmlPath);
             engine.RegisterTypes(fixture.Schemas);
-            TaskCompletionSource<object?> shutdownStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            Task shutdownTask = Task.Run(() =>
-            {
-                shutdownStarted.SetResult(null);
-                engine.Shutdown();
-            });
+            fixture.QueueApplicationQuit();
 
-            _ = await shutdownStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
             int exitCode = engine.Run(fixture.QuitQmlPath);
 
             Assert.Equal(0, exitCode);
-            await shutdownTask.WaitAsync(TimeSpan.FromSeconds(5));
+            engine.Shutdown();
             Assert.False(engine.IsInitialized);
         }
 
