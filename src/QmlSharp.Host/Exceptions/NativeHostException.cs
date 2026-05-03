@@ -38,6 +38,29 @@ namespace QmlSharp.Host.Exceptions
         public int ActualVersion { get; }
     }
 
+    /// <summary>Thrown when a native-host API is used before the Qt engine has initialized.</summary>
+    public sealed class EngineNotInitializedException : NativeHostException
+    {
+        public EngineNotInitializedException()
+            : base(-4, "QmlSharp engine is not initialized. Call Initialize() first.")
+        {
+        }
+
+        public EngineNotInitializedException(string message)
+            : base(-4, message)
+        {
+        }
+    }
+
+    /// <summary>Thrown when a native-host API rejects its arguments before doing work.</summary>
+    public sealed class NativeInvalidArgumentException : NativeHostException
+    {
+        public NativeInvalidArgumentException(string message)
+            : base(-2, message)
+        {
+        }
+    }
+
     /// <summary>Thrown when a referenced runtime instance is not registered.</summary>
     public sealed class InstanceNotFoundException : NativeHostException
     {
@@ -49,6 +72,19 @@ namespace QmlSharp.Host.Exceptions
 
         /// <summary>The missing instance identifier.</summary>
         public string InstanceId { get; }
+    }
+
+    /// <summary>Thrown when the native host cannot load or reload a root QML file.</summary>
+    public sealed class QmlLoadException : NativeHostException
+    {
+        public QmlLoadException(string qmlPath, string detail)
+            : base(-5, $"Failed to load QML from '{qmlPath}': {detail}")
+        {
+            QmlPath = qmlPath;
+        }
+
+        /// <summary>The root QML path that failed to load.</summary>
+        public string QmlPath { get; }
     }
 
     /// <summary>Thrown when a state synchronization property name is not part of the known schema.</summary>
