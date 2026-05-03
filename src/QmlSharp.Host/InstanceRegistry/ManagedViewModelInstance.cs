@@ -164,6 +164,20 @@ namespace QmlSharp.Host.Instances
             }
         }
 
+        internal void UpdatePropertyStates(IReadOnlyDictionary<string, object?> state)
+        {
+            lock (syncRoot)
+            {
+                Dictionary<string, object?> nextState = new(currentState, StringComparer.Ordinal);
+                foreach (KeyValuePair<string, object?> property in state)
+                {
+                    nextState[property.Key] = property.Value;
+                }
+
+                currentState = ToReadOnly(nextState);
+            }
+        }
+
         internal void ReplacePropertyState(IReadOnlyDictionary<string, object?> state)
         {
             lock (syncRoot)

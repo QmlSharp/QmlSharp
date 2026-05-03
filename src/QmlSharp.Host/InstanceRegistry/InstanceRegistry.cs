@@ -287,6 +287,29 @@ namespace QmlSharp.Host.Instances
             }
         }
 
+        /// <summary>Updates several properties in the managed state snapshot as one sync operation.</summary>
+        public bool UpdatePropertyStates(string instanceId, IReadOnlyDictionary<string, object?> state)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+            ArgumentNullException.ThrowIfNull(state);
+
+            lock (syncRoot)
+            {
+                if (disposed || !instancesById.TryGetValue(instanceId, out ManagedViewModelInstance? instance))
+                {
+                    return false;
+                }
+
+                instance.UpdatePropertyStates(state);
+                checked
+                {
+                    totalStateSyncs++;
+                }
+
+                return true;
+            }
+        }
+
         /// <summary>Replaces the managed state snapshot for one instance.</summary>
         public bool ReplacePropertyState(string instanceId, IReadOnlyDictionary<string, object?> state)
         {
