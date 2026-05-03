@@ -94,6 +94,12 @@ namespace QmlSharp.Qt.Tools.ProcessProbe
             string delayMilliseconds = args[1];
             using Process child = Process.Start(CreateChildStartInfo("delayed-write", markerPath, delayMilliseconds))
                 ?? throw new InvalidOperationException("Failed to start child process.");
+            if (args.Length >= 3)
+            {
+                await File.WriteAllTextAsync(args[2], child.Id.ToString(CultureInfo.InvariantCulture))
+                    .ConfigureAwait(false);
+            }
+
             Console.WriteLine("stdout-before-wait");
             Console.Error.WriteLine("stderr-before-wait");
             Console.WriteLine($"child-pid={child.Id}");
