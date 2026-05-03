@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 120
     env:
       MSBUILDDISABLENODEREUSE: "1"
+      QT_QPA_PLATFORM: offscreen
 
     steps:
       - name: Checkout

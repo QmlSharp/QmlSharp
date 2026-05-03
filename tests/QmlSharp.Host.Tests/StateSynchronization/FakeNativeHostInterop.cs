@@ -16,6 +16,12 @@ namespace QmlSharp.Host.Tests.StateSynchronization
 
         public int ReloadResultCode { get; set; }
 
+        public IntPtr EngineHandle { get; set; } = new(1);
+
+        public int EngineExecResultCode { get; set; }
+
+        public int RegisterResultCode { get; set; }
+
         public string? SnapshotJson { get; set; } = "{\"window\":{}}";
 
         public string? LastError { get; set; }
@@ -23,6 +29,10 @@ namespace QmlSharp.Host.Tests.StateSynchronization
         public Action? OnReload { get; set; }
 
         public Exception? HideErrorException { get; set; }
+
+        public bool ReturnNullNativeInstanceInfo { get; set; }
+
+        public string? NativeInstanceInfoJson { get; set; }
 
         public IReadOnlyList<SyncCall> Calls
         {
@@ -51,6 +61,23 @@ namespace QmlSharp.Host.Tests.StateSynchronization
             return NativeHostAbi.SupportedAbiVersion;
         }
 
+        public IntPtr EngineInit(IReadOnlyList<string> arguments)
+        {
+            AddCall(new SyncCall("engine_init", arguments.Count.ToString(), PropertyName: null, string.Join("|", arguments)));
+            return EngineHandle;
+        }
+
+        public void EngineShutdown(IntPtr engineHandle)
+        {
+            AddCall(new SyncCall("engine_shutdown", engineHandle.ToString(), PropertyName: null, Value: null));
+        }
+
+        public int EngineExec(IntPtr engineHandle)
+        {
+            AddCall(new SyncCall("engine_exec", engineHandle.ToString(), PropertyName: null, Value: null));
+            return EngineExecResultCode;
+        }
+
         public string? GetLastError()
         {
             return LastError;
@@ -69,6 +96,71 @@ namespace QmlSharp.Host.Tests.StateSynchronization
             }
 
             callback();
+        }
+
+        public int RegisterType(
+            IntPtr engineHandle,
+            string moduleUri,
+            int versionMajor,
+            int versionMinor,
+            string typeName,
+            string schemaId,
+            string compilerSlotKey,
+            QmlSharpTypeRegistrationCallback registerCallback)
+        {
+            AddCall(new SyncCall("register_type", moduleUri, typeName, schemaId));
+            if (RegisterResultCode == 0)
+            {
+                _ = registerCallback(moduleUri, versionMajor, versionMinor, typeName);
+            }
+
+            return RegisterResultCode;
+        }
+
+        public int RegisterModule(
+            IntPtr engineHandle,
+            string moduleUri,
+            int versionMajor,
+            int versionMinor,
+            IReadOnlyList<QmlSharpTypeRegistrationEntry> entries)
+        {
+            AddCall(new SyncCall("register_module", moduleUri, versionMajor.ToString(), entries.Count));
+            if (RegisterResultCode == 0)
+            {
+                foreach (QmlSharpTypeRegistrationEntry entry in entries)
+                {
+                    AddCall(new SyncCall("register_module_entry", entry.TypeName, entry.CompilerSlotKey, entry.SchemaId));
+                    _ = entry.RegisterCallback(moduleUri, versionMajor, versionMinor, entry.TypeName);
+                }
+            }
+
+            return RegisterResultCode;
+        }
+
+        public Action<string, string, string>? InstanceCreatedCallback { get; private set; }
+
+        public Action<string>? InstanceDestroyedCallback { get; private set; }
+
+        public Action<string, string, string>? CommandCallback { get; private set; }
+
+        public void SetInstanceCallbacks(
+            Action<string, string, string>? onCreated,
+            Action<string>? onDestroyed)
+        {
+            InstanceCreatedCallback = onCreated;
+            InstanceDestroyedCallback = onDestroyed;
+            AddCall(new SyncCall("set_instance_callbacks", "callbacks", PropertyName: null, onCreated is null ? "clear" : "set"));
+        }
+
+        public void InstanceReady(string instanceId)
+        {
+            AddCall(new SyncCall("instance_ready", instanceId, PropertyName: null, Value: null));
+        }
+
+        public void SetCommandCallback(Action<string, string, string>? callback)
+        {
+            CommandCallback = callback;
+            AddCall(new SyncCall("set_command_callback", "callback", PropertyName: null, callback is null ? "clear" : "set"));
         }
 
         public int SyncStateString(string instanceId, string propertyName, string? value)
@@ -166,6 +258,29 @@ namespace QmlSharp.Host.Tests.StateSynchronization
             {
                 overlayCalls.Add(new OverlayCall(engineHandle, Title: null, Message: null, FilePath: null, Line: 0, Column: 0, IsShow: false));
             }
+        }
+
+        public string? GetNativeInstanceInfo(string instanceId)
+        {
+            AddCall(new SyncCall("native_instance_info", instanceId, PropertyName: null, Value: null));
+            if (ReturnNullNativeInstanceInfo)
+            {
+                return null;
+            }
+
+            return NativeInstanceInfoJson ?? "{\"instanceId\":\"" + instanceId + "\"}";
+        }
+
+        public string? GetNativeAllInstances()
+        {
+            AddCall(new SyncCall("native_all_instances", "all", PropertyName: null, Value: null));
+            return "[]";
+        }
+
+        public string? GetNativeMetrics()
+        {
+            AddCall(new SyncCall("native_metrics", "metrics", PropertyName: null, Value: null));
+            return "{}";
         }
 
         private void AddCall(SyncCall call)

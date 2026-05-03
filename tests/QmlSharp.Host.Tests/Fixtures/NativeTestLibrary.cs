@@ -4,6 +4,11 @@ namespace QmlSharp.Host.Tests.Fixtures
 {
     internal static class NativeTestLibrary
     {
+        public static void ConfigureHeadlessQt()
+        {
+            Environment.SetEnvironmentVariable("QT_QPA_PLATFORM", "offscreen");
+        }
+
         public static string Resolve()
         {
             string repositoryRoot = FindRepositoryRoot(AppContext.BaseDirectory);

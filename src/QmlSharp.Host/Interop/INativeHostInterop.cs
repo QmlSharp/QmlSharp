@@ -6,11 +6,42 @@ namespace QmlSharp.Host.Interop
 
         int GetAbiVersion();
 
+        IntPtr EngineInit(IReadOnlyList<string> arguments);
+
+        void EngineShutdown(IntPtr engineHandle);
+
+        int EngineExec(IntPtr engineHandle);
+
         string? GetLastError();
 
         void FreeString(IntPtr pointer);
 
         void PostToMainThread(Action callback);
+
+        int RegisterType(
+            IntPtr engineHandle,
+            string moduleUri,
+            int versionMajor,
+            int versionMinor,
+            string typeName,
+            string schemaId,
+            string compilerSlotKey,
+            QmlSharpTypeRegistrationCallback registerCallback);
+
+        int RegisterModule(
+            IntPtr engineHandle,
+            string moduleUri,
+            int versionMajor,
+            int versionMinor,
+            IReadOnlyList<QmlSharpTypeRegistrationEntry> entries);
+
+        void SetInstanceCallbacks(
+            Action<string, string, string>? onCreated,
+            Action<string>? onDestroyed);
+
+        void InstanceReady(string instanceId);
+
+        void SetCommandCallback(Action<string, string, string>? callback);
 
         int SyncStateString(string instanceId, string propertyName, string? value);
 
@@ -43,5 +74,11 @@ namespace QmlSharp.Host.Interop
             int column);
 
         void HideError(IntPtr engineHandle);
+
+        string? GetNativeInstanceInfo(string instanceId);
+
+        string? GetNativeAllInstances();
+
+        string? GetNativeMetrics();
     }
 }
