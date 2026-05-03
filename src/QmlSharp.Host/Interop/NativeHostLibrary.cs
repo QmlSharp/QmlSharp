@@ -120,6 +120,44 @@ namespace QmlSharp.Host.Interop
             return LoadLazyDelegate<QmlsharpBroadcastEffectDelegate>("qmlsharp_broadcast_effect")(className, effectName, payloadJson);
         }
 
+        public string? CaptureSnapshot(IntPtr engineHandle)
+        {
+            ThrowIfDisposed();
+            return NativeString.ReadAndFree(
+                LoadLazyDelegate<QmlsharpCaptureSnapshotDelegate>("qmlsharp_capture_snapshot")(engineHandle),
+                this);
+        }
+
+        public int ReloadQml(IntPtr engineHandle, string qmlSourcePath)
+        {
+            ThrowIfDisposed();
+            return LoadLazyDelegate<QmlsharpReloadQmlDelegate>("qmlsharp_reload_qml")(engineHandle, qmlSourcePath);
+        }
+
+        public void RestoreSnapshot(IntPtr engineHandle, string snapshotJson)
+        {
+            ThrowIfDisposed();
+            LoadLazyDelegate<QmlsharpRestoreSnapshotDelegate>("qmlsharp_restore_snapshot")(engineHandle, snapshotJson);
+        }
+
+        public void ShowError(
+            IntPtr engineHandle,
+            string title,
+            string message,
+            string? filePath,
+            int line,
+            int column)
+        {
+            ThrowIfDisposed();
+            LoadLazyDelegate<QmlsharpShowErrorDelegate>("qmlsharp_show_error")(engineHandle, title, message, filePath, line, column);
+        }
+
+        public void HideError(IntPtr engineHandle)
+        {
+            ThrowIfDisposed();
+            LoadLazyDelegate<QmlsharpHideErrorDelegate>("qmlsharp_hide_error")(engineHandle);
+        }
+
         public void Dispose()
         {
             if (!disposed)
@@ -214,5 +252,30 @@ namespace QmlSharp.Host.Interop
             [MarshalAs(UnmanagedType.LPUTF8Str)] string className,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string effectName,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string payloadJson);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate IntPtr QmlsharpCaptureSnapshotDelegate(IntPtr engineHandle);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int QmlsharpReloadQmlDelegate(
+            IntPtr engineHandle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string qmlSourcePath);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void QmlsharpRestoreSnapshotDelegate(
+            IntPtr engineHandle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string snapshotJson);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void QmlsharpShowErrorDelegate(
+            IntPtr engineHandle,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string title,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string message,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string? filePath,
+            int line,
+            int column);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void QmlsharpHideErrorDelegate(IntPtr engineHandle);
     }
 }

@@ -255,6 +255,88 @@ namespace QmlSharp.Host.Commands
             }
         }
 
+        internal CommandRouterSnapshot CaptureForHotReload(string instanceId)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+
+            lock (syncRoot)
+            {
+                ThrowIfDisposed();
+                CommandRouterSnapshot.Registration[] registrations = registrationsByName
+                    .Where(registration => string.Equals(registration.Key.InstanceId, instanceId, StringComparison.Ordinal))
+                    .Select(static registration => new CommandRouterSnapshot.Registration(
+                        registration.Value.CommandId,
+                        registration.Value.CommandName,
+                        registration.Value.Handler))
+                    .ToArray();
+
+                CommandRouterSnapshot.QueuedCommand[] queuedCommands = queuedCommandsByInstanceId.TryGetValue(instanceId, out Queue<QueuedCommand>? queue)
+                    ? queue.Select(static queuedCommand => new CommandRouterSnapshot.QueuedCommand(
+                        queuedCommand.Registration.CommandId,
+                        queuedCommand.Registration.CommandName,
+                        queuedCommand.Invocation.ArgsJson)).ToArray()
+                    : [];
+
+                return new CommandRouterSnapshot(registrations, queuedCommands);
+            }
+        }
+
+        internal void RestoreForHotReload(
+            string newInstanceId,
+            CommandRouterSnapshot snapshot,
+            bool restoreQueuedCommands)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(newInstanceId);
+            ArgumentNullException.ThrowIfNull(snapshot);
+
+            lock (syncRoot)
+            {
+                ThrowIfDisposed();
+                RemoveRegistrations(newInstanceId);
+                _ = queuedCommandsByInstanceId.Remove(newInstanceId);
+                _ = registry.SetQueuedCommandCount(newInstanceId, 0);
+
+                Dictionary<string, CommandRegistration> restoredRegistrationsByName = new(StringComparer.Ordinal);
+                foreach (CommandRouterSnapshot.Registration registrationSnapshot in snapshot.Registrations)
+                {
+                    CommandRegistration registration = new(
+                        newInstanceId,
+                        registrationSnapshot.CommandId,
+                        registrationSnapshot.CommandName,
+                        registrationSnapshot.Handler);
+                    registrationsById[new CommandKey(newInstanceId, registration.CommandId)] = registration;
+                    registrationsByName[new CommandNameKey(newInstanceId, registration.CommandName)] = registration;
+                    restoredRegistrationsByName[registration.CommandName] = registration;
+                }
+
+                if (!restoreQueuedCommands || snapshot.QueuedCommands.Count == 0)
+                {
+                    return;
+                }
+
+                Queue<QueuedCommand> queue = new();
+                foreach (CommandRouterSnapshot.QueuedCommand queuedCommandSnapshot in snapshot.QueuedCommands)
+                {
+                    if (!restoredRegistrationsByName.TryGetValue(queuedCommandSnapshot.CommandName, out CommandRegistration? registration))
+                    {
+                        continue;
+                    }
+
+                    CommandInvocation invocation = new(newInstanceId, queuedCommandSnapshot.CommandName, queuedCommandSnapshot.ArgsJson)
+                    {
+                        CommandId = queuedCommandSnapshot.CommandId
+                    };
+                    queue.Enqueue(new QueuedCommand(invocation, registration));
+                }
+
+                if (queue.Count > 0)
+                {
+                    queuedCommandsByInstanceId[newInstanceId] = queue;
+                    _ = registry.SetQueuedCommandCount(newInstanceId, queue.Count);
+                }
+            }
+        }
+
         /// <summary>Clears all command registrations and queued commands.</summary>
         public void Dispose()
         {

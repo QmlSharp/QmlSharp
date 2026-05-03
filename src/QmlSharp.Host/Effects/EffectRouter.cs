@@ -254,6 +254,55 @@ namespace QmlSharp.Host.Effects
             }
         }
 
+        internal EffectRouterSnapshot CaptureForHotReload(string instanceId)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+
+            lock (syncRoot)
+            {
+                ThrowIfDisposed();
+                EffectRouterSnapshot.Registration[] registrations = registrationsByName
+                    .Where(registration => string.Equals(registration.Key.InstanceId, instanceId, StringComparison.Ordinal))
+                    .Select(static registration => new EffectRouterSnapshot.Registration(
+                        registration.Value.EffectId,
+                        registration.Value.EffectName))
+                    .ToArray();
+
+                return new EffectRouterSnapshot(registrations);
+            }
+        }
+
+        internal void RestoreForHotReload(string newInstanceId, EffectRouterSnapshot snapshot)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(newInstanceId);
+            ArgumentNullException.ThrowIfNull(snapshot);
+
+            lock (syncRoot)
+            {
+                ThrowIfDisposed();
+                foreach (EffectKey key in registrationsById.Keys
+                             .Where(key => string.Equals(key.InstanceId, newInstanceId, StringComparison.Ordinal))
+                             .ToArray())
+                {
+                    _ = registrationsById.Remove(key);
+                }
+
+                foreach (EffectNameKey key in registrationsByName.Keys
+                             .Where(key => string.Equals(key.InstanceId, newInstanceId, StringComparison.Ordinal))
+                             .ToArray())
+                {
+                    _ = registrationsByName.Remove(key);
+                }
+
+                foreach (EffectRouterSnapshot.Registration registrationSnapshot in snapshot.Registrations)
+                {
+                    EffectRegistration registration = new(newInstanceId, registrationSnapshot.EffectId, registrationSnapshot.EffectName);
+                    registrationsById[new EffectKey(newInstanceId, registration.EffectId)] = registration;
+                    registrationsByName[new EffectNameKey(newInstanceId, registration.EffectName)] = registration;
+                }
+            }
+        }
+
         /// <summary>Clears all effect registrations.</summary>
         public void Dispose()
         {

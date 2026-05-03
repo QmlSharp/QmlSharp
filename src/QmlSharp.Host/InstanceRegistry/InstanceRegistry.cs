@@ -19,6 +19,9 @@ namespace QmlSharp.Host.Instances
         private long totalStateSyncs;
         private long totalCommandsDispatched;
         private long totalEffectsEmitted;
+        private long totalHotReloads;
+        private long totalHotReloadFailures;
+        private TimeSpan lastHotReloadDuration;
 
         /// <summary>Initializes a new instance registry.</summary>
         public InstanceRegistry()
@@ -464,8 +467,36 @@ namespace QmlSharp.Host.Instances
                     DateTimeOffset.UtcNow - startedAt)
                 {
                     DestroyedInstanceCount = destroyedInstances.Count,
-                    QueuedCommandCount = queuedCommandCount
+                    QueuedCommandCount = queuedCommandCount,
+                    TotalHotReloads = totalHotReloads,
+                    TotalHotReloadFailures = totalHotReloadFailures,
+                    LastHotReloadDuration = lastHotReloadDuration
                 };
+            }
+        }
+
+        /// <summary>Records a coordinated hot reload attempt for runtime diagnostics.</summary>
+        public void RecordHotReload(bool success, TimeSpan duration)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(duration, TimeSpan.Zero);
+
+            lock (syncRoot)
+            {
+                if (disposed)
+                {
+                    return;
+                }
+
+                checked
+                {
+                    totalHotReloads++;
+                    if (!success)
+                    {
+                        totalHotReloadFailures++;
+                    }
+                }
+
+                lastHotReloadDuration = duration;
             }
         }
 
