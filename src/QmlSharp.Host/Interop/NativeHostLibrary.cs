@@ -20,10 +20,19 @@ namespace QmlSharp.Host.Interop
                 throw new FileNotFoundException("The QmlSharp native host library was not found.", fullPath);
             }
 
-            libraryHandle = NativeLibrary.Load(fullPath);
-            getAbiVersion = LoadDelegate<QmlsharpGetAbiVersionDelegate>("qmlsharp_get_abi_version");
-            getLastError = LoadDelegate<QmlsharpGetLastErrorDelegate>("qmlsharp_get_last_error");
-            freeString = LoadDelegate<QmlsharpFreeStringDelegate>("qmlsharp_free_string");
+            IntPtr loadedLibraryHandle = NativeLibrary.Load(fullPath);
+            try
+            {
+                libraryHandle = loadedLibraryHandle;
+                getAbiVersion = LoadDelegate<QmlsharpGetAbiVersionDelegate>("qmlsharp_get_abi_version");
+                getLastError = LoadDelegate<QmlsharpGetLastErrorDelegate>("qmlsharp_get_last_error");
+                freeString = LoadDelegate<QmlsharpFreeStringDelegate>("qmlsharp_free_string");
+            }
+            catch
+            {
+                NativeLibrary.Free(loadedLibraryHandle);
+                throw;
+            }
         }
 
         public int GetAbiVersion()

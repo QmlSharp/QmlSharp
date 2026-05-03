@@ -17,3 +17,11 @@ qmlsharp_enable_sanitizers(qmlsharp_native_tests)
 qmlsharp_configure_static_analysis(qmlsharp_native_tests)
 
 add_test(NAME qmlsharp_native_tests COMMAND qmlsharp_native_tests)
+set_tests_properties(qmlsharp_native_tests PROPERTIES TIMEOUT 30)
+
+if(WIN32 AND DEFINED ENV{QT_DIR} AND NOT "$ENV{QT_DIR}" STREQUAL "")
+  set_tests_properties(qmlsharp_native_tests
+    PROPERTIES
+      ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$ENV{QT_DIR}/bin"
+  )
+endif()

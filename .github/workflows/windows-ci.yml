@@ -100,6 +100,7 @@ jobs:
           "QT_ROOT_DIR=$qtRoot" >> $env:GITHUB_ENV
           "QT_DIR=$qtRoot" >> $env:GITHUB_ENV
           "Qt6_DIR=$qt6Dir" >> $env:GITHUB_ENV
+          (Join-Path $qtRoot 'bin') >> $env:GITHUB_PATH
           Write-Host "QT_DIR=$qtRoot"
           Write-Host "Qt6_DIR=$qt6Dir"
 

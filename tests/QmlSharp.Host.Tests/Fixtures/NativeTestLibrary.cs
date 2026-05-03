@@ -8,18 +8,22 @@ namespace QmlSharp.Host.Tests.Fixtures
         {
             string repositoryRoot = FindRepositoryRoot(AppContext.BaseDirectory);
             string libraryFileName = GetLibraryFileName();
+            ValidateLibraryFileName(libraryFileName);
+
             string[] candidateDirectories =
             [
-                Path.Combine(repositoryRoot, "build", "debug", "bin"),
-                Path.Combine(repositoryRoot, "build", "windows-ci", "bin"),
-                Path.Combine(repositoryRoot, "build", "linux-ci", "bin"),
-                Path.Combine(repositoryRoot, "build", "macos-ci", "bin"),
-                Path.Combine(repositoryRoot, "build", "release", "bin")
+                CombineUnder(repositoryRoot, "build", "debug", "bin"),
+                CombineUnder(repositoryRoot, "build", "windows-ci", "bin"),
+                CombineUnder(repositoryRoot, "build", "linux-ci", "bin"),
+                CombineUnder(repositoryRoot, "build", "macos-ci", "bin"),
+                CombineUnder(repositoryRoot, "build", "macos-debug", "bin"),
+                CombineUnder(repositoryRoot, "build", "macos-release", "bin"),
+                CombineUnder(repositoryRoot, "build", "release", "bin")
             ];
 
             foreach (string candidateDirectory in candidateDirectories)
             {
-                string candidate = Path.Combine(candidateDirectory, libraryFileName);
+                string candidate = Path.Join(candidateDirectory, libraryFileName);
                 if (File.Exists(candidate))
                 {
                     return candidate;
@@ -27,11 +31,32 @@ namespace QmlSharp.Host.Tests.Fixtures
             }
 
             string candidates = string.Join(Environment.NewLine, candidateDirectories.Select(
-                static directory => $"  - {Path.Combine(directory, GetLibraryFileName())}"));
+                directory => $"  - {Path.Join(directory, libraryFileName)}"));
             throw new FileNotFoundException(
                 "The native host library was not found. Build the native target before running RequiresNative tests." +
                 Environment.NewLine +
                 candidates);
+        }
+
+        private static string CombineUnder(string basePath, params string[] relativeSegments)
+        {
+            foreach (string segment in relativeSegments)
+            {
+                if (Path.IsPathRooted(segment))
+                {
+                    throw new ArgumentException("Native test library candidate path segments must be relative.", nameof(relativeSegments));
+                }
+            }
+
+            return Path.Join([basePath, .. relativeSegments]);
+        }
+
+        private static void ValidateLibraryFileName(string libraryFileName)
+        {
+            if (Path.IsPathRooted(libraryFileName) || Path.GetFileName(libraryFileName) != libraryFileName)
+            {
+                throw new InvalidOperationException("Native test library name must be a file name, not a path.");
+            }
         }
 
         private static string FindRepositoryRoot(string startDirectory)
@@ -39,7 +64,7 @@ namespace QmlSharp.Host.Tests.Fixtures
             DirectoryInfo? current = new(startDirectory);
             while (current is not null)
             {
-                if (File.Exists(Path.Combine(current.FullName, "QmlSharp.slnx")))
+                if (File.Exists(Path.Join(current.FullName, "QmlSharp.slnx")))
                 {
                     return current.FullName;
                 }
