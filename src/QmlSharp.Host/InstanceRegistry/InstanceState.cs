@@ -1,4 +1,4 @@
-namespace QmlSharp.Host.InstanceRegistry
+namespace QmlSharp.Host.Instances
 {
     /// <summary>Lifecycle state for a managed ViewModel instance.</summary>
     public enum InstanceState
