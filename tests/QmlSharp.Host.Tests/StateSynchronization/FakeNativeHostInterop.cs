@@ -30,6 +30,10 @@ namespace QmlSharp.Host.Tests.StateSynchronization
 
         public Exception? HideErrorException { get; set; }
 
+        public bool ReturnNullNativeInstanceInfo { get; set; }
+
+        public string? NativeInstanceInfoJson { get; set; }
+
         public IReadOnlyList<SyncCall> Calls
         {
             get
@@ -125,6 +129,7 @@ namespace QmlSharp.Host.Tests.StateSynchronization
             {
                 foreach (QmlSharpTypeRegistrationEntry entry in entries)
                 {
+                    AddCall(new SyncCall("register_module_entry", entry.TypeName, entry.CompilerSlotKey, entry.SchemaId));
                     _ = entry.RegisterCallback(moduleUri, versionMajor, versionMinor, entry.TypeName);
                 }
             }
@@ -258,7 +263,12 @@ namespace QmlSharp.Host.Tests.StateSynchronization
         public string? GetNativeInstanceInfo(string instanceId)
         {
             AddCall(new SyncCall("native_instance_info", instanceId, PropertyName: null, Value: null));
-            return "{\"instanceId\":\"" + instanceId + "\"}";
+            if (ReturnNullNativeInstanceInfo)
+            {
+                return null;
+            }
+
+            return NativeInstanceInfoJson ?? "{\"instanceId\":\"" + instanceId + "\"}";
         }
 
         public string? GetNativeAllInstances()

@@ -23,7 +23,7 @@ namespace QmlSharp.Host.Engine
         private readonly bool ownsInterop;
         private readonly QmlSharpTypeRegistrationCallback? defaultTypeRegistrationCallback;
         private readonly Lock syncRoot = new();
-        private readonly Dictionary<string, string> schemaIdsByClassName = new(StringComparer.Ordinal);
+        private readonly Dictionary<SchemaLookupKey, string> schemaIdsByClassAndSlot = [];
         private readonly Dictionary<string, StateSyncSchemaMetadata> stateSchemasById = new(StringComparer.Ordinal);
         private IntPtr engineHandle;
         private ErrorOverlayController? errorOverlay;
@@ -341,7 +341,12 @@ namespace QmlSharp.Host.Engine
                 string? detail = interop.GetLastError();
                 if (!string.IsNullOrWhiteSpace(detail))
                 {
-                    throw new InstanceNotFoundException(instanceId);
+                    if (IsNativeInstanceNotFound(detail))
+                    {
+                        throw new InstanceNotFoundException(instanceId);
+                    }
+
+                    throw new NativeHostException(-1, detail);
                 }
             }
 
@@ -380,17 +385,15 @@ namespace QmlSharp.Host.Engine
                 }
 
                 IntPtr handleToShutdown = engineHandle;
-                engineHandle = IntPtr.Zero;
-                errorOverlay = null;
-                try
+                _ = ExecuteNative(() =>
                 {
                     interop.EngineShutdown(handleToShutdown);
-                }
-                finally
-                {
-                    interop.SetCommandCallback(null);
-                    interop.SetInstanceCallbacks(null, null);
-                }
+                    return 0;
+                });
+                engineHandle = IntPtr.Zero;
+                errorOverlay = null;
+                interop.SetCommandCallback(null);
+                interop.SetInstanceCallbacks(null, null);
             }
         }
 
@@ -426,7 +429,7 @@ namespace QmlSharp.Host.Engine
             foreach (ViewModelSchema schema in schemas)
             {
                 string schemaId = GetSchemaId(schema);
-                schemaIdsByClassName[schema.ClassName] = schemaId;
+                schemaIdsByClassAndSlot[new SchemaLookupKey(schema.ClassName, schema.CompilerSlotKey)] = schemaId;
                 StateSyncSchemaMetadata metadata = new(
                     schemaId,
                     schema.Properties.Select(static property => new StateSyncPropertyMetadata(
@@ -457,7 +460,9 @@ namespace QmlSharp.Host.Engine
 
         private static string GetSchemaId(ViewModelSchema schema)
         {
-            return schema.ClassName;
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{schema.ModuleUri}/{schema.ModuleVersion.Major}.{schema.ModuleVersion.Minor}/{schema.ClassName}");
         }
 
         private static StateSyncValueKind MapStateValueKind(string typeName)
@@ -509,7 +514,7 @@ namespace QmlSharp.Host.Engine
 
         private void OnNativeInstanceCreated(string instanceId, string className, string compilerSlotKey)
         {
-            string schemaId = schemaIdsByClassName.TryGetValue(className, out string? foundSchemaId)
+            string schemaId = schemaIdsByClassAndSlot.TryGetValue(new SchemaLookupKey(className, compilerSlotKey), out string? foundSchemaId)
                 ? foundSchemaId
                 : className;
             _ = Instances.Register(instanceId, className, schemaId, compilerSlotKey, IntPtr.Zero, IntPtr.Zero);
@@ -554,6 +559,14 @@ namespace QmlSharp.Host.Engine
         }
 
         private readonly record struct ModuleKey(string ModuleUri, int VersionMajor, int VersionMinor);
+
+        private readonly record struct SchemaLookupKey(string ClassName, string CompilerSlotKey);
+
+        private static bool IsNativeInstanceNotFound(string detail)
+        {
+            return detail.Contains("instance", StringComparison.OrdinalIgnoreCase)
+                && detail.Contains("not found", StringComparison.OrdinalIgnoreCase);
+        }
 
         private sealed class UnconfiguredNativeHostInterop : INativeHostInterop
         {

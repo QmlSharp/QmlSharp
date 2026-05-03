@@ -96,6 +96,99 @@ namespace QmlSharp.Host.Tests.Engine
 
         [Fact]
         [Trait("Category", TestCategories.Smoke)]
+        public void RegisterTypes_DuplicateClassNames_UseModuleQualifiedSchemaIds()
+        {
+            FakeNativeHostInterop interop = new();
+            using QmlSharpEngine engine = CreateEngine(interop);
+            ViewModelSchema firstSchema = CreateSchema(
+                moduleUri: "QmlSharp.Managed.One",
+                className: "SharedCounterViewModel",
+                compilerSlotKey: "FirstView::__qmlsharp_vm0",
+                propertyName: "title",
+                propertyType: "string");
+            ViewModelSchema secondSchema = CreateSchema(
+                moduleUri: "QmlSharp.Managed.Two",
+                className: "SharedCounterViewModel",
+                compilerSlotKey: "SecondView::__qmlsharp_vm0",
+                propertyName: "count",
+                propertyType: "int");
+            string instanceId = "33333333-3333-4333-8333-333333333333";
+
+            engine.Initialize();
+            engine.RegisterTypes(
+                [secondSchema, firstSchema],
+                static (moduleUri, versionMajor, versionMinor, typeName) => 1);
+            interop.InstanceCreatedCallback?.Invoke(instanceId, firstSchema.ClassName, firstSchema.CompilerSlotKey);
+            engine.State.PushString(instanceId, "title", "ready");
+
+            Assert.Contains(
+                interop.Calls,
+                static call => call.Kind == "register_module_entry"
+                    && (string)call.Value! == "QmlSharp.Managed.One/1.0/SharedCounterViewModel");
+            Assert.Contains(
+                interop.Calls,
+                static call => call.Kind == "register_module_entry"
+                    && (string)call.Value! == "QmlSharp.Managed.Two/1.0/SharedCounterViewModel");
+            Assert.Contains(interop.Calls, static call => call.Kind == "string" && call.PropertyName == "title");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Smoke)]
+        public void GetNativeInstanceInfoJson_NativeMissingInstance_ThrowsInstanceNotFoundException()
+        {
+            FakeNativeHostInterop interop = new()
+            {
+                ReturnNullNativeInstanceInfo = true,
+                LastError = "Native instance 'missing-instance' was not found."
+            };
+            using QmlSharpEngine engine = CreateEngine(interop);
+
+            engine.Initialize();
+
+            InstanceNotFoundException exception = Assert.Throws<InstanceNotFoundException>(
+                () => engine.GetNativeInstanceInfoJson("missing-instance"));
+
+            Assert.Equal("missing-instance", exception.InstanceId);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Smoke)]
+        public void GetNativeInstanceInfoJson_NativeDiagnosticsFailure_ThrowsNativeHostException()
+        {
+            FakeNativeHostInterop interop = new()
+            {
+                ReturnNullNativeInstanceInfo = true,
+                LastError = "Diagnostics failed to marshal instance property reads to the QObject thread."
+            };
+            using QmlSharpEngine engine = CreateEngine(interop);
+
+            engine.Initialize();
+
+            NativeHostException exception = Assert.Throws<NativeHostException>(
+                () => engine.GetNativeInstanceInfoJson("active-instance"));
+
+            Assert.IsNotType<InstanceNotFoundException>(exception);
+            Assert.Contains("Diagnostics failed", exception.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Smoke)]
+        public void Shutdown_FromWorkerThread_MarshalsThroughMainThread()
+        {
+            FakeNativeHostInterop interop = new();
+            using QmlSharpEngine engine = CreateEngine(interop);
+
+            engine.Initialize();
+            interop.IsOnMainThread = false;
+            engine.Shutdown();
+
+            Assert.False(engine.IsInitialized);
+            Assert.Equal(1, interop.PostToMainThreadCallCount);
+            Assert.Contains(interop.Calls, static call => call.Kind == "engine_shutdown");
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Smoke)]
         public void Dispose_InitializedEngine_ShutsDownNativeOnceAndClearsCallbacks()
         {
             FakeNativeHostInterop interop = new();
@@ -145,16 +238,31 @@ namespace QmlSharp.Host.Tests.Engine
 
         private static ViewModelSchema CreateSchema()
         {
+            return CreateSchema(
+                moduleUri: "QmlSharp.Managed.Tests",
+                className: "ManagedCounterViewModel",
+                compilerSlotKey: "MainView::__qmlsharp_vm0",
+                propertyName: "title",
+                propertyType: "string");
+        }
+
+        private static ViewModelSchema CreateSchema(
+            string moduleUri,
+            string className,
+            string compilerSlotKey,
+            string propertyName,
+            string propertyType)
+        {
             return new ViewModelSchema(
                 "1.0",
-                "ManagedCounterViewModel",
+                className,
                 "ManagedTests",
-                "QmlSharp.Managed.Tests",
+                moduleUri,
                 new QmlVersion(1, 0),
                 1,
-                "MainView::__qmlsharp_vm0",
+                compilerSlotKey,
                 [
-                    new StateEntry("title", "string", DefaultValue: null, ReadOnly: false, MemberId: 0)
+                    new StateEntry(propertyName, propertyType, DefaultValue: null, ReadOnly: false, MemberId: 0)
                 ],
                 [],
                 [],

@@ -160,14 +160,13 @@ namespace QmlSharp.Host.Tests.Interop
             using NativeHostLibrary library = CreateLibrary();
             IntPtr engine = InitializeEngine(library);
             bool called = false;
-
-            library.PostToMainThread(() =>
+            Action callback = () =>
             {
                 called = true;
                 library.EngineShutdown(engine);
-            });
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
+            };
+
+            library.PostToMainThread(callback);
 
             int exitCode = library.EngineExec(engine);
 

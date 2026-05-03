@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using QmlSharp.Host.Exceptions;
 
@@ -101,12 +102,9 @@ namespace QmlSharp.Host.Interop
                     Marshal.FreeHGlobal(argv);
                 }
 
-                foreach (IntPtr argumentPointer in argumentPointers)
+                foreach (IntPtr argumentPointer in argumentPointers.Where(static pointer => pointer != IntPtr.Zero))
                 {
-                    if (argumentPointer != IntPtr.Zero)
-                    {
-                        Marshal.FreeCoTaskMem(argumentPointer);
-                    }
+                    Marshal.FreeCoTaskMem(argumentPointer);
                 }
             }
         }
@@ -376,6 +374,7 @@ namespace QmlSharp.Host.Interop
                 }
                 catch (Exception exception) when (!IsCriticalException(exception))
                 {
+                    Trace.TraceError("QmlSharp native host dispose callback cleanup failed: {0}", exception);
                 }
 
                 NativeLibrary.Free(libraryHandle);
@@ -419,6 +418,7 @@ namespace QmlSharp.Host.Interop
             }
             catch (Exception exception) when (!IsCriticalException(exception))
             {
+                ReportNonCriticalCallbackException(nameof(InvokeInstanceCreated), exception);
             }
         }
 
@@ -430,6 +430,7 @@ namespace QmlSharp.Host.Interop
             }
             catch (Exception exception) when (!IsCriticalException(exception))
             {
+                ReportNonCriticalCallbackException(nameof(InvokeInstanceDestroyed), exception);
             }
         }
 
@@ -444,6 +445,7 @@ namespace QmlSharp.Host.Interop
             }
             catch (Exception exception) when (!IsCriticalException(exception))
             {
+                ReportNonCriticalCallbackException(nameof(InvokeCommand), exception);
             }
         }
 
@@ -553,6 +555,11 @@ namespace QmlSharp.Host.Interop
         private static string ReadCallbackString(IntPtr pointer)
         {
             return Marshal.PtrToStringUTF8(pointer) ?? string.Empty;
+        }
+
+        private static void ReportNonCriticalCallbackException(string callbackName, Exception exception)
+        {
+            Trace.TraceError("QmlSharp native host callback '{0}' failed: {1}", callbackName, exception);
         }
 
         private void ThrowIfDisposed()
