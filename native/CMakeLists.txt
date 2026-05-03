@@ -11,6 +11,8 @@ target_sources(qmlsharp_native
     src/qmlsharp_engine.h
     src/qmlsharp_errors.cpp
     src/qmlsharp_errors.h
+    src/qmlsharp_type_registry.cpp
+    src/qmlsharp_type_registry.h
   PUBLIC
     FILE_SET qmlsharp_native_headers
     TYPE HEADERS

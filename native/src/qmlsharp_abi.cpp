@@ -7,6 +7,7 @@
 
 #include "qmlsharp_engine.h"
 #include "qmlsharp_errors.h"
+#include "qmlsharp_type_registry.h"
 
 namespace {
 const char* qmlsharp_allocate_string(const std::string& value) noexcept {
@@ -39,6 +40,21 @@ extern "C" QMLSHARP_API int32_t qmlsharp_engine_exec(void* engine) {
 
 extern "C" QMLSHARP_API void qmlsharp_post_to_main_thread(void (*callback)(void* user_data), void* user_data) {
     qmlsharp::post_to_main_thread(callback, user_data);
+}
+
+extern "C" QMLSHARP_API int32_t qmlsharp_register_type(void* engine, const char* module_uri, int32_t version_major,
+                                                       int32_t version_minor, const char* type_name,
+                                                       const char* schema_id, const char* compiler_slot_key,
+                                                       qmlsharp_type_registration_callback register_callback) {
+    return qmlsharp::register_type(engine, module_uri, version_major, version_minor, type_name, schema_id,
+                                   compiler_slot_key, register_callback);
+}
+
+extern "C" QMLSHARP_API int32_t qmlsharp_register_module(void* engine, const char* module_uri, int32_t version_major,
+                                                         int32_t version_minor,
+                                                         const qmlsharp_type_registration_entry* entries,
+                                                         int32_t entry_count) {
+    return qmlsharp::register_module(engine, module_uri, version_major, version_minor, entries, entry_count);
 }
 
 extern "C" QMLSHARP_API const char* qmlsharp_get_last_error(void) {

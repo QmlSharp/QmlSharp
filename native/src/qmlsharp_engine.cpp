@@ -66,6 +66,11 @@ void reset_engine_state() {
 }
 }  // namespace
 
+bool validate_engine_call(void* engine, const char* operation) noexcept {
+    std::lock_guard<std::mutex> lock(engine_mutex);
+    return validate_engine_handle(engine, operation) && validate_qt_main_thread(operation);
+}
+
 QmlSharpEngine::QmlSharpEngine(std::unique_ptr<QQmlEngine> engine, QObject* parent)
     : QObject(parent), engine_(std::move(engine)) {}
 
