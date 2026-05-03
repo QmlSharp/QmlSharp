@@ -1,0 +1,7 @@
+{
+  "nativeLib": "native/__QMLSHARP_NATIVE_LIBRARY__",
+  "managedAssembly": "managed/QmlSharp.Integration.Tests.dll",
+  "viewModels": [
+    "RegistrationCounterViewModel"
+  ]
+}

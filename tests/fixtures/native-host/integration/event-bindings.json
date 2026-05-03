@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "commands": [
+    {
+      "viewModelClass": "RegistrationCounterViewModel",
+      "commandName": "commandInt",
+      "commandId": 7001,
+      "parameterTypes": [
+        "int"
+      ]
+    },
+    {
+      "viewModelClass": "RegistrationCounterViewModel",
+      "commandName": "commandNoArgs",
+      "commandId": 7002,
+      "parameterTypes": []
+    }
+  ],
+  "effects": [
+    {
+      "viewModelClass": "RegistrationCounterViewModel",
+      "effectName": "showToast",
+      "effectId": 2001,
+      "payloadType": "json"
+    }
+  ]
+}
