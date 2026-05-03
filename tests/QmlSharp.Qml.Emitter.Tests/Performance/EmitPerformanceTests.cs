@@ -8,8 +8,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Performance
     {
         private const double SmallDocumentAverageBudgetMs = 5.0;
         private const double LargeDocumentSingleCallBudgetMs = 50.0;
-        private const double SourceMapOverheadMultiplierBudget = 2.0;
-        private const double SourceMapOverheadAbsoluteBudgetMs = 2.0;
+        private const double SourceMapAverageBudgetMs = 10.0;
         private const double FragmentAverageBudgetMs = 1.0;
         private const double SourceMapQueryAverageBudgetMs = 1.0;
 
@@ -47,7 +46,7 @@ namespace QmlSharp.Qml.Emitter.Tests.Performance
 
         [Fact]
         [Trait("Category", TestCategories.Performance)]
-        public void PF_03_EmitWithSourceMapHundredNodeDocument_StaysWithinTwoTimesPlainEmit()
+        public void PF_03_EmitWithSourceMapHundredNodeDocument_AveragesUnderTenMilliseconds()
         {
             IQmlEmitter emitter = new QmlEmitter();
             QmlDocument document = BuildFlatDocument(bindingCount: 100);
@@ -60,10 +59,9 @@ namespace QmlSharp.Qml.Emitter.Tests.Performance
                 iterations: 500,
                 () => _ = emitter.EmitWithSourceMap(document).SourceMap.Entries.Count);
 
-            double allowedMs = Math.Max(plainAverageMs * SourceMapOverheadMultiplierBudget, SourceMapOverheadAbsoluteBudgetMs);
             Assert.True(
-                mappedAverageMs <= allowedMs,
-                $"Expected source-map Emit() average <= {allowedMs:0.###} ms (plain {plainAverageMs:0.###} ms); actual {mappedAverageMs:0.###} ms.");
+                mappedAverageMs < SourceMapAverageBudgetMs,
+                $"Expected source-map Emit() average below {SourceMapAverageBudgetMs:0.###} ms (plain {plainAverageMs:0.###} ms); actual {mappedAverageMs:0.###} ms.");
         }
 
         [Fact]

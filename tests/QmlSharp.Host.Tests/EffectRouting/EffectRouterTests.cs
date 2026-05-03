@@ -140,6 +140,40 @@ namespace QmlSharp.Host.Tests.EffectRouting
         }
 
         [Fact]
+        public void Dispatch_UnsupportedPayload_ReturnsStructuredError()
+        {
+            TestContext context = CreateContext();
+
+            EffectDispatchResult result = context.Router.Dispatch(
+                context.Instance.InstanceId,
+                "showToast",
+                new UnsupportedPayload(static () => { }));
+
+            Assert.Equal(EffectDispatchStatus.InvalidPayload, result.Status);
+            Assert.Empty(context.Interop.Calls);
+            RuntimeDiagnostic diagnostic = Assert.Single(context.Diagnostics);
+            Assert.Equal(RuntimeDiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Contains("not serializable", diagnostic.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Broadcast_UnsupportedPayload_ReturnsStructuredError()
+        {
+            TestContext context = CreateContext();
+
+            EffectDispatchResult result = context.Router.Broadcast(
+                "CounterViewModel",
+                "showToast",
+                new UnsupportedPayload(static () => { }));
+
+            Assert.Equal(EffectDispatchStatus.InvalidPayload, result.Status);
+            Assert.Empty(context.Interop.Calls);
+            RuntimeDiagnostic diagnostic = Assert.Single(context.Diagnostics);
+            Assert.Equal(RuntimeDiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Contains("not serializable", diagnostic.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void Dispatch_NativeFailure_ReturnsStructuredError()
         {
             TestContext context = CreateContext();
@@ -214,6 +248,8 @@ namespace QmlSharp.Host.Tests.EffectRouting
         }
 
         private sealed record ToastPayload(string Message, IReadOnlyList<string> Tags);
+
+        private sealed record UnsupportedPayload(Action Callback);
 
         private sealed record TestContext(
             ManagedInstanceRegistry Registry,

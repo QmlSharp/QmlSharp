@@ -60,6 +60,29 @@ namespace QmlSharp.Host.Tests.CommandRouting
         }
 
         [Fact]
+        public async Task RegisterCommandHandler_ByName_AllowsMultipleCommandNamesForSameInstance()
+        {
+            TestContext context = CreateContext();
+            _ = context.Router.MarkReady(context.Instance.InstanceId);
+            TaskCompletionSource<CommandInvocation> increment = NewCompletionSource<CommandInvocation>();
+            TaskCompletionSource<CommandInvocation> reset = NewCompletionSource<CommandInvocation>();
+            context.Router.RegisterCommandHandler(context.Instance.InstanceId, "increment", increment.SetResult);
+            context.Router.RegisterCommandHandler(context.Instance.InstanceId, "reset", reset.SetResult);
+
+            CommandDispatchResult incrementResult = context.Router.OnCommand(context.Instance.InstanceId, "increment", "[1]");
+            CommandDispatchResult resetResult = context.Router.OnCommand(context.Instance.InstanceId, "reset", "[]");
+
+            Assert.Equal(CommandDispatchStatus.Dispatched, incrementResult.Status);
+            Assert.Equal(CommandDispatchStatus.Dispatched, resetResult.Status);
+            CommandInvocation incrementInvocation = await WaitFor(increment.Task);
+            CommandInvocation resetInvocation = await WaitFor(reset.Task);
+            Assert.Equal("increment", incrementInvocation.CommandName);
+            Assert.Equal("reset", resetInvocation.CommandName);
+            Assert.Equal(0, incrementInvocation.CommandId);
+            Assert.Equal(0, resetInvocation.CommandId);
+        }
+
+        [Fact]
         public async Task OnCommand_PendingInstance_QueuesUntilReady()
         {
             TestContext context = CreateContext();

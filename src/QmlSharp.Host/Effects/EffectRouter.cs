@@ -355,6 +355,15 @@ namespace QmlSharp.Host.Effects
                     "Effect payload is not valid JSON: " + exception.Message);
                 return false;
             }
+            catch (NotSupportedException exception)
+            {
+                payloadJson = "{}";
+                diagnostic = CreateDiagnostic(
+                    RuntimeDiagnosticSeverity.Error,
+                    instanceId,
+                    "Effect payload is not serializable as JSON: " + exception.Message);
+                return false;
+            }
         }
 
         private static string SerializePayload(object? payload)

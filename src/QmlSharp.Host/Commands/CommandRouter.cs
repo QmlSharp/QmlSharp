@@ -91,7 +91,12 @@ namespace QmlSharp.Host.Commands
         /// <summary>Registers a command handler by instance and command name.</summary>
         public void RegisterCommandHandler(string instanceId, string commandName, Action<CommandInvocation> handler)
         {
-            RegisterCommandHandler(instanceId, commandId: 0, commandName, handler);
+            ArgumentNullException.ThrowIfNull(handler);
+            RegisterCommandHandlerByName(instanceId, commandName, invocation =>
+            {
+                handler(invocation);
+                return Task.CompletedTask;
+            });
         }
 
         /// <summary>Receives a command callback from native code and schedules managed dispatch.</summary>
@@ -354,6 +359,42 @@ namespace QmlSharp.Host.Commands
                         invocation.CommandName,
                         exception.Message));
                 Report(diagnostic);
+            }
+        }
+
+        private void RegisterCommandHandlerByName(
+            string instanceId,
+            string commandName,
+            Func<CommandInvocation, Task> handler)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(commandName);
+            ArgumentNullException.ThrowIfNull(handler);
+
+            if (registry.FindById(instanceId) is null)
+            {
+                throw new InstanceNotFoundException(instanceId);
+            }
+
+            CommandRegistration registration = new(instanceId, 0, commandName, handler);
+            CommandNameKey nameKey = new(instanceId, commandName);
+
+            lock (syncRoot)
+            {
+                ThrowIfDisposed();
+                if (registrationsByName.ContainsKey(nameKey))
+                {
+                    throw new CommandRoutingException(
+                        instanceId,
+                        commandId: 0,
+                        string.Format(
+                            CultureInfo.InvariantCulture,
+                            "Command '{0}' is already registered for instance '{1}'.",
+                            commandName,
+                            instanceId));
+                }
+
+                registrationsByName.Add(nameKey, registration);
             }
         }
 
