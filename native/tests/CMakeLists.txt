@@ -1,10 +1,22 @@
-add_executable(qmlsharp_native_tests native_host_smoke_tests.cpp)
+add_executable(qmlsharp_native_tests
+  native_host_smoke_tests.cpp
+  fixtures/RegistrationCounterViewModel.cpp
+  fixtures/RegistrationCounterViewModel.h
+  fixtures/RegistrationStatusViewModel.cpp
+  fixtures/RegistrationStatusViewModel.h
+)
 
 target_compile_features(qmlsharp_native_tests PRIVATE cxx_std_20)
+target_include_directories(qmlsharp_native_tests
+  PRIVATE
+    fixtures
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
 target_link_libraries(qmlsharp_native_tests
   PRIVATE
     qmlsharp_native
     Qt6::Core
+    Qt6::Qml
 )
 
 set_target_properties(qmlsharp_native_tests

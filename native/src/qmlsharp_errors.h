@@ -7,6 +7,7 @@ constexpr int QmlSharpSuccess = 0;
 constexpr int QmlSharpGeneralFailure = -1;
 constexpr int QmlSharpInvalidArgument = -2;
 constexpr int QmlSharpEngineNotInitialized = -4;
+constexpr int QmlSharpTypeRegistrationFailure = -6;
 
 void set_last_error(std::string message);
 void clear_last_error();
