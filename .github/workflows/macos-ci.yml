@@ -175,7 +175,7 @@ jobs:
         run: ctest --preset macos-ci
 
       - name: Test .NET solution
-        run: dotnet test QmlSharp.slnx --configuration Debug --no-build --verbosity normal
+        run: dotnet test QmlSharp.slnx --configuration Debug --no-build --verbosity normal -m:1
 
       - name: Check .NET formatting
         run: |
