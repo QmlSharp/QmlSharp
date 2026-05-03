@@ -1680,6 +1680,42 @@ int test_state_sync_batch_partial_failure_is_all_or_nothing() {
     return EXIT_SUCCESS;
 }
 
+int test_state_sync_batch_incompatible_value_is_all_or_nothing() {
+    constexpr const char* test_name = "SSY-08C batch state sync incompatible value";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    fixture.counter()->setCount(3);
+    fixture.counter()->setRatio(1.25);
+    fixture.counter()->setTitle(QStringLiteral("stable"));
+    int count_notifications = 0;
+    int ratio_notifications = 0;
+    int title_notifications = 0;
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::countChanged,
+                     [&count_notifications]() { ++count_notifications; });
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::ratioChanged,
+                     [&ratio_notifications]() { ++ratio_notifications; });
+    QObject::connect(fixture.counter(), &RegistrationCounterViewModel::titleChanged,
+                     [&title_notifications]() { ++title_notifications; });
+
+    const int result = qmlsharp_sync_state_batch(fixture.instance_id().c_str(),
+                                                 "{\"count\":9,\"ratio\":{\"bad\":true},\"title\":\"bad\"}");
+    const std::string error = read_last_error();
+    if (result != -1 || error.find("ratio") == std::string::npos) {
+        return fail(test_name, "batch incompatible value should report the failing property conversion.");
+    }
+
+    if (fixture.counter()->count() != 3 || !qFuzzyCompare(fixture.counter()->ratio() + 1.0, 2.25) ||
+        fixture.counter()->title() != QStringLiteral("stable") || count_notifications != 0 ||
+        ratio_notifications != 0 || title_notifications != 0) {
+        return fail(test_name, "batch incompatible value should leave all properties unchanged.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int test_state_sync_unknown_instance_reports_error() {
     constexpr const char* test_name = "SSY-09 unknown instance state sync";
     const int result = qmlsharp_sync_state_int("missing-instance", "count", 1);
@@ -1963,6 +1999,7 @@ int main() {
     result |= run_test(test_state_sync_json_updates_complex_property);
     result |= run_test(test_state_sync_batch_updates_properties_deterministically);
     result |= run_test(test_state_sync_batch_partial_failure_is_all_or_nothing);
+    result |= run_test(test_state_sync_batch_incompatible_value_is_all_or_nothing);
     result |= run_test(test_state_sync_unknown_instance_reports_error);
     result |= run_test(test_state_sync_unknown_property_reports_error);
     result |= run_test(test_state_sync_from_background_thread_marshal_to_qobject_thread);

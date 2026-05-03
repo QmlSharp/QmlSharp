@@ -6,6 +6,7 @@
 #include <QJsonParseError>
 #include <QMetaObject>
 #include <QMetaProperty>
+#include <QMetaType>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -61,7 +62,7 @@ int validate_common_arguments(const char* instance_id, const char* property_name
     return QmlSharpSuccess;
 }
 
-int validate_writable_property(QObject* object, const std::string& property_name) {
+int get_writable_property(QObject* object, const std::string& property_name, QMetaProperty& property) {
     const QByteArray property_name_utf8 = property_name_bytes(property_name);
     const int property_index = object->metaObject()->indexOfProperty(property_name_utf8.constData());
     if (property_index < 0) {
@@ -69,12 +70,38 @@ int validate_writable_property(QObject* object, const std::string& property_name
         return QmlSharpPropertyNotFound;
     }
 
-    const QMetaProperty property = object->metaObject()->property(property_index);
+    property = object->metaObject()->property(property_index);
     if (!property.isWritable()) {
         set_last_error("State sync target property '" + property_name + "' is not writable.");
         return QmlSharpPropertyNotFound;
     }
 
+    return QmlSharpSuccess;
+}
+
+int validate_writable_property(QObject* object, const std::string& property_name) {
+    QMetaProperty property;
+    return get_writable_property(object, property_name, property);
+}
+
+int convert_value_for_property(const QMetaProperty& property, const std::string& property_name, QVariant& value) {
+    const QMetaType target_type = property.metaType();
+    if (target_type.id() == QMetaType::QVariant) {
+        return QmlSharpSuccess;
+    }
+
+    if (!value.isValid() || !value.canConvert(target_type)) {
+        set_last_error("State sync value for property '" + property_name + "' is not convertible to the target type.");
+        return QmlSharpGeneralFailure;
+    }
+
+    QVariant converted = value;
+    if (!converted.convert(target_type)) {
+        set_last_error("State sync value for property '" + property_name + "' failed target type conversion.");
+        return QmlSharpGeneralFailure;
+    }
+
+    value = std::move(converted);
     return QmlSharpSuccess;
 }
 
@@ -248,14 +275,24 @@ int sync_state_batch(const char* instance_id, const char* properties_json) noexc
         }
 
         return run_on_object_thread(object, [object, updates = std::move(updates)]() {
-            for (const StateUpdate& update : updates) {
-                const int validation = validate_writable_property(object, update.property_name);
+            std::vector<StateUpdate> validated_updates;
+            validated_updates.reserve(updates.size());
+            for (StateUpdate update : updates) {
+                QMetaProperty property;
+                const int validation = get_writable_property(object, update.property_name, property);
                 if (validation != QmlSharpSuccess) {
                     return validation;
                 }
+
+                const int conversion = convert_value_for_property(property, update.property_name, update.value);
+                if (conversion != QmlSharpSuccess) {
+                    return conversion;
+                }
+
+                validated_updates.push_back(std::move(update));
             }
 
-            for (const StateUpdate& update : updates) {
+            for (const StateUpdate& update : validated_updates) {
                 const QByteArray property_name_utf8 = property_name_bytes(update.property_name);
                 if (!object->setProperty(property_name_utf8.constData(), update.value)) {
                     set_last_error("Batch state sync failed to set property '" + update.property_name + "'.");
