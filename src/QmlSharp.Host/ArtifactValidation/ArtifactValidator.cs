@@ -120,7 +120,17 @@ namespace QmlSharp.Host.ArtifactValidation
 
         private void ValidateNativeLibrary(string distDirectory, ProductManifest manifest, List<ArtifactDiagnostic> diagnostics)
         {
-            string nativeLibraryPath = ResolveDistPath(distDirectory, manifest.NativeLib);
+            if (!TryResolveDistPath(
+                distDirectory,
+                manifest.NativeLib,
+                ArtifactValidationCodes.NativeLibraryMissing,
+                "manifest.nativeLib must resolve inside the dist directory.",
+                diagnostics,
+                out string nativeLibraryPath))
+            {
+                return;
+            }
+
             if (!File.Exists(nativeLibraryPath))
             {
                 AddDiagnostic(
@@ -162,7 +172,17 @@ namespace QmlSharp.Host.ArtifactValidation
 
         private static void ValidateManagedAssembly(string distDirectory, ProductManifest manifest, List<ArtifactDiagnostic> diagnostics)
         {
-            string managedAssemblyPath = ResolveDistPath(distDirectory, manifest.ManagedAssembly);
+            if (!TryResolveDistPath(
+                distDirectory,
+                manifest.ManagedAssembly,
+                ArtifactValidationCodes.ManifestMissing,
+                "manifest.managedAssembly must resolve inside the dist directory.",
+                diagnostics,
+                out string managedAssemblyPath))
+            {
+                return;
+            }
+
             if (!File.Exists(managedAssemblyPath))
             {
                 AddDiagnostic(
@@ -202,15 +222,10 @@ namespace QmlSharp.Host.ArtifactValidation
                 return Array.Empty<SchemaInfo>();
             }
 
-            List<SchemaInfo> schemas = [];
-            foreach (string schemaFile in schemaFiles)
-            {
-                SchemaInfo? schema = TryReadSchema(schemaFile, diagnostics);
-                if (schema is not null)
-                {
-                    schemas.Add(schema);
-                }
-            }
+            List<SchemaInfo> schemas = schemaFiles
+                .Select(schemaFile => TryReadSchema(schemaFile, diagnostics))
+                .OfType<SchemaInfo>()
+                .ToList();
 
             foreach (IGrouping<string, SchemaInfo> duplicateGroup in schemas.GroupBy(static schema => schema.ClassName, StringComparer.Ordinal)
                          .Where(static group => group.Count() > 1))
@@ -274,17 +289,14 @@ namespace QmlSharp.Host.ArtifactValidation
         private static void ValidateDeclaredSchemas(string distDirectory, ProductManifest manifest, IReadOnlyList<SchemaInfo> schemas, List<ArtifactDiagnostic> diagnostics)
         {
             HashSet<string> schemaClassNames = schemas.Select(static schema => schema.ClassName).ToHashSet(StringComparer.Ordinal);
-            foreach (string viewModel in manifest.ViewModels)
+            foreach (string viewModel in manifest.ViewModels.Where(viewModel => !schemaClassNames.Contains(viewModel)))
             {
-                if (!schemaClassNames.Contains(viewModel))
-                {
-                    AddDiagnostic(
-                        diagnostics,
-                        ArtifactDiagnosticSeverity.Error,
-                        ArtifactValidationCodes.SchemaMissing,
-                        string.Format(CultureInfo.InvariantCulture, "Schema for manifest-declared ViewModel '{0}' was not found.", viewModel),
-                        Path.Join(distDirectory, "schemas", viewModel + ".schema.json"));
-                }
+                AddDiagnostic(
+                    diagnostics,
+                    ArtifactDiagnosticSeverity.Error,
+                    ArtifactValidationCodes.SchemaMissing,
+                    string.Format(CultureInfo.InvariantCulture, "Schema for manifest-declared ViewModel '{0}' was not found.", viewModel),
+                    Path.Join(distDirectory, "schemas", viewModel + ".schema.json"));
             }
         }
 
@@ -379,12 +391,16 @@ namespace QmlSharp.Host.ArtifactValidation
         private static void ValidateEventBindings(EventBindingsInfo eventBindings, IReadOnlyList<SchemaInfo> schemas, List<ArtifactDiagnostic> diagnostics)
         {
             HashSet<SchemaCommandInfo> schemaCommands = schemas
-                .SelectMany(static schema => schema.Commands.Select(command => new SchemaCommandInfo(schema.ClassName, command.Name, command.CommandId)))
+                .SelectMany(static schema => schema.Commands.Select(command => new SchemaCommandInfo(
+                    schema.ClassName,
+                    command.Name,
+                    command.CommandId,
+                    command.ParameterSignature)))
                 .ToHashSet();
 
             foreach (EventCommandInfo command in eventBindings.Commands)
             {
-                SchemaCommandInfo schemaCommand = new(command.ViewModelClass, command.CommandName, command.CommandId);
+                SchemaCommandInfo schemaCommand = new(command.ViewModelClass, command.CommandName, command.CommandId, command.ParameterSignature);
                 if (!schemaCommands.Contains(schemaCommand))
                 {
                     AddDiagnostic(
@@ -426,12 +442,25 @@ namespace QmlSharp.Host.ArtifactValidation
             foreach (JsonElement command in commands.EnumerateArray())
             {
                 string name = ReadRequiredString(command, "name");
-                RequireArray(command.GetProperty("parameters"), "parameters");
-                _ = command.GetProperty("commandId").GetInt32();
-                result.Add(new SchemaCommandInfo(string.Empty, name, command.GetProperty("commandId").GetInt32()));
+                string parameterSignature = CreateParameterSignature(ReadSchemaParameterTypes(command.GetProperty("parameters")));
+                int commandId = command.GetProperty("commandId").GetInt32();
+                result.Add(new SchemaCommandInfo(string.Empty, name, commandId, parameterSignature));
             }
 
             return result;
+        }
+
+        private static IReadOnlyList<string> ReadSchemaParameterTypes(JsonElement parameters)
+        {
+            RequireArray(parameters, "parameters");
+            return parameters
+                .EnumerateArray()
+                .Select(static parameter =>
+                {
+                    _ = ReadRequiredString(parameter, "name");
+                    return ReadRequiredString(parameter, "type");
+                })
+                .ToArray();
         }
 
         private static void ValidateEffects(JsonElement effects)
@@ -462,19 +491,29 @@ namespace QmlSharp.Host.ArtifactValidation
                 string viewModelClass = ReadRequiredString(command, "viewModelClass");
                 string commandName = ReadRequiredString(command, "commandName");
                 int commandId = command.GetProperty("commandId").GetInt32();
-                RequireArray(command.GetProperty("parameterTypes"), "parameterTypes");
-                foreach (JsonElement parameterType in command.GetProperty("parameterTypes").EnumerateArray())
+                JsonElement parameterTypes = command.GetProperty("parameterTypes");
+                RequireArray(parameterTypes, "parameterTypes");
+                if (parameterTypes.EnumerateArray().Where(static parameterType => parameterType.ValueKind != JsonValueKind.String).Any())
                 {
-                    if (parameterType.ValueKind != JsonValueKind.String)
-                    {
-                        throw new JsonException("parameterTypes entries must be strings.");
-                    }
+                    throw new JsonException("parameterTypes entries must be strings.");
                 }
 
-                result.Add(new EventCommandInfo(viewModelClass, commandName, commandId));
+                string parameterSignature = CreateParameterSignature(ReadEventParameterTypes(parameterTypes));
+                result.Add(new EventCommandInfo(viewModelClass, commandName, commandId, parameterSignature));
             }
 
             return result;
+        }
+
+        private static IReadOnlyList<string> ReadEventParameterTypes(JsonElement parameterTypes)
+        {
+            return parameterTypes
+                .EnumerateArray()
+                .Select(static parameterType => parameterType.GetString())
+                .Select(static parameterType => string.IsNullOrWhiteSpace(parameterType)
+                    ? throw new JsonException("parameterTypes entries must be non-empty strings.")
+                    : parameterType)
+                .ToArray();
         }
 
         private static void ValidateEventEffects(JsonElement effects)
@@ -523,9 +562,8 @@ namespace QmlSharp.Host.ArtifactValidation
             JsonElement arrayElement = element.GetProperty(propertyName);
             RequireArray(arrayElement, propertyName);
             List<string> values = [];
-            foreach (JsonElement item in arrayElement.EnumerateArray())
+            foreach (string? value in arrayElement.EnumerateArray().Select(static item => item.GetString()))
             {
-                string? value = item.GetString();
                 if (string.IsNullOrWhiteSpace(value))
                 {
                     throw new JsonException(string.Format(CultureInfo.InvariantCulture, "Entries in '{0}' must be non-empty strings.", propertyName));
@@ -537,11 +575,46 @@ namespace QmlSharp.Host.ArtifactValidation
             return values;
         }
 
-        private static string ResolveDistPath(string distDirectory, string relativePath)
+        private static bool TryResolveDistPath(
+            string distDirectory,
+            string manifestPath,
+            string diagnosticCode,
+            string diagnosticMessage,
+            List<ArtifactDiagnostic> diagnostics,
+            out string resolvedPath)
         {
-            return Path.IsPathRooted(relativePath)
-                ? Path.GetFullPath(relativePath)
-                : Path.GetFullPath(Path.Join(distDirectory, relativePath));
+            string distRoot = Path.GetFullPath(distDirectory);
+            resolvedPath = Path.IsPathRooted(manifestPath)
+                ? Path.GetFullPath(manifestPath)
+                : Path.GetFullPath(Path.Join(distRoot, manifestPath));
+
+            if (IsUnderDirectory(distRoot, resolvedPath))
+            {
+                return true;
+            }
+
+            AddDiagnostic(
+                diagnostics,
+                ArtifactDiagnosticSeverity.Error,
+                diagnosticCode,
+                diagnosticMessage,
+                resolvedPath);
+            return false;
+        }
+
+        private static bool IsUnderDirectory(string rootDirectory, string candidatePath)
+        {
+            string relativePath = Path.GetRelativePath(rootDirectory, candidatePath);
+            return relativePath.Length == 0
+                || (!Path.IsPathRooted(relativePath)
+                    && !StringComparer.Ordinal.Equals(relativePath, "..")
+                    && !relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                    && !relativePath.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal));
+        }
+
+        private static string CreateParameterSignature(IEnumerable<string> parameterTypes)
+        {
+            return string.Join("\u001F", parameterTypes);
         }
 
         private static void AddDiagnostic(
@@ -562,10 +635,10 @@ namespace QmlSharp.Host.ArtifactValidation
 
         private sealed record SchemaInfo(string FilePath, string ClassName, IReadOnlyList<SchemaCommandInfo> Commands);
 
-        private sealed record SchemaCommandInfo(string ViewModelClass, string Name, int CommandId);
+        private sealed record SchemaCommandInfo(string ViewModelClass, string Name, int CommandId, string ParameterSignature);
 
         private sealed record EventBindingsInfo(string FilePath, IReadOnlyList<EventCommandInfo> Commands);
 
-        private sealed record EventCommandInfo(string ViewModelClass, string CommandName, int CommandId);
+        private sealed record EventCommandInfo(string ViewModelClass, string CommandName, int CommandId, string ParameterSignature);
     }
 }
