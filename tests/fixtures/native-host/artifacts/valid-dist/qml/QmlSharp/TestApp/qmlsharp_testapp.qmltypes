@@ -1,0 +1,5 @@
+Module {
+    Component {
+        name: "CounterViewModel"
+    }
+}

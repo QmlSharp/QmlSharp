@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "commands": [
+    {
+      "viewModelClass": "CounterViewModel",
+      "commandName": "increment",
+      "commandId": 985427602,
+      "parameterTypes": []
+    },
+    {
+      "viewModelClass": "TodoViewModel",
+      "commandName": "removeItem",
+      "commandId": 1743999692,
+      "parameterTypes": [
+        "int"
+      ]
+    }
+  ],
+  "effects": [
+    {
+      "viewModelClass": "TodoViewModel",
+      "effectName": "showToast",
+      "effectId": 118435790,
+      "payloadType": "string"
+    }
+  ]
+}

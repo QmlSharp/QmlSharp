@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1.0",
+  "className": "CounterViewModel",
+  "moduleName": "TestApp",
+  "moduleUri": "QmlSharp.TestApp",
+  "moduleVersion": {
+    "major": 1,
+    "minor": 0
+  },
+  "compilerSlotKey": "CounterView::__qmlsharp_vm0",
+  "properties": [
+    {
+      "name": "count",
+      "type": "int",
+      "defaultValue": "0",
+      "readOnly": false,
+      "memberId": 1975080775
+    }
+  ],
+  "commands": [
+    {
+      "name": "increment",
+      "parameters": [],
+      "commandId": 985427602
+    }
+  ],
+  "effects": [],
+  "lifecycle": {
+    "onMounted": true,
+    "onUnmounting": true,
+    "hotReload": false
+  }
+}

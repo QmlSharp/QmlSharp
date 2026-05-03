@@ -1,0 +1,3 @@
+module QmlSharp.TestApp
+typeinfo qmlsharp_testapp.qmltypes
+CounterView 1.0 CounterView.qml
