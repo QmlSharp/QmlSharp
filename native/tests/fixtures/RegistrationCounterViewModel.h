@@ -12,6 +12,7 @@ class RegistrationCounterViewModel : public QObject {
 
 public:
     explicit RegistrationCounterViewModel(QObject* parent = nullptr);
+    ~RegistrationCounterViewModel() override;
 
     QString instanceId() const;
     QString compilerSlotKey() const;
@@ -19,6 +20,11 @@ public:
     void setCount(int value);
 
     Q_INVOKABLE void increment();
+    Q_INVOKABLE void reset(int value);
+    Q_INVOKABLE void commandNoArgs();
+    Q_INVOKABLE void commandInt(int value);
+    Q_INVOKABLE void commandString(const QString& value);
+    Q_INVOKABLE void commandMixed(int number, const QString& text, bool enabled);
 
 signals:
     void countChanged();

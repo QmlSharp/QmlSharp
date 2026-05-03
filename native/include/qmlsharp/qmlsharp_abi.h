@@ -35,6 +35,18 @@ QMLSHARP_API int32_t qmlsharp_register_module(void* engine, const char* module_u
                                               int32_t version_minor, const qmlsharp_type_registration_entry* entries,
                                               int32_t entry_count);
 
+typedef void (*qmlsharp_instance_created_cb)(const char* instance_id, const char* class_name,
+                                             const char* compiler_slot_key);
+typedef void (*qmlsharp_instance_destroyed_cb)(const char* instance_id);
+
+QMLSHARP_API void qmlsharp_set_instance_callbacks(qmlsharp_instance_created_cb on_created,
+                                                  qmlsharp_instance_destroyed_cb on_destroyed);
+QMLSHARP_API void qmlsharp_instance_ready(const char* instance_id);
+
+typedef void (*qmlsharp_command_cb)(const char* instance_id, const char* command_name, const char* args_json);
+
+QMLSHARP_API void qmlsharp_set_command_callback(qmlsharp_command_cb callback);
+
 QMLSHARP_API const char* qmlsharp_get_last_error(void);
 QMLSHARP_API void qmlsharp_free_string(const char* str);
 

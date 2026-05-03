@@ -7,6 +7,7 @@
 
 #include "qmlsharp_engine.h"
 #include "qmlsharp_errors.h"
+#include "qmlsharp_instances.h"
 #include "qmlsharp_type_registry.h"
 
 namespace {
@@ -55,6 +56,19 @@ extern "C" QMLSHARP_API int32_t qmlsharp_register_module(void* engine, const cha
                                                          const qmlsharp_type_registration_entry* entries,
                                                          int32_t entry_count) {
     return qmlsharp::register_module(engine, module_uri, version_major, version_minor, entries, entry_count);
+}
+
+extern "C" QMLSHARP_API void qmlsharp_set_instance_callbacks(qmlsharp_instance_created_cb on_created,
+                                                             qmlsharp_instance_destroyed_cb on_destroyed) {
+    qmlsharp::set_instance_callbacks(on_created, on_destroyed);
+}
+
+extern "C" QMLSHARP_API void qmlsharp_instance_ready(const char* instance_id) {
+    qmlsharp::instance_ready(instance_id);
+}
+
+extern "C" QMLSHARP_API void qmlsharp_set_command_callback(qmlsharp_command_cb callback) {
+    qmlsharp::set_command_callback(callback);
 }
 
 extern "C" QMLSHARP_API const char* qmlsharp_get_last_error(void) {
