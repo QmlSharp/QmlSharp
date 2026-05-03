@@ -19,7 +19,6 @@
 
 #include "RegistrationCounterViewModel.h"
 #include "RegistrationStatusViewModel.h"
-#include "qmlsharp_type_registry.h"
 
 namespace {
 struct CallbackProbe {
@@ -80,6 +79,17 @@ int32_t register_counter_type(const char* module_uri, int32_t version_major, int
 int32_t register_status_type(const char* module_uri, int32_t version_major, int32_t version_minor,
                              const char* type_name) {
     return qmlRegisterType<RegistrationStatusViewModel>(module_uri, version_major, version_minor, type_name);
+}
+
+int32_t register_status_type_after_one_failure(const char* module_uri, int32_t version_major, int32_t version_minor,
+                                               const char* type_name) {
+    static int attempts = 0;
+    ++attempts;
+    if (attempts == 1) {
+        return -1;
+    }
+
+    return register_status_type(module_uri, version_major, version_minor, type_name);
 }
 
 std::unique_ptr<QObject> create_qml_object(QQmlEngine& qml_engine, const char* qml_source, std::string& error) {
@@ -391,6 +401,17 @@ int test_register_type_duplicate_registration_fails() {
 
 int test_register_type_invalid_version_and_type_name_fail() {
     constexpr const char* test_name = "REG-03 invalid module version and type name";
+    const int null_type_result =
+        qmlsharp_register_type(nullptr, "QmlSharp.NativeRegistration.NullEngine", 1, 0, "RegistrationNullEngine",
+                               "schema-null-engine", "RegistrationView::__qmlsharp_vm0", register_counter_type);
+    const std::string null_type_error = read_last_error();
+    const qmlsharp_type_registration_entry null_engine_entries[] = {
+        {"RegistrationNullModule", "schema-null-module", "RegistrationView::__qmlsharp_vm0", register_counter_type},
+    };
+    const int null_module_result =
+        qmlsharp_register_module(nullptr, "QmlSharp.NativeRegistration.NullEngineModule", 1, 0, null_engine_entries, 1);
+    const std::string null_module_error = read_last_error();
+
     void* engine = qmlsharp_engine_init(0, nullptr);
     if (engine == nullptr) {
         return fail(test_name, read_last_error());
@@ -406,6 +427,14 @@ int test_register_type_invalid_version_and_type_name_fail() {
     const std::string type_error = read_last_error();
     qmlsharp_engine_shutdown(engine);
 
+    if (null_type_result != -2 || null_type_error.find("non-null") == std::string::npos) {
+        return fail(test_name, "register_type null engine should fail as invalid argument.");
+    }
+
+    if (null_module_result != -2 || null_module_error.find("non-null") == std::string::npos) {
+        return fail(test_name, "register_module null engine should fail as invalid argument.");
+    }
+
     if (invalid_version != -2 || version_error.find("module version") == std::string::npos) {
         return fail(test_name, "negative module version should fail as invalid argument.");
     }
@@ -414,6 +443,58 @@ int test_register_type_invalid_version_and_type_name_fail() {
         return fail(test_name, "lowercase QML type name should fail as invalid argument.");
     }
 
+    return EXIT_SUCCESS;
+}
+
+int test_register_module_callback_failure_is_retry_safe() {
+    constexpr const char* test_name = "REG-04B register_module callback failure retry";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    const qmlsharp_type_registration_entry entries[] = {
+        {"RegistrationRetryCounter", "schema-retry-counter", "RegistrationRetryView::__qmlsharp_vm0",
+         register_counter_type},
+        {"RegistrationRetryStatus", "schema-retry-status", "RegistrationRetryStatusView::__qmlsharp_vm0",
+         register_status_type_after_one_failure},
+    };
+
+    const int first = qmlsharp_register_module(engine, "QmlSharp.NativeRegistration.Retry", 1, 3, entries, 2);
+    const std::string first_error = read_last_error();
+    const int second = qmlsharp_register_module(engine, "QmlSharp.NativeRegistration.Retry", 1, 3, entries, 2);
+    if (first != -6 || first_error.find("callback failed") == std::string::npos) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, "first registration should surface the generated callback failure.");
+    }
+
+    if (second != 0) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    QQmlEngine qml_engine;
+    std::string counter_error;
+    std::unique_ptr<QObject> counter = create_qml_object(qml_engine,
+                                                         "import QmlSharp.NativeRegistration.Retry 1.3\n"
+                                                         "RegistrationRetryCounter { count: 11 }\n",
+                                                         counter_error);
+    std::string status_error;
+    std::unique_ptr<QObject> status = create_qml_object(qml_engine,
+                                                        "import QmlSharp.NativeRegistration.Retry 1.3\n"
+                                                        "RegistrationRetryStatus { status: \"retried\" }\n",
+                                                        status_error);
+    if (counter == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, counter_error);
+    }
+
+    if (status == nullptr) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, status_error);
+    }
+
+    qmlsharp_engine_shutdown(engine);
     return EXIT_SUCCESS;
 }
 
@@ -477,20 +558,25 @@ int test_registration_preserves_schema_metadata() {
     const int result =
         qmlsharp_register_type(engine, "QmlSharp.NativeRegistration.Metadata", 3, 4, "RegistrationMetadataCounter",
                                "schema-metadata-counter", "MetadataView::__qmlsharp_vm0", register_counter_type);
+    const int conflicting_schema =
+        qmlsharp_register_type(engine, "QmlSharp.NativeRegistration.Metadata", 3, 4, "RegistrationMetadataCounter",
+                               "schema-metadata-other", "MetadataView::__qmlsharp_vm0", register_counter_type);
+    const std::string schema_error = read_last_error();
+    const int conflicting_slot =
+        qmlsharp_register_type(engine, "QmlSharp.NativeRegistration.Metadata", 3, 4, "RegistrationMetadataCounter",
+                               "schema-metadata-counter", "OtherView::__qmlsharp_vm0", register_counter_type);
+    const std::string slot_error = read_last_error();
     qmlsharp_engine_shutdown(engine);
     if (result != 0) {
         return fail(test_name, read_last_error());
     }
 
-    const qmlsharp::RegisteredTypeMetadata* metadata =
-        qmlsharp::find_registered_type("QmlSharp.NativeRegistration.Metadata", 3, 4, "RegistrationMetadataCounter");
-    if (metadata == nullptr) {
-        return fail(test_name, "registered type metadata was not retained.");
+    if (conflicting_schema != -6 || schema_error.find("schema metadata") == std::string::npos) {
+        return fail(test_name, "conflicting schema ID should be detected from retained metadata.");
     }
 
-    if (metadata->schema_id != "schema-metadata-counter" ||
-        metadata->compiler_slot_key != "MetadataView::__qmlsharp_vm0" || metadata->qt_type_id < 0) {
-        return fail(test_name, "schema ID, compilerSlotKey, or Qt type ID metadata did not round-trip.");
+    if (conflicting_slot != -6 || slot_error.find("schema metadata") == std::string::npos) {
+        return fail(test_name, "conflicting compilerSlotKey should be detected from retained metadata.");
     }
 
     return EXIT_SUCCESS;
@@ -525,6 +611,7 @@ int main() {
     result |= run_test(test_register_type_valid_schema_makes_qml_type_available);
     result |= run_test(test_register_type_duplicate_registration_fails);
     result |= run_test(test_register_type_invalid_version_and_type_name_fail);
+    result |= run_test(test_register_module_callback_failure_is_retry_safe);
     result |= run_test(test_register_module_valid_entries_registers_all_types);
     result |= run_test(test_registration_preserves_schema_metadata);
 

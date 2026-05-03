@@ -9,6 +9,7 @@
 #include <string>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 #include "qmlsharp_engine.h"
 #include "qmlsharp_errors.h"
@@ -19,6 +20,13 @@ using TypeKey = std::tuple<std::string, int, int, std::string>;
 
 std::mutex registry_mutex;
 std::map<TypeKey, RegisteredTypeMetadata> registered_types;
+
+struct ValidatedRegistrationEntry {
+    TypeKey key;
+    std::string schema_id;
+    std::string compiler_slot_key;
+    qmlsharp_type_registration_callback register_callback = nullptr;
+};
 
 bool is_blank(const char* value) noexcept {
     if (value == nullptr) {
@@ -62,22 +70,26 @@ std::string make_key_display(const TypeKey& key) {
     return builder.str();
 }
 
-bool validate_common(void* engine, const char* module_uri, int version_major, int version_minor,
-                     const char* operation) {
+bool validate_common(void* engine, const char* module_uri, int version_major, int version_minor, const char* operation,
+                     int& error_code) {
     if (!validate_engine_call(engine, operation)) {
+        error_code = engine == nullptr ? QmlSharpInvalidArgument : QmlSharpEngineNotInitialized;
         return false;
     }
 
     if (is_blank(module_uri)) {
         set_last_error(std::string(operation) + " requires a non-empty module URI.");
+        error_code = QmlSharpInvalidArgument;
         return false;
     }
 
     if (version_major < 0 || version_minor < 0) {
         set_last_error(std::string(operation) + " requires a non-negative module version.");
+        error_code = QmlSharpInvalidArgument;
         return false;
     }
 
+    error_code = QmlSharpSuccess;
     return true;
 }
 
@@ -110,31 +122,55 @@ TypeKey make_type_key(const char* module_uri, int version_major, int version_min
     return TypeKey{std::string(module_uri), version_major, version_minor, std::string(type_name)};
 }
 
-int register_validated_type(const TypeKey& key, const char* schema_id, const char* compiler_slot_key,
-                            qmlsharp_type_registration_callback register_callback) {
-    std::lock_guard<std::mutex> lock(registry_mutex);
-    if (registered_types.contains(key)) {
-        set_last_error("QML type registration already exists for " + make_key_display(key) + '.');
-        return QmlSharpTypeRegistrationFailure;
-    }
-
-    const int qt_type_id =
-        register_callback(std::get<0>(key).c_str(), std::get<1>(key), std::get<2>(key), std::get<3>(key).c_str());
-    if (qt_type_id < 0) {
-        set_last_error("Generated registration callback failed for " + make_key_display(key) + '.');
-        return QmlSharpTypeRegistrationFailure;
-    }
-
+RegisteredTypeMetadata make_metadata(const ValidatedRegistrationEntry& entry, int qt_type_id) {
     RegisteredTypeMetadata metadata;
-    metadata.module_uri = std::get<0>(key);
-    metadata.version_major = std::get<1>(key);
-    metadata.version_minor = std::get<2>(key);
-    metadata.type_name = std::get<3>(key);
-    metadata.schema_id = schema_id;
-    metadata.compiler_slot_key = compiler_slot_key;
+    metadata.module_uri = std::get<0>(entry.key);
+    metadata.version_major = std::get<1>(entry.key);
+    metadata.version_minor = std::get<2>(entry.key);
+    metadata.type_name = std::get<3>(entry.key);
+    metadata.schema_id = entry.schema_id;
+    metadata.compiler_slot_key = entry.compiler_slot_key;
     metadata.qt_type_id = qt_type_id;
+    return metadata;
+}
 
-    registered_types.emplace(key, std::move(metadata));
+bool metadata_matches(const RegisteredTypeMetadata& metadata, const ValidatedRegistrationEntry& entry) {
+    return metadata.module_uri == std::get<0>(entry.key) && metadata.version_major == std::get<1>(entry.key) &&
+           metadata.version_minor == std::get<2>(entry.key) && metadata.type_name == std::get<3>(entry.key) &&
+           metadata.schema_id == entry.schema_id && metadata.compiler_slot_key == entry.compiler_slot_key &&
+           metadata.qt_type_id >= 0;
+}
+
+void set_duplicate_error(const TypeKey& key, bool metadata_conflict) {
+    if (metadata_conflict) {
+        set_last_error("QML type registration conflicts with existing schema metadata for " + make_key_display(key) +
+                       '.');
+        return;
+    }
+
+    set_last_error("QML type registration already exists for " + make_key_display(key) + '.');
+}
+
+int register_validated_type(const ValidatedRegistrationEntry& entry, bool skip_matching_existing) {
+    std::lock_guard<std::mutex> lock(registry_mutex);
+    const auto existing = registered_types.find(entry.key);
+    if (existing != registered_types.end()) {
+        if (skip_matching_existing && metadata_matches(existing->second, entry)) {
+            return QmlSharpSuccess;
+        }
+
+        set_duplicate_error(entry.key, !metadata_matches(existing->second, entry));
+        return QmlSharpTypeRegistrationFailure;
+    }
+
+    const int qt_type_id = entry.register_callback(std::get<0>(entry.key).c_str(), std::get<1>(entry.key),
+                                                   std::get<2>(entry.key), std::get<3>(entry.key).c_str());
+    if (qt_type_id < 0) {
+        set_last_error("Generated registration callback failed for " + make_key_display(entry.key) + '.');
+        return QmlSharpTypeRegistrationFailure;
+    }
+
+    registered_types.emplace(entry.key, make_metadata(entry, qt_type_id));
     return QmlSharpSuccess;
 }
 }  // namespace
@@ -144,17 +180,22 @@ int register_type(void* engine, const char* module_uri, int version_major, int v
                   qmlsharp_type_registration_callback register_callback) noexcept {
     try {
         constexpr const char* operation = "qmlsharp_register_type";
-        if (!validate_common(engine, module_uri, version_major, version_minor, operation)) {
-            return is_blank(module_uri) || version_major < 0 || version_minor < 0 ? QmlSharpInvalidArgument
-                                                                                  : QmlSharpEngineNotInitialized;
+        int validation_error = QmlSharpSuccess;
+        if (!validate_common(engine, module_uri, version_major, version_minor, operation, validation_error)) {
+            return validation_error;
         }
 
         if (!validate_type_entry(type_name, schema_id, compiler_slot_key, register_callback, operation)) {
             return QmlSharpInvalidArgument;
         }
 
-        const int result = register_validated_type(make_type_key(module_uri, version_major, version_minor, type_name),
-                                                   schema_id, compiler_slot_key, register_callback);
+        const ValidatedRegistrationEntry entry{
+            make_type_key(module_uri, version_major, version_minor, type_name),
+            schema_id,
+            compiler_slot_key,
+            register_callback,
+        };
+        const int result = register_validated_type(entry, false);
         if (result == QmlSharpSuccess) {
             clear_last_error();
         }
@@ -173,9 +214,9 @@ int register_module(void* engine, const char* module_uri, int version_major, int
                     const qmlsharp_type_registration_entry* entries, int entry_count) noexcept {
     try {
         constexpr const char* operation = "qmlsharp_register_module";
-        if (!validate_common(engine, module_uri, version_major, version_minor, operation)) {
-            return is_blank(module_uri) || version_major < 0 || version_minor < 0 ? QmlSharpInvalidArgument
-                                                                                  : QmlSharpEngineNotInitialized;
+        int validation_error = QmlSharpSuccess;
+        if (!validate_common(engine, module_uri, version_major, version_minor, operation, validation_error)) {
+            return validation_error;
         }
 
         if (entry_count < 0) {
@@ -194,6 +235,8 @@ int register_module(void* engine, const char* module_uri, int version_major, int
         }
 
         std::set<TypeKey> module_keys;
+        std::vector<ValidatedRegistrationEntry> validated_entries;
+        validated_entries.reserve(static_cast<std::size_t>(entry_count));
         for (int index = 0; index < entry_count; ++index) {
             const qmlsharp_type_registration_entry& entry = entries[index];
             if (!validate_type_entry(entry.type_name, entry.schema_id, entry.compiler_slot_key, entry.register_callback,
@@ -206,23 +249,28 @@ int register_module(void* engine, const char* module_uri, int version_major, int
                 set_last_error("qmlsharp_register_module received duplicate entry " + make_key_display(key) + '.');
                 return QmlSharpTypeRegistrationFailure;
             }
+
+            validated_entries.push_back(ValidatedRegistrationEntry{
+                std::move(key),
+                entry.schema_id,
+                entry.compiler_slot_key,
+                entry.register_callback,
+            });
         }
 
         {
             std::lock_guard<std::mutex> lock(registry_mutex);
-            for (const TypeKey& key : module_keys) {
-                if (registered_types.contains(key)) {
-                    set_last_error("QML type registration already exists for " + make_key_display(key) + '.');
+            for (const ValidatedRegistrationEntry& entry : validated_entries) {
+                const auto existing = registered_types.find(entry.key);
+                if (existing != registered_types.end() && !metadata_matches(existing->second, entry)) {
+                    set_duplicate_error(entry.key, true);
                     return QmlSharpTypeRegistrationFailure;
                 }
             }
         }
 
-        for (int index = 0; index < entry_count; ++index) {
-            const qmlsharp_type_registration_entry& entry = entries[index];
-            const int result =
-                register_validated_type(make_type_key(module_uri, version_major, version_minor, entry.type_name),
-                                        entry.schema_id, entry.compiler_slot_key, entry.register_callback);
+        for (const ValidatedRegistrationEntry& entry : validated_entries) {
+            const int result = register_validated_type(entry, true);
             if (result != QmlSharpSuccess) {
                 return result;
             }
@@ -239,15 +287,4 @@ int register_module(void* engine, const char* module_uri, int version_major, int
     }
 }
 
-const RegisteredTypeMetadata* find_registered_type(const std::string& module_uri, int version_major, int version_minor,
-                                                   const std::string& type_name) {
-    std::lock_guard<std::mutex> lock(registry_mutex);
-    const TypeKey key{module_uri, version_major, version_minor, type_name};
-    const auto iterator = registered_types.find(key);
-    if (iterator == registered_types.end()) {
-        return nullptr;
-    }
-
-    return &iterator->second;
-}
 }  // namespace qmlsharp

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "qmlsharp/qmlsharp_abi.h"
-#include "qmlsharp/qmlsharp_export.h"
 
 #include <string>
 
@@ -22,7 +21,4 @@ int register_type(void* engine, const char* module_uri, int version_major, int v
 
 int register_module(void* engine, const char* module_uri, int version_major, int version_minor,
                     const qmlsharp_type_registration_entry* entries, int entry_count) noexcept;
-
-QMLSHARP_API const RegisteredTypeMetadata* find_registered_type(const std::string& module_uri, int version_major,
-                                                                int version_minor, const std::string& type_name);
 }  // namespace qmlsharp
