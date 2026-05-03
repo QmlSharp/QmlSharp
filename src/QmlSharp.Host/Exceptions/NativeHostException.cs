@@ -37,6 +37,57 @@ namespace QmlSharp.Host.Exceptions
         /// <summary>The ABI version reported by the native library.</summary>
         public int ActualVersion { get; }
     }
+
+    /// <summary>Thrown when a referenced runtime instance is not registered.</summary>
+    public sealed class InstanceNotFoundException : NativeHostException
+    {
+        public InstanceNotFoundException(string instanceId)
+            : base(-3, $"Instance '{instanceId}' was not found in the managed instance registry.")
+        {
+            InstanceId = instanceId;
+        }
+
+        /// <summary>The missing instance identifier.</summary>
+        public string InstanceId { get; }
+    }
+
+    /// <summary>Thrown when a state synchronization property name is not part of the known schema.</summary>
+    public sealed class PropertyNotFoundException : NativeHostException
+    {
+        public PropertyNotFoundException(string instanceId, string propertyName)
+            : base(-7, $"Property '{propertyName}' was not found for instance '{instanceId}'.")
+        {
+            InstanceId = instanceId;
+            PropertyName = propertyName;
+        }
+
+        public PropertyNotFoundException(string instanceId, string propertyName, string message)
+            : base(-7, message)
+        {
+            InstanceId = instanceId;
+            PropertyName = propertyName;
+        }
+
+        /// <summary>The instance identifier whose schema rejected the property.</summary>
+        public string InstanceId { get; }
+
+        /// <summary>The rejected property name.</summary>
+        public string PropertyName { get; }
+    }
+
+    /// <summary>Thrown when JSON state payloads are invalid or rejected by the native host.</summary>
+    public sealed class NativeJsonException : NativeHostException
+    {
+        public NativeJsonException(string message)
+            : base(-8, message)
+        {
+        }
+
+        public NativeJsonException(string message, Exception innerException)
+            : base(-8, message, innerException)
+        {
+        }
+    }
 }
 
 #pragma warning restore MA0048
