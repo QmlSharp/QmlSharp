@@ -22,6 +22,8 @@ namespace QmlSharp.Host.Tests.StateSynchronization
 
         public Action? OnReload { get; set; }
 
+        public Exception? HideErrorException { get; set; }
+
         public IReadOnlyList<SyncCall> Calls
         {
             get
@@ -155,6 +157,11 @@ namespace QmlSharp.Host.Tests.StateSynchronization
 
         public void HideError(IntPtr engineHandle)
         {
+            if (HideErrorException is not null)
+            {
+                throw HideErrorException;
+            }
+
             lock (syncRoot)
             {
                 overlayCalls.Add(new OverlayCall(engineHandle, Title: null, Message: null, FilePath: null, Line: 0, Column: 0, IsShow: false));

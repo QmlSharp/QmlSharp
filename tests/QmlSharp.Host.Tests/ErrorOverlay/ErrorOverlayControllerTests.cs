@@ -46,6 +46,26 @@ namespace QmlSharp.Host.Tests.ErrorOverlay
         }
 
         [Fact]
+        public void Hide_WhenNativeHideFails_KeepsVisibleStateForRetry()
+        {
+            FakeNativeHostInterop interop = new()
+            {
+                HideErrorException = new InvalidOperationException("native hide failed")
+            };
+            ErrorOverlayController overlay = new(interop, new IntPtr(77));
+            overlay.Show(new ErrorOverlayPayload("Broken", Severity: ErrorOverlaySeverity.Warning));
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(overlay.Hide);
+            interop.HideErrorException = null;
+            overlay.Hide();
+
+            Assert.Equal("native hide failed", exception.Message);
+            Assert.False(overlay.IsVisible);
+            Assert.Equal(2, interop.OverlayCalls.Count);
+            Assert.False(interop.OverlayCalls[1].IsShow);
+        }
+
+        [Fact]
         public void Hide_WhenNotVisible_IsNoOp()
         {
             FakeNativeHostInterop interop = new();

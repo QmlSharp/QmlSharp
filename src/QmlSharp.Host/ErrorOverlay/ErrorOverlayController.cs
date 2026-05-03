@@ -58,23 +58,21 @@ namespace QmlSharp.Host.ErrorOverlay
         /// <summary>Hides the native error overlay. Repeated calls are harmless.</summary>
         public void Hide()
         {
-            bool shouldHide;
             lock (syncRoot)
             {
-                shouldHide = visible;
+                if (!visible)
+                {
+                    return;
+                }
+
+                _ = ExecuteNative(() =>
+                {
+                    interop.HideError(engineHandle);
+                    return 0;
+                });
+
                 visible = false;
             }
-
-            if (!shouldHide)
-            {
-                return;
-            }
-
-            _ = ExecuteNative(() =>
-            {
-                interop.HideError(engineHandle);
-                return 0;
-            });
         }
 
         private int ExecuteNative(Func<int> operation)

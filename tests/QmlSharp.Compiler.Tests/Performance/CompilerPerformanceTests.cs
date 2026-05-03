@@ -81,7 +81,7 @@ namespace QmlSharp.Compiler.Tests.Performance
                 Assert.Equal(50, result.Units.Length);
             });
 
-            AssertUnderBudget("PF-04 50-file full compile", elapsed, TimeSpan.FromSeconds(10));
+            AssertUnderBudget("PF-04 50-file full compile", elapsed, GetFiftyFileFullCompileBudget());
         }
 
         [Fact]
@@ -217,6 +217,22 @@ namespace QmlSharp.Compiler.Tests.Performance
             }
 
             return best;
+        }
+
+        private static TimeSpan GetFiftyFileFullCompileBudget()
+        {
+            return IsWindowsContinuousIntegration()
+                ? TimeSpan.FromSeconds(30)
+                : TimeSpan.FromSeconds(10);
+        }
+
+        private static bool IsWindowsContinuousIntegration()
+        {
+            return OperatingSystem.IsWindows()
+                && string.Equals(
+                    Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase);
         }
 
         private static void AssertUnderBudget(string operation, TimeSpan elapsed, TimeSpan budget)

@@ -264,10 +264,14 @@ namespace QmlSharp.Host.Commands
                 ThrowIfDisposed();
                 CommandRouterSnapshot.Registration[] registrations = registrationsByName
                     .Where(registration => string.Equals(registration.Key.InstanceId, instanceId, StringComparison.Ordinal))
-                    .Select(static registration => new CommandRouterSnapshot.Registration(
+                    .Select(registration => new CommandRouterSnapshot.Registration(
                         registration.Value.CommandId,
                         registration.Value.CommandName,
-                        registration.Value.Handler))
+                        registration.Value.Handler,
+                        registrationsById.TryGetValue(
+                            new CommandKey(instanceId, registration.Value.CommandId),
+                            out CommandRegistration? idRegistration)
+                            && ReferenceEquals(idRegistration, registration.Value)))
                     .ToArray();
 
                 CommandRouterSnapshot.QueuedCommand[] queuedCommands = queuedCommandsByInstanceId.TryGetValue(instanceId, out Queue<QueuedCommand>? queue)
@@ -304,7 +308,11 @@ namespace QmlSharp.Host.Commands
                         registrationSnapshot.CommandId,
                         registrationSnapshot.CommandName,
                         registrationSnapshot.Handler);
-                    registrationsById[new CommandKey(newInstanceId, registration.CommandId)] = registration;
+                    if (registrationSnapshot.SupportsNumericDispatch)
+                    {
+                        registrationsById[new CommandKey(newInstanceId, registration.CommandId)] = registration;
+                    }
+
                     registrationsByName[new CommandNameKey(newInstanceId, registration.CommandName)] = registration;
                     restoredRegistrationsByName[registration.CommandName] = registration;
                 }

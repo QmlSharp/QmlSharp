@@ -7,7 +7,8 @@ namespace QmlSharp.Host.Commands
         internal sealed record Registration(
             int CommandId,
             string CommandName,
-            Func<CommandInvocation, Task> Handler);
+            Func<CommandInvocation, Task> Handler,
+            bool SupportsNumericDispatch);
 
         internal sealed record QueuedCommand(
             int CommandId,
