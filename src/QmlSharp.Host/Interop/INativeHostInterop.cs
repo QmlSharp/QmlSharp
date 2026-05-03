@@ -23,5 +23,9 @@ namespace QmlSharp.Host.Interop
         int SyncStateJson(string instanceId, string propertyName, string jsonValue);
 
         int SyncStateBatch(string instanceId, string propertiesJson);
+
+        int DispatchEffect(string instanceId, string effectName, string payloadJson);
+
+        int BroadcastEffect(string className, string effectName, string payloadJson);
     }
 }
