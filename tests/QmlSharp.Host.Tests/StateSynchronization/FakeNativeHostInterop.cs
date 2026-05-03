@@ -6,6 +6,7 @@ namespace QmlSharp.Host.Tests.StateSynchronization
     {
         private readonly Lock syncRoot = new();
         private readonly List<SyncCall> calls = [];
+        private readonly List<OverlayCall> overlayCalls = [];
 
         public bool IsOnMainThread { get; set; } = true;
 
@@ -13,7 +14,15 @@ namespace QmlSharp.Host.Tests.StateSynchronization
 
         public int NextResultCode { get; set; }
 
+        public int ReloadResultCode { get; set; }
+
+        public string? SnapshotJson { get; set; } = "{\"window\":{}}";
+
         public string? LastError { get; set; }
+
+        public Action? OnReload { get; set; }
+
+        public Exception? HideErrorException { get; set; }
 
         public IReadOnlyList<SyncCall> Calls
         {
@@ -22,6 +31,17 @@ namespace QmlSharp.Host.Tests.StateSynchronization
                 lock (syncRoot)
                 {
                     return calls.ToArray();
+                }
+            }
+        }
+
+        public IReadOnlyList<OverlayCall> OverlayCalls
+        {
+            get
+            {
+                lock (syncRoot)
+                {
+                    return overlayCalls.ToArray();
                 }
             }
         }
@@ -99,6 +119,55 @@ namespace QmlSharp.Host.Tests.StateSynchronization
             return NextResultCode;
         }
 
+        public string? CaptureSnapshot(IntPtr engineHandle)
+        {
+            AddCall(new SyncCall("capture", engineHandle.ToString(), PropertyName: null, SnapshotJson));
+            return SnapshotJson;
+        }
+
+        public int ReloadQml(IntPtr engineHandle, string qmlSourcePath)
+        {
+            AddCall(new SyncCall("reload", engineHandle.ToString(), "qmlSourcePath", qmlSourcePath));
+            if (ReloadResultCode == 0)
+            {
+                OnReload?.Invoke();
+            }
+
+            return ReloadResultCode;
+        }
+
+        public void RestoreSnapshot(IntPtr engineHandle, string snapshotJson)
+        {
+            AddCall(new SyncCall("restore", engineHandle.ToString(), PropertyName: null, snapshotJson));
+        }
+
+        public void ShowError(
+            IntPtr engineHandle,
+            string title,
+            string message,
+            string? filePath,
+            int line,
+            int column)
+        {
+            lock (syncRoot)
+            {
+                overlayCalls.Add(new OverlayCall(engineHandle, title, message, filePath, line, column, IsShow: true));
+            }
+        }
+
+        public void HideError(IntPtr engineHandle)
+        {
+            if (HideErrorException is not null)
+            {
+                throw HideErrorException;
+            }
+
+            lock (syncRoot)
+            {
+                overlayCalls.Add(new OverlayCall(engineHandle, Title: null, Message: null, FilePath: null, Line: 0, Column: 0, IsShow: false));
+            }
+        }
+
         private void AddCall(SyncCall call)
         {
             lock (syncRoot)
@@ -107,4 +176,13 @@ namespace QmlSharp.Host.Tests.StateSynchronization
             }
         }
     }
+
+    internal sealed record OverlayCall(
+        IntPtr EngineHandle,
+        string? Title,
+        string? Message,
+        string? FilePath,
+        int Line,
+        int Column,
+        bool IsShow);
 }

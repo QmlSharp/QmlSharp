@@ -27,5 +27,21 @@ namespace QmlSharp.Host.Interop
         int DispatchEffect(string instanceId, string effectName, string payloadJson);
 
         int BroadcastEffect(string className, string effectName, string payloadJson);
+
+        string? CaptureSnapshot(IntPtr engineHandle);
+
+        int ReloadQml(IntPtr engineHandle, string qmlSourcePath);
+
+        void RestoreSnapshot(IntPtr engineHandle, string snapshotJson);
+
+        void ShowError(
+            IntPtr engineHandle,
+            string title,
+            string message,
+            string? filePath,
+            int line,
+            int column);
+
+        void HideError(IntPtr engineHandle);
     }
 }

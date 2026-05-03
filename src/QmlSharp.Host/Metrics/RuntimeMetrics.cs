@@ -15,5 +15,14 @@ namespace QmlSharp.Host.Metrics
 
         /// <summary>Total queued commands across active instances.</summary>
         public int QueuedCommandCount { get; init; }
+
+        /// <summary>Total hot reload attempts coordinated by this runtime.</summary>
+        public long TotalHotReloads { get; init; }
+
+        /// <summary>Total failed hot reload attempts coordinated by this runtime.</summary>
+        public long TotalHotReloadFailures { get; init; }
+
+        /// <summary>Duration of the most recent hot reload attempt.</summary>
+        public TimeSpan LastHotReloadDuration { get; init; }
     }
 }

@@ -83,6 +83,30 @@ namespace QmlSharp.Host.Tests.CommandRouting
         }
 
         [Fact]
+        public async Task RestoreForHotReload_NameOnlyHandlers_DoNotBecomeNumericHandlers()
+        {
+            TestContext context = CreateContext();
+            TaskCompletionSource<CommandInvocation> numeric = NewCompletionSource<CommandInvocation>();
+            TaskCompletionSource<CommandInvocation> nameOnly = NewCompletionSource<CommandInvocation>();
+            context.Router.RegisterCommandHandler(context.Instance.InstanceId, 0, "increment", numeric.SetResult);
+            context.Router.RegisterCommandHandler(context.Instance.InstanceId, "reset", nameOnly.SetResult);
+            CommandRouterSnapshot snapshot = context.Router.CaptureForHotReload(context.Instance.InstanceId);
+            string restoredInstanceId = RegisterSecondInstance(context.Registry).InstanceId;
+
+            context.Router.RestoreForHotReload(restoredInstanceId, snapshot, restoreQueuedCommands: false);
+            _ = context.Router.MarkReady(restoredInstanceId);
+            CommandDispatchResult numericResult = context.Router.OnCommand(restoredInstanceId, 0, "[1]");
+            CommandDispatchResult nameResult = context.Router.OnCommand(restoredInstanceId, "reset", "[]");
+
+            Assert.Equal(CommandDispatchStatus.Dispatched, numericResult.Status);
+            Assert.Equal(CommandDispatchStatus.Dispatched, nameResult.Status);
+            CommandInvocation numericInvocation = await WaitFor(numeric.Task);
+            CommandInvocation nameOnlyInvocation = await WaitFor(nameOnly.Task);
+            Assert.Equal("increment", numericInvocation.CommandName);
+            Assert.Equal("reset", nameOnlyInvocation.CommandName);
+        }
+
+        [Fact]
         public async Task OnCommand_PendingInstance_QueuesUntilReady()
         {
             TestContext context = CreateContext();
@@ -251,6 +275,17 @@ namespace QmlSharp.Host.Tests.CommandRouting
             List<RuntimeDiagnostic> diagnostics = [];
             CommandRouter router = new(registry, diagnostics.Add);
             return new TestContext(registry, instance, router, diagnostics);
+        }
+
+        private static ManagedViewModelInstance RegisterSecondInstance(ManagedInstanceRegistry registry)
+        {
+            return registry.Register(new InstanceRegistration(
+                NewInstanceId(),
+                "CounterViewModel",
+                "counter-schema",
+                "CounterView::__qmlsharp_vm1",
+                new IntPtr(789),
+                new IntPtr(987)));
         }
 
         private static TaskCompletionSource<T> NewCompletionSource<T>()
