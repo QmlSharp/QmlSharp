@@ -33,5 +33,24 @@ namespace QmlSharp.Host.Tests.Interop
 
             Assert.Null(library.GetLastError());
         }
+
+        [Fact]
+        [Trait("Category", TestCategories.RequiresNative)]
+        public void MainThreadDispatch_FromWorkerThreadFailsFast()
+        {
+            using NativeHostLibrary library = new(NativeTestLibrary.Resolve());
+            Exception? capturedException = null;
+
+            Assert.True(library.IsOnMainThread);
+            Thread worker = new(() =>
+            {
+                capturedException = Record.Exception(() => library.PostToMainThread(static () => { }));
+            });
+            worker.Start();
+            worker.Join();
+
+            InvalidOperationException exception = Assert.IsType<InvalidOperationException>(capturedException);
+            Assert.Contains("main-thread dispatch is not available", exception.Message, StringComparison.Ordinal);
+        }
     }
 }

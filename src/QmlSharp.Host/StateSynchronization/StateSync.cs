@@ -122,7 +122,7 @@ namespace QmlSharp.Host.StateSynchronization
             foreach (KeyValuePair<string, object?> property in properties)
             {
                 sortedProperties.Add(property.Key, property.Value);
-                snapshotValues.Add(property.Key, CloneSnapshotValue(property.Value));
+                snapshotValues.Add(property.Key, NormalizeSnapshotValue(property.Value));
             }
 
             string propertiesJson = JsonSerializer.Serialize(sortedProperties, SerializerOptions);
@@ -251,7 +251,7 @@ namespace QmlSharp.Host.StateSynchronization
                 {
                     resultCode = operation();
                 }
-                catch (Exception capturedException)
+                catch (Exception capturedException) when (!IsCriticalException(capturedException))
                 {
                     exception = capturedException;
                 }
@@ -333,8 +333,13 @@ namespace QmlSharp.Host.StateSynchronization
             return JsonSerializer.Serialize(value, SerializerOptions);
         }
 
-        private static object? CloneSnapshotValue(object? value)
+        private static object? NormalizeSnapshotValue(object? value)
         {
+            if (value is null or string or int or double or bool)
+            {
+                return value;
+            }
+
             if (value is JsonElement jsonElement)
             {
                 return jsonElement.Clone();
@@ -345,7 +350,19 @@ namespace QmlSharp.Host.StateSynchronization
                 return jsonDocument.RootElement.Clone();
             }
 
-            return value;
+            return ParseJsonValue(SerializeJsonValue(value));
+        }
+
+        private static bool IsCriticalException(Exception exception)
+        {
+            return exception is OutOfMemoryException
+                or StackOverflowException
+                or AccessViolationException
+                or AppDomainUnloadedException
+                or BadImageFormatException
+                or CannotUnloadAppDomainException
+                or InvalidProgramException
+                or ThreadAbortException;
         }
     }
 }

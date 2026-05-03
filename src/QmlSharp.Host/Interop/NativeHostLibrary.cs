@@ -10,11 +10,13 @@ namespace QmlSharp.Host.Interop
         private readonly QmlsharpFreeStringDelegate freeString;
         private readonly Dictionary<string, Delegate> loadedDelegates = new(StringComparer.Ordinal);
         private readonly Lock syncRoot = new();
+        private readonly int ownerManagedThreadId;
         private bool disposed;
 
         public NativeHostLibrary(string nativeLibraryPath)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(nativeLibraryPath);
+            ownerManagedThreadId = Environment.CurrentManagedThreadId;
 
             string fullPath = Path.GetFullPath(nativeLibraryPath);
             if (!File.Exists(fullPath))
@@ -37,7 +39,7 @@ namespace QmlSharp.Host.Interop
             }
         }
 
-        public bool IsOnMainThread => true;
+        public bool IsOnMainThread => Environment.CurrentManagedThreadId == ownerManagedThreadId;
 
         public int GetAbiVersion()
         {
@@ -61,6 +63,12 @@ namespace QmlSharp.Host.Interop
         {
             ArgumentNullException.ThrowIfNull(callback);
             ThrowIfDisposed();
+            if (!IsOnMainThread)
+            {
+                throw new InvalidOperationException(
+                    "Native host main-thread dispatch is not available yet; call native host operations from the owner thread.");
+            }
+
             callback();
         }
 

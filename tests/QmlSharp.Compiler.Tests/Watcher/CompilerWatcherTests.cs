@@ -120,12 +120,16 @@ namespace QmlSharp.Compiler.Tests.Watcher
         [Fact]
         public async Task CompilerWatcher_ReplacedDebounceCompilesOnlyLatestChange()
         {
-            using TestHarness harness = new(TimeSpan.FromMilliseconds(100));
+            ManualDelayProvider delays = new();
+            using TestHarness harness = new(TimeSpan.FromMilliseconds(100), delays.DelayAsync);
             CallbackProbe callbacks = new(targetCount: 2);
             await harness.Watcher.StartAsync(Options, callbacks.Record);
 
             harness.FileWatcher.RaiseChanged("CounterView.cs");
+            await delays.WaitForRequestCountAsync(1);
             harness.FileWatcher.RaiseChanged("TodoView.cs");
+            await delays.WaitForRequestCountAsync(2);
+            delays.CompleteRequest(1);
             await callbacks.WaitAsync();
 
             Assert.Equal(2, harness.IncrementalCompiler.CompileCalls);
@@ -228,7 +232,7 @@ namespace QmlSharp.Compiler.Tests.Watcher
         {
             private readonly FakeFileWatcherFactory fileWatcherFactory;
 
-            public TestHarness(TimeSpan debounce)
+            public TestHarness(TimeSpan debounce, Func<TimeSpan, CancellationToken, Task>? delayAsync = null)
             {
                 Compiler = new FakeCompiler();
                 Analyzer = new FakeAnalyzer();
@@ -239,7 +243,8 @@ namespace QmlSharp.Compiler.Tests.Watcher
                     IncrementalCompiler,
                     Analyzer,
                     fileWatcherFactory,
-                    debounce);
+                    debounce,
+                    delayAsync);
             }
 
             public CompilerWatcher Watcher { get; }
@@ -284,6 +289,69 @@ namespace QmlSharp.Compiler.Tests.Watcher
             public Task WaitAsync()
             {
                 return completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+        }
+
+        private sealed class ManualDelayProvider
+        {
+            private readonly Lock syncRoot = new();
+            private readonly List<TaskCompletionSource<object?>> requests = [];
+            private TaskCompletionSource<object?> requestObserved = CreateCompletionSource<object?>();
+
+            public Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken)
+            {
+                if (delay < TimeSpan.Zero)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(delay), delay, "Delay must be non-negative.");
+                }
+
+                TaskCompletionSource<object?> request = CreateCompletionSource<object?>();
+                if (cancellationToken.CanBeCanceled)
+                {
+                    _ = cancellationToken.Register(static state =>
+                    {
+                        _ = ((TaskCompletionSource<object?>)state!).TrySetCanceled();
+                    }, request);
+                }
+
+                lock (syncRoot)
+                {
+                    requests.Add(request);
+                    _ = requestObserved.TrySetResult(null);
+                    requestObserved = CreateCompletionSource<object?>();
+                }
+
+                return request.Task;
+            }
+
+            public async Task WaitForRequestCountAsync(int count)
+            {
+                while (true)
+                {
+                    Task waitTask;
+                    lock (syncRoot)
+                    {
+                        if (requests.Count >= count)
+                        {
+                            return;
+                        }
+
+                        waitTask = requestObserved.Task;
+                    }
+
+                    await waitTask.WaitAsync(TimeSpan.FromSeconds(5));
+                }
+            }
+
+            public void CompleteRequest(int index)
+            {
+                TaskCompletionSource<object?> request;
+                lock (syncRoot)
+                {
+                    request = requests[index];
+                }
+
+                _ = request.TrySetResult(null);
             }
         }
 

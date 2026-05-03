@@ -13,6 +13,7 @@ namespace QmlSharp.Compiler
         private readonly ICSharpAnalyzer analyzer;
         private readonly ICompilerFileWatcherFactory fileWatcherFactory;
         private readonly TimeSpan debounce;
+        private readonly Func<TimeSpan, CancellationToken, Task> delayAsync;
         private readonly SemaphoreSlim compileGate = new(1, 1);
         private readonly List<Action<Exception>> errorHandlers = [];
 
@@ -53,7 +54,8 @@ namespace QmlSharp.Compiler
             IIncrementalCompiler incrementalCompiler,
             ICSharpAnalyzer analyzer,
             ICompilerFileWatcherFactory fileWatcherFactory,
-            TimeSpan debounce)
+            TimeSpan debounce,
+            Func<TimeSpan, CancellationToken, Task>? delayAsync = null)
         {
             if (debounce < TimeSpan.Zero)
             {
@@ -65,6 +67,7 @@ namespace QmlSharp.Compiler
             this.analyzer = analyzer ?? throw new ArgumentNullException(nameof(analyzer));
             this.fileWatcherFactory = fileWatcherFactory ?? throw new ArgumentNullException(nameof(fileWatcherFactory));
             this.debounce = debounce;
+            this.delayAsync = delayAsync ?? Task.Delay;
         }
 
         /// <inheritdoc />
@@ -284,7 +287,7 @@ namespace QmlSharp.Compiler
             {
                 if (debounce > TimeSpan.Zero)
                 {
-                    await Task.Delay(debounce, cancellationToken).ConfigureAwait(false);
+                    await delayAsync(debounce, cancellationToken).ConfigureAwait(false);
                 }
 
                 await CompileNowAsync(activeGeneration, cancellationToken).ConfigureAwait(false);

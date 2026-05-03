@@ -135,6 +135,29 @@ namespace QmlSharp.Host.Tests.StateSynchronization
         }
 
         [Fact]
+        public void PushBatch_ComplexObjectSnapshot_IsDetachedFromMutableInput()
+        {
+            TestContext context = CreateContext();
+            MutableSettingsPayload settings = new()
+            {
+                Mode = "dark",
+                Level = 2
+            };
+            Dictionary<string, object?> properties = new(StringComparer.Ordinal)
+            {
+                ["settings"] = settings
+            };
+
+            context.StateSync.PushBatch(context.Instance.InstanceId, properties);
+            settings.Mode = "light";
+            settings.Level = 5;
+
+            JsonElement snapshot = Assert.IsType<JsonElement>(context.Instance.CurrentState["settings"]);
+            Assert.Equal("dark", snapshot.GetProperty("Mode").GetString());
+            Assert.Equal(2, snapshot.GetProperty("Level").GetInt32());
+        }
+
+        [Fact]
         public void Push_UnknownInstance_ThrowsStructuredErrorAndDoesNotCallNative()
         {
             TestContext context = CreateContext();
@@ -272,6 +295,13 @@ namespace QmlSharp.Host.Tests.StateSynchronization
         }
 
         private sealed record SettingsPayload(string Mode, int Level);
+
+        private sealed class MutableSettingsPayload
+        {
+            public string Mode { get; set; } = string.Empty;
+
+            public int Level { get; set; }
+        }
 
         private sealed record TestContext(
             ManagedInstanceRegistry Registry,
