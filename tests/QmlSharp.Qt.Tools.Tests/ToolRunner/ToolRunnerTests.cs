@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using QmlSharp.Qt.Tools.Tests.Helpers;
 using ProcessToolRunner = QmlSharp.Qt.Tools.ToolRunner;
@@ -170,27 +171,41 @@ namespace QmlSharp.Qt.Tools.Tests.ToolRunner
         public async Task ToolRunner_Timeout_KillsEntireProcessTree()
         {
             ProcessToolRunner runner = new();
+            string childStartedPath = Path.Join(
+                Path.GetTempPath(),
+                "qmlsharp-toolrunner-child-started-" + Guid.NewGuid().ToString("N") + ".txt");
             string markerPath = Path.Join(
                 Path.GetTempPath(),
                 "qmlsharp-toolrunner-child-" + Guid.NewGuid().ToString("N") + ".txt");
-            ProbeInvocation probe = CreateProbeInvocation("spawn-child-sleep", markerPath, "2500");
+            TimeSpan timeout = TimeSpan.FromSeconds(3);
+            TimeSpan childDelay = TimeSpan.FromSeconds(4);
+            ProbeInvocation probe = CreateProbeInvocation(
+                "spawn-child-sleep",
+                markerPath,
+                ((int)childDelay.TotalMilliseconds).ToString(CultureInfo.InvariantCulture),
+                childStartedPath);
 
             try
             {
-                QtToolTimeoutError error = await Assert.ThrowsAsync<QtToolTimeoutError>(() =>
+                _ = await Assert.ThrowsAsync<QtToolTimeoutError>(() =>
                     runner.RunAsync(
                         probe.ExecutablePath,
                         probe.Arguments,
-                        new ToolRunnerOptions { Timeout = TimeSpan.FromSeconds(1) }));
+                        new ToolRunnerOptions { Timeout = timeout }));
 
-                Assert.Contains("child-pid=", error.PartialStdout, StringComparison.Ordinal);
+                Assert.True(File.Exists(childStartedPath), "The probe did not start its child before timeout.");
 
-                await Task.Delay(TimeSpan.FromSeconds(3));
+                await Task.Delay(childDelay + TimeSpan.FromSeconds(1));
 
                 Assert.False(File.Exists(markerPath));
             }
             finally
             {
+                if (File.Exists(childStartedPath))
+                {
+                    File.Delete(childStartedPath);
+                }
+
                 if (File.Exists(markerPath))
                 {
                     File.Delete(markerPath);
