@@ -2,6 +2,7 @@
 
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QThread>
 #include <QUuid>
 #include <QtGlobal>
 
@@ -34,6 +35,7 @@ QString RegistrationCounterViewModel::compilerSlotKey() const {
 }
 
 int RegistrationCounterViewModel::count() const {
+    count_read_on_owner_thread_ = QThread::currentThread() == thread();
     return count_;
 }
 
@@ -96,6 +98,14 @@ void RegistrationCounterViewModel::setMetadata(const QVariant& value) {
 
     metadata_ = value;
     emit metadataChanged();
+}
+
+bool RegistrationCounterViewModel::wasCountReadOnOwnerThread() const {
+    return count_read_on_owner_thread_;
+}
+
+void RegistrationCounterViewModel::resetCountReadProbe() {
+    count_read_on_owner_thread_ = false;
 }
 
 void RegistrationCounterViewModel::increment() {

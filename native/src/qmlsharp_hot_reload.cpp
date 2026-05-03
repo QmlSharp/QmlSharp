@@ -17,7 +17,9 @@
 #include <QVariant>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <exception>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -153,7 +155,24 @@ void restore_root_window(QObject* root, const QJsonObject& window) {
     }
 }
 
-int restore_instance_state(const QJsonObject& instance) {
+using InstanceRestoreKey = std::pair<std::string, std::string>;
+using InstanceRestoreTargets = std::map<InstanceRestoreKey, std::deque<std::string>>;
+
+InstanceRestoreTargets make_restore_targets() {
+    InstanceRestoreTargets targets;
+    const std::vector<NativeInstanceRecordSnapshot> records = snapshot_instances();
+    for (const NativeInstanceRecordSnapshot& record : records) {
+        if (record.object.isNull()) {
+            continue;
+        }
+
+        targets[{record.class_name, record.compiler_slot_key}].push_back(record.instance_id);
+    }
+
+    return targets;
+}
+
+int restore_instance_state(const QJsonObject& instance, InstanceRestoreTargets& targets) {
     const QString class_name = instance.value(QStringLiteral("className")).toString();
     const QString compiler_slot_key = instance.value(QStringLiteral("compilerSlotKey")).toString();
     const QJsonValue properties_value = instance.value(QStringLiteral("properties"));
@@ -163,11 +182,13 @@ int restore_instance_state(const QJsonObject& instance) {
 
     const std::string class_name_utf8 = to_utf8_string(class_name);
     const std::string compiler_slot_key_utf8 = to_utf8_string(compiler_slot_key);
-    const std::string instance_id =
-        find_instance_id_by_class_slot(class_name_utf8.c_str(), compiler_slot_key_utf8.c_str());
-    if (instance_id.empty()) {
+    const auto target = targets.find({class_name_utf8, compiler_slot_key_utf8});
+    if (target == targets.end() || target->second.empty()) {
         return QmlSharpSuccess;
     }
+
+    const std::string instance_id = target->second.front();
+    target->second.pop_front();
 
     const QByteArray properties_json = QJsonDocument(properties_value.toObject()).toJson(QJsonDocument::Compact);
     return sync_state_batch(instance_id.c_str(), properties_json.constData());
@@ -270,12 +291,13 @@ void restore_snapshot(void* engine, const char* snapshot_json) noexcept {
 
         const QJsonValue instances = snapshot.value(QStringLiteral("instances"));
         if (instances.isArray()) {
+            InstanceRestoreTargets targets = make_restore_targets();
             for (const QJsonValue& instance : instances.toArray()) {
                 if (!instance.isObject()) {
                     continue;
                 }
 
-                const int result = restore_instance_state(instance.toObject());
+                const int result = restore_instance_state(instance.toObject(), targets);
                 if (result != QmlSharpSuccess) {
                     return;
                 }

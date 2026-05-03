@@ -2352,6 +2352,100 @@ int test_hot_reload_restore_snapshot_preserves_matching_instance_state() {
     return EXIT_SUCCESS;
 }
 
+int test_hot_reload_restore_snapshot_consumes_duplicate_slot_matches() {
+    constexpr const char* test_name = "HRL-08B restore snapshot consumes duplicate slot matches";
+    void* engine = qmlsharp_engine_init(0, nullptr);
+    if (engine == nullptr) {
+        return fail(test_name, read_last_error());
+    }
+
+    const char* module_uri = "QmlSharp.NativeHotReload.Duplicates";
+    const char* type_name = "HotReloadDuplicateCounter";
+    if (register_counter_type_for_test(engine, module_uri, type_name, "schema-hot-reload-duplicates") != 0) {
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    InstanceCommandProbe probe;
+    current_instance_probe = &probe;
+    qmlsharp_set_instance_callbacks(instance_created_callback, instance_destroyed_callback);
+
+    QTemporaryDir directory;
+    std::string error;
+    const QString qml_path = write_qml_file(directory, QStringLiteral("Duplicates.qml"),
+                                            QStringLiteral("import QtQuick\nimport %1 1.0\nItem { %2 {} %2 {} }\n")
+                                                .arg(QString::fromLatin1(module_uri))
+                                                .arg(QString::fromLatin1(type_name)),
+                                            error);
+    if (qml_path.isEmpty()) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, error);
+    }
+
+    if (reload_qml_file(engine, qml_path) != 0 || probe.created.size() < 2U) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const std::string first_old_id = probe.created[0].instance_id;
+    const std::string second_old_id = probe.created[1].instance_id;
+    if (qmlsharp_sync_state_int(first_old_id.c_str(), "count", 10) != 0 ||
+        qmlsharp_sync_state_string(first_old_id.c_str(), "title", "first") != 0 ||
+        qmlsharp_sync_state_int(second_old_id.c_str(), "count", 20) != 0 ||
+        qmlsharp_sync_state_string(second_old_id.c_str(), "title", "second") != 0) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const char* snapshot = qmlsharp_capture_snapshot(engine);
+    if (snapshot == nullptr) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    if (reload_qml_file(engine, qml_path) != 0 || probe.created.size() < 4U) {
+        qmlsharp_free_string(snapshot);
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, read_last_error());
+    }
+
+    const std::string first_new_id = probe.created[2].instance_id;
+    const std::string second_new_id = probe.created[3].instance_id;
+    qmlsharp_restore_snapshot(engine, snapshot);
+    qmlsharp_free_string(snapshot);
+    if (!read_last_error().empty()) {
+        clear_instance_command_callbacks();
+        qmlsharp_engine_shutdown(engine);
+        return fail(test_name, "restore snapshot should hydrate duplicate matching instances.");
+    }
+
+    const QJsonDocument first_info = read_native_json_document(qmlsharp_get_instance_info(first_new_id.c_str()), error);
+    const QJsonDocument second_info =
+        read_native_json_document(qmlsharp_get_instance_info(second_new_id.c_str()), error);
+    clear_instance_command_callbacks();
+    qmlsharp_engine_shutdown(engine);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    std::vector<int> counts{
+        first_info.object().value(QStringLiteral("properties")).toObject().value(QStringLiteral("count")).toInt(),
+        second_info.object().value(QStringLiteral("properties")).toObject().value(QStringLiteral("count")).toInt(),
+    };
+    std::sort(counts.begin(), counts.end());
+    if (counts.size() != 2U || counts[0] != 10 || counts[1] != 20) {
+        return fail(test_name,
+                    "restore should distribute duplicate slot snapshots across distinct replacement objects.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int test_error_overlay_show_hide_and_repeated_hide() {
     constexpr const char* test_name = "error overlay show/hide";
     void* engine = qmlsharp_engine_init(0, nullptr);
@@ -2441,6 +2535,55 @@ int test_devtools_instance_lookup_reports_properties() {
         properties.value(QStringLiteral("count")).toInt() != 77 ||
         properties.value(QStringLiteral("title")).toString() != QStringLiteral("inspectable")) {
         return fail(test_name, "instance info should expose identity and readable state.");
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int test_devtools_instance_lookup_from_background_thread_reads_on_owner_thread() {
+    constexpr const char* test_name = "dev-tools instance lookup marshals property reads";
+    CounterFixture fixture;
+    if (!fixture.valid()) {
+        return fail(test_name, read_last_error());
+    }
+
+    fixture.counter()->setCount(88);
+    fixture.counter()->resetCountReadProbe();
+
+    std::atomic_bool done = false;
+    std::string json;
+    std::string worker_error;
+    std::thread worker([&fixture, &done, &json, &worker_error]() {
+        const char* payload = qmlsharp_get_instance_info(fixture.instance_id().c_str());
+        if (payload == nullptr) {
+            worker_error = read_last_error();
+        } else {
+            json = take_native_string(payload);
+        }
+
+        done = true;
+    });
+
+    for (int attempt = 0; attempt < 200 && !done; ++attempt) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        QThread::msleep(1);
+    }
+
+    worker.join();
+    if (!worker_error.empty()) {
+        return fail(test_name, worker_error);
+    }
+
+    std::string error;
+    const QJsonDocument info = parse_json_text(json, error);
+    if (!error.empty()) {
+        return fail(test_name, error);
+    }
+
+    const int count =
+        info.object().value(QStringLiteral("properties")).toObject().value(QStringLiteral("count")).toInt();
+    if (count != 88 || !fixture.counter()->wasCountReadOnOwnerThread()) {
+        return fail(test_name, "background diagnostics should read QObject properties on the owning thread.");
     }
 
     return EXIT_SUCCESS;
@@ -2629,9 +2772,11 @@ int main() {
     result |= run_test(test_hot_reload_syntax_error_reports_qml_error);
     result |= run_test(test_hot_reload_restore_snapshot_restores_root_geometry);
     result |= run_test(test_hot_reload_restore_snapshot_preserves_matching_instance_state);
+    result |= run_test(test_hot_reload_restore_snapshot_consumes_duplicate_slot_matches);
     result |= run_test(test_error_overlay_show_hide_and_repeated_hide);
     result |= run_test(test_error_overlay_invalid_payload_reports_error);
     result |= run_test(test_devtools_instance_lookup_reports_properties);
+    result |= run_test(test_devtools_instance_lookup_from_background_thread_reads_on_owner_thread);
     result |= run_test(test_devtools_instance_enumeration_lists_active_instances);
     result |= run_test(test_metrics_include_stable_native_counters);
 

@@ -31,6 +31,8 @@ public:
     void setTitle(const QString& value);
     QVariant metadata() const;
     void setMetadata(const QVariant& value);
+    bool wasCountReadOnOwnerThread() const;
+    void resetCountReadProbe();
 
     Q_INVOKABLE void increment();
     Q_INVOKABLE void reset(int value);
@@ -56,4 +58,5 @@ private:
     bool enabled_ = false;
     QString title_;
     QVariant metadata_;
+    mutable bool count_read_on_owner_thread_ = false;
 };

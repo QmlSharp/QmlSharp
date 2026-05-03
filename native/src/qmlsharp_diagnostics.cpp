@@ -9,11 +9,13 @@
 #include <QMetaProperty>
 #include <QObject>
 #include <QString>
+#include <QThread>
 #include <QVariant>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "qmlsharp_errors.h"
@@ -74,14 +76,50 @@ QJsonObject capture_instance_properties(QObject* object) {
     return properties;
 }
 
-QJsonObject capture_instance(const NativeInstanceRecordSnapshot& instance) {
-    QJsonObject snapshot;
+template <typename Operation>
+bool run_on_object_thread(QObject* object, QJsonObject& result, Operation operation) {
+    if (object == nullptr) {
+        result = {};
+        return true;
+    }
+
+    if (object->thread() == QThread::currentThread()) {
+        result = operation();
+        return true;
+    }
+
+    bool completed = false;
+    const bool invoked = QMetaObject::invokeMethod(
+        object,
+        [&result, &completed, operation = std::move(operation)]() mutable {
+            result = operation();
+            completed = true;
+        },
+        Qt::BlockingQueuedConnection);
+
+    if (!invoked || !completed) {
+        set_last_error("Diagnostics failed to marshal instance property reads to the QObject thread.");
+        return false;
+    }
+
+    return true;
+}
+
+bool capture_instance(const NativeInstanceRecordSnapshot& instance, QJsonObject& snapshot) {
     snapshot.insert(QStringLiteral("instanceId"), QString::fromStdString(instance.instance_id));
     snapshot.insert(QStringLiteral("className"), QString::fromStdString(instance.class_name));
     snapshot.insert(QStringLiteral("compilerSlotKey"), QString::fromStdString(instance.compiler_slot_key));
     snapshot.insert(QStringLiteral("ready"), instance.ready);
-    snapshot.insert(QStringLiteral("properties"), capture_instance_properties(instance.object.data()));
-    return snapshot;
+    QPointer<QObject> object = instance.object;
+    QJsonObject properties;
+    if (!run_on_object_thread(object.data(), properties, [object]() {
+            return object.isNull() ? QJsonObject() : capture_instance_properties(object.data());
+        })) {
+        return false;
+    }
+
+    snapshot.insert(QStringLiteral("properties"), properties);
+    return true;
 }
 
 const char* allocate_document(const QJsonDocument& document) noexcept {
@@ -99,7 +137,12 @@ const char* get_instance_info(const char* instance_id) noexcept {
         const std::vector<NativeInstanceRecordSnapshot> records = snapshot_instances();
         for (const NativeInstanceRecordSnapshot& instance : records) {
             if (instance.instance_id == instance_id && !instance.object.isNull()) {
-                const char* result = allocate_document(QJsonDocument(capture_instance(instance)));
+                QJsonObject instance_info;
+                if (!capture_instance(instance, instance_info)) {
+                    return nullptr;
+                }
+
+                const char* result = allocate_document(QJsonDocument(instance_info));
                 if (result != nullptr) {
                     clear_last_error();
                 }
@@ -125,7 +168,12 @@ const char* get_all_instances() noexcept {
         const std::vector<NativeInstanceRecordSnapshot> records = snapshot_instances();
         for (const NativeInstanceRecordSnapshot& instance : records) {
             if (!instance.object.isNull()) {
-                instances.append(capture_instance(instance));
+                QJsonObject instance_info;
+                if (!capture_instance(instance, instance_info)) {
+                    return nullptr;
+                }
+
+                instances.append(instance_info);
             }
         }
 
