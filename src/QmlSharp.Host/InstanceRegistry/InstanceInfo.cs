@@ -1,3 +1,5 @@
+using QmlSharp.Host.InstanceRegistry;
+
 namespace QmlSharp.Host.Instances
 {
     /// <summary>Detailed diagnostic information for a managed ViewModel instance.</summary>

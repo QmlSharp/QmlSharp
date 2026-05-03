@@ -1,5 +1,7 @@
+using QmlSharp.Host.InstanceRegistry;
 using QmlSharp.Host.Instances;
 using QmlSharp.Host.Metrics;
+using ManagedInstanceRegistry = QmlSharp.Host.Instances.InstanceRegistry;
 
 namespace QmlSharp.Host.Tests.Instances
 {
@@ -8,7 +10,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void OnInstanceCreated_ValidRegistration_AddsEntry()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             InstanceRegistration registration = CreateRegistration();
 
             ManagedViewModelInstance instance = registry.Register(registration);
@@ -25,7 +27,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void OnInstanceCreated_ValidRegistration_SetsStateToPending()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
 
             ManagedViewModelInstance instance = registry.Register(CreateRegistration());
 
@@ -35,7 +37,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void MarkReady_KnownInstance_TransitionsToActive()
         {
-            InstanceRegistry registry = new();
+            using ManagedInstanceRegistry registry = new();
             ManagedViewModelInstance instance = registry.Register(CreateRegistration());
 
             bool changed = registry.MarkReady(instance.InstanceId);
@@ -47,7 +49,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void MarkReady_UnknownInstanceId_NoException()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
 
             bool changed = registry.MarkReady(NewInstanceId());
 
@@ -57,7 +59,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void OnInstanceDestroyed_KnownInstance_RemovesEntry()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             ManagedViewModelInstance instance = registry.Register(CreateRegistration());
 
             bool removed = registry.Unregister(instance.InstanceId);
@@ -76,7 +78,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void FindBySlotKey_KnownClassAndSlot_ReturnsMatchingInstance()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             ManagedViewModelInstance instance = registry.Register(CreateRegistration(
                 className: "CounterViewModel",
                 compilerSlotKey: "CounterView::__qmlsharp_vm0"));
@@ -89,7 +91,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void FindBySlotKey_UnknownClassAndSlot_ReturnsNull()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             _ = registry.Register(CreateRegistration());
 
             ManagedViewModelInstance? found = registry.FindBySlotKey("MissingViewModel", "Missing::__qmlsharp_vm0");
@@ -100,7 +102,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void GetAll_MultipleActiveInstances_ReturnsAllActiveInstances()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             ManagedViewModelInstance first = registry.Register(CreateRegistration());
             ManagedViewModelInstance second = registry.Register(CreateRegistration());
             ManagedViewModelInstance third = registry.Register(CreateRegistration());
@@ -117,7 +119,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void FindByClassName_MultipleInstances_ReturnsMatchingInstances()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             ManagedViewModelInstance first = registry.Register(CreateRegistration(className: "CounterViewModel"));
             ManagedViewModelInstance second = registry.Register(CreateRegistration(className: "CounterViewModel"));
             _ = registry.Register(CreateRegistration(className: "TodoViewModel"));
@@ -132,7 +134,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void CaptureInstanceSnapshots_InstancesWithState_IncludesCurrentPropertyValues()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             ManagedViewModelInstance instance = registry.Register(CreateRegistration());
             _ = registry.UpdatePropertyState(instance.InstanceId, "count", 42);
             _ = registry.UpdatePropertyState(instance.InstanceId, "label", "Ready");
@@ -149,7 +151,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void Register_DuplicateInstanceId_Throws()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             InstanceRegistration registration = CreateRegistration();
             _ = registry.Register(registration);
 
@@ -164,7 +166,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void Register_DuplicateNativeHandle_Throws()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             InstanceRegistration first = CreateRegistration(nativeHandle: new IntPtr(1234));
             InstanceRegistration second = CreateRegistration(nativeHandle: new IntPtr(1234));
             _ = registry.Register(first);
@@ -180,7 +182,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void Register_NonUuidV4InstanceId_Throws()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             InstanceRegistration registration = CreateRegistration(instanceId: Guid.NewGuid().ToString("N"));
 
             ArgumentException exception = Assert.Throws<ArgumentException>(() =>
@@ -194,7 +196,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void FindByNativeHandle_KnownHandle_ReturnsMatchingInstance()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             InstanceRegistration registration = CreateRegistration(nativeHandle: new IntPtr(5678));
             ManagedViewModelInstance instance = registry.Register(registration);
 
@@ -206,7 +208,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void FindById_UnknownInstance_ReturnsNull()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
 
             ManagedViewModelInstance? found = registry.FindById(NewInstanceId());
 
@@ -216,7 +218,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void UpdatePropertyState_UnknownInstance_ReturnsFalse()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
 
             bool changed = registry.UpdatePropertyState(NewInstanceId(), "count", 1);
 
@@ -226,7 +228,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void QueuedCommandCount_UpdatesInstanceAndMetrics()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             ManagedViewModelInstance instance = registry.Register(CreateRegistration());
 
             _ = registry.IncrementQueuedCommandCount(instance.InstanceId);
@@ -242,12 +244,13 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void Metrics_RegistryActivity_ReturnsStableSnapshot()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             ManagedViewModelInstance first = registry.Register(CreateRegistration());
             ManagedViewModelInstance second = registry.Register(CreateRegistration());
             _ = registry.MarkReady(first.InstanceId);
             _ = registry.UpdatePropertyState(first.InstanceId, "count", 1);
             _ = registry.UpdatePropertyState(first.InstanceId, "count", 2);
+            _ = registry.ReplacePropertyState(first.InstanceId, new Dictionary<string, object?> { ["count"] = 3 });
             _ = registry.RecordCommandDispatched(first.InstanceId);
             _ = registry.RecordEffectEmitted(first.InstanceId);
             _ = registry.SetQueuedCommandCount(first.InstanceId, 3);
@@ -258,7 +261,7 @@ namespace QmlSharp.Host.Tests.Instances
             Assert.Equal(1, metrics.ActiveInstanceCount);
             Assert.Equal(2, metrics.TotalInstancesCreated);
             Assert.Equal(1, metrics.TotalInstancesDestroyed);
-            Assert.Equal(2, metrics.TotalStateSyncs);
+            Assert.Equal(3, metrics.TotalStateSyncs);
             Assert.Equal(1, metrics.TotalCommandsDispatched);
             Assert.Equal(1, metrics.TotalEffectsEmitted);
             Assert.Equal(1, metrics.DestroyedInstanceCount);
@@ -269,7 +272,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void Dispose_CalledTwice_IsIdempotent()
         {
-            InstanceRegistry registry = new();
+            using ManagedInstanceRegistry registry = new();
             ManagedViewModelInstance instance = registry.Register(CreateRegistration());
 
             registry.Dispose();
@@ -286,7 +289,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public async Task ConcurrentReadWriteBehavior_RegistryOperations_RemainConsistent()
         {
-            InstanceRegistry registry = new();
+            using ManagedInstanceRegistry registry = new();
             IReadOnlyList<InstanceRegistration> registrations = Enumerable.Range(0, 100)
                 .Select(static index => CreateRegistration(
                     className: index % 2 == 0 ? "CounterViewModel" : "TodoViewModel",
@@ -324,7 +327,7 @@ namespace QmlSharp.Host.Tests.Instances
         [Fact]
         public void Stress_OneHundredRegisteredInstances_AllRemainRoutable()
         {
-            InstanceRegistry registry = new();
+            ManagedInstanceRegistry registry = new();
             List<ManagedViewModelInstance> instances = [];
 
             for (int index = 0; index < 100; index++)

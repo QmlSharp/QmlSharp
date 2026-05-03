@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using QmlSharp.Host.InstanceRegistry;
 
 namespace QmlSharp.Host.Instances
 {

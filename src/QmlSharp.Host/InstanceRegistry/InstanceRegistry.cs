@@ -1,3 +1,4 @@
+using QmlSharp.Host.InstanceRegistry;
 using QmlSharp.Host.Metrics;
 
 namespace QmlSharp.Host.Instances
@@ -180,15 +181,13 @@ namespace QmlSharp.Host.Instances
                     return null;
                 }
 
-                foreach (string instanceId in ids)
-                {
-                    if (instancesById.TryGetValue(instanceId, out ManagedViewModelInstance? instance))
-                    {
-                        return instance;
-                    }
-                }
-
-                return null;
+                return ids
+                    .Select(instanceId => instancesById.TryGetValue(instanceId, out ManagedViewModelInstance? instance)
+                        ? instance
+                        : null)
+                    .Where(static instance => instance is not null)
+                    .Cast<ManagedViewModelInstance>()
+                    .FirstOrDefault();
             }
         }
 
@@ -204,16 +203,13 @@ namespace QmlSharp.Host.Instances
                     return [];
                 }
 
-                List<ManagedViewModelInstance> instances = [];
-                foreach (string instanceId in ids)
-                {
-                    if (instancesById.TryGetValue(instanceId, out ManagedViewModelInstance? instance))
-                    {
-                        instances.Add(instance);
-                    }
-                }
-
-                return instances;
+                return ids
+                    .Select(instanceId => instancesById.TryGetValue(instanceId, out ManagedViewModelInstance? instance)
+                        ? instance
+                        : null)
+                    .Where(static instance => instance is not null)
+                    .Cast<ManagedViewModelInstance>()
+                    .ToArray();
             }
         }
 
@@ -305,6 +301,11 @@ namespace QmlSharp.Host.Instances
                 }
 
                 instance.ReplacePropertyState(state);
+                checked
+                {
+                    totalStateSyncs++;
+                }
+
                 return true;
             }
         }
@@ -456,17 +457,14 @@ namespace QmlSharp.Host.Instances
                 }
 
                 DateTimeOffset disposedAt = DateTimeOffset.UtcNow;
-                foreach (ManagedViewModelInstance instance in instancesById.Values)
+                foreach (ManagedViewModelInstance instance in instancesById.Values.Where(instance => instance.MarkDestroyed(disposedAt)))
                 {
-                    if (instance.MarkDestroyed(disposedAt))
+                    checked
                     {
-                        checked
-                        {
-                            totalInstancesDestroyed++;
-                        }
-
-                        destroyedInstances.Add(instance);
+                        totalInstancesDestroyed++;
                     }
+
+                    destroyedInstances.Add(instance);
                 }
 
                 instancesById.Clear();
