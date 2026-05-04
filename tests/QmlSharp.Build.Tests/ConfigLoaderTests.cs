@@ -7,6 +7,12 @@ namespace QmlSharp.Build.Tests
     public sealed class ConfigLoaderTests
     {
         [Fact]
+        public void ConstructorNullQtToolchain_ThrowsArgumentNullException()
+        {
+            _ = Assert.Throws<ArgumentNullException>(() => new ConfigLoader(null!));
+        }
+
+        [Fact]
         public void CL01_LoadValidQmlsharpJsonWithAllFields_PopulatesConfig()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject("cl01-config");
@@ -196,6 +202,50 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public void LoadWhitespaceOutDir_ReportsConfigValidationDiagnostic()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("blank-out-dir");
+            string qtDir = CreateDirectory(project.Path, "qt");
+            _ = WriteConfig(
+                project.Path,
+                $$"""
+                {
+                  "outDir": "   ",
+                  "qt": { "dir": "{{ToJsonPath(qtDir)}}" },
+                  "module": { "prefix": "QmlSharp.BlankOutDir" }
+                }
+                """);
+            ConfigLoader loader = new(new MockQtToolchain(CreateQtInstallation(qtDir)));
+
+            ConfigParseException exception = Assert.Throws<ConfigParseException>(() => loader.Load(project.Path));
+
+            Assert.Equal(BuildDiagnosticCode.ConfigValidationError, exception.Code);
+            Assert.Equal("outDir", exception.Diagnostic.FilePath);
+        }
+
+        [Fact]
+        public void LoadWhitespaceWatchPath_ReportsConfigValidationDiagnostic()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("blank-watch-path");
+            string qtDir = CreateDirectory(project.Path, "qt");
+            _ = WriteConfig(
+                project.Path,
+                $$"""
+                {
+                  "qt": { "dir": "{{ToJsonPath(qtDir)}}" },
+                  "dev": { "watchPaths": ["./src", "   "] },
+                  "module": { "prefix": "QmlSharp.BlankWatchPath" }
+                }
+                """);
+            ConfigLoader loader = new(new MockQtToolchain(CreateQtInstallation(qtDir)));
+
+            ConfigParseException exception = Assert.Throws<ConfigParseException>(() => loader.Load(project.Path));
+
+            Assert.Equal(BuildDiagnosticCode.ConfigValidationError, exception.Code);
+            Assert.Equal("dev.watchPaths[1]", exception.Diagnostic.FilePath);
+        }
+
+        [Fact]
         public void CV01_ValidateValidConfig_ReturnsNoDiagnostics()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject("cv01-config");
@@ -294,6 +344,38 @@ namespace QmlSharp.Build.Tests
 
             Assert.Equal(BuildDiagnosticCode.ConfigValidationError, diagnostic.Code);
             Assert.Equal("module.version", diagnostic.Field);
+        }
+
+        [Fact]
+        public void ValidateBlankProgrammaticPaths_ReportsFieldDiagnostics()
+        {
+            ConfigLoader loader = new(new MockQtToolchain(CreateMissingQtException()));
+            QmlSharpConfig config = new()
+            {
+                Entry = " ",
+                OutDir = " ",
+                Qt = new QtConfig
+                {
+                    Dir = " ",
+                },
+                Dev = new DevConfig
+                {
+                    WatchPaths = ImmutableArray.Create("./src", " "),
+                },
+                Module = new ModuleConfig
+                {
+                    Prefix = "QmlSharp.BlankPaths",
+                },
+            };
+
+            ImmutableArray<string> fields = loader.Validate(config)
+                .Select(static diagnostic => diagnostic.Field)
+                .ToImmutableArray();
+
+            Assert.Contains("entry", fields);
+            Assert.Contains("outDir", fields);
+            Assert.Contains("qt.dir", fields);
+            Assert.Contains("dev.watchPaths[1]", fields);
         }
 
         [Fact]

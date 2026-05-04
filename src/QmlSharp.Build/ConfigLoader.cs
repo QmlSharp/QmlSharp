@@ -37,6 +37,11 @@ namespace QmlSharp.Build
             Func<string, bool> directoryExists,
             Func<string, string> readAllText)
         {
+            ArgumentNullException.ThrowIfNull(qtToolchain);
+            ArgumentNullException.ThrowIfNull(fileExists);
+            ArgumentNullException.ThrowIfNull(directoryExists);
+            ArgumentNullException.ThrowIfNull(readAllText);
+
             _qtToolchain = qtToolchain;
             _fileExists = fileExists;
             _directoryExists = directoryExists;
@@ -75,55 +80,11 @@ namespace QmlSharp.Build
             ArgumentNullException.ThrowIfNull(config);
 
             ImmutableArray<ConfigDiagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<ConfigDiagnostic>();
-
-            if (config.Qt is null)
-            {
-                diagnostics.Add(CreateValidationDiagnostic("qt", "The qt section is required."));
-            }
-            else if (!string.IsNullOrWhiteSpace(config.Qt.Dir) && !_directoryExists(NormalizeRequiredPath(config.Qt.Dir)))
-            {
-                diagnostics.Add(new ConfigDiagnostic(
-                    BuildDiagnosticCode.QtDirNotFound,
-                    "qt.dir",
-                    $"Qt directory '{config.Qt.Dir}' does not exist.",
-                    ConfigDiagnosticSeverity.Error));
-            }
-
-            if (!string.Equals(config.Build.Mode, "development", StringComparison.Ordinal) &&
-                !string.Equals(config.Build.Mode, "production", StringComparison.Ordinal))
-            {
-                diagnostics.Add(CreateValidationDiagnostic(
-                    "build.mode",
-                    "Build mode must be either 'development' or 'production'."));
-            }
-
-            if (config.Dev.DebounceMs < 0)
-            {
-                diagnostics.Add(CreateValidationDiagnostic(
-                    "dev.debounceMs",
-                    "Debounce interval must be zero or greater."));
-            }
-
-            if (config.Module is null)
-            {
-                diagnostics.Add(CreateValidationDiagnostic("module", "The module section is required."));
-            }
-            else
-            {
-                if (string.IsNullOrWhiteSpace(config.Module.Prefix))
-                {
-                    diagnostics.Add(CreateValidationDiagnostic(
-                        "module.prefix",
-                        "Module prefix must not be empty."));
-                }
-
-                if (config.Module.Version.Major < 0 || config.Module.Version.Minor < 0)
-                {
-                    diagnostics.Add(CreateValidationDiagnostic(
-                        "module.version",
-                        "Module version major and minor values must be zero or greater."));
-                }
-            }
+            ValidatePathValues(config, diagnostics);
+            ValidateQtConfig(config.Qt, diagnostics);
+            ValidateBuildConfig(config.Build, diagnostics);
+            ValidateDevConfig(config.Dev, diagnostics);
+            ValidateModuleConfig(config.Module, diagnostics);
 
             return diagnostics.ToImmutable();
         }
@@ -132,6 +93,99 @@ namespace QmlSharp.Build
         public QmlSharpConfig GetDefaults()
         {
             return CreateDefaultConfig();
+        }
+
+        private static void ValidatePathValues(
+            QmlSharpConfig config,
+            ImmutableArray<ConfigDiagnostic>.Builder diagnostics)
+        {
+            if (config.Entry is not null && string.IsNullOrWhiteSpace(config.Entry))
+            {
+                diagnostics.Add(CreateValidationDiagnostic("entry", "entry must not be empty."));
+            }
+
+            if (string.IsNullOrWhiteSpace(config.OutDir))
+            {
+                diagnostics.Add(CreateValidationDiagnostic("outDir", "outDir must not be empty."));
+            }
+        }
+
+        private void ValidateQtConfig(QtConfig? qt, ImmutableArray<ConfigDiagnostic>.Builder diagnostics)
+        {
+            if (qt is null)
+            {
+                diagnostics.Add(CreateValidationDiagnostic("qt", "The qt section is required."));
+            }
+            else if (qt.Dir is not null && string.IsNullOrWhiteSpace(qt.Dir))
+            {
+                diagnostics.Add(CreateValidationDiagnostic("qt.dir", "qt.dir must not be empty."));
+            }
+            else if (!string.IsNullOrWhiteSpace(qt.Dir) && !_directoryExists(NormalizeRequiredPath(qt.Dir)))
+            {
+                diagnostics.Add(new ConfigDiagnostic(
+                    BuildDiagnosticCode.QtDirNotFound,
+                    "qt.dir",
+                    $"Qt directory '{qt.Dir}' does not exist.",
+                    ConfigDiagnosticSeverity.Error));
+            }
+        }
+
+        private static void ValidateBuildConfig(BuildConfig build, ImmutableArray<ConfigDiagnostic>.Builder diagnostics)
+        {
+            if (!string.Equals(build.Mode, "development", StringComparison.Ordinal) &&
+                !string.Equals(build.Mode, "production", StringComparison.Ordinal))
+            {
+                diagnostics.Add(CreateValidationDiagnostic(
+                    "build.mode",
+                    "Build mode must be either 'development' or 'production'."));
+            }
+        }
+
+        private static void ValidateDevConfig(DevConfig dev, ImmutableArray<ConfigDiagnostic>.Builder diagnostics)
+        {
+            if (dev.DebounceMs < 0)
+            {
+                diagnostics.Add(CreateValidationDiagnostic(
+                    "dev.debounceMs",
+                    "Debounce interval must be zero or greater."));
+            }
+
+            int watchPathIndex = 0;
+            foreach (string watchPath in dev.WatchPaths)
+            {
+                if (string.IsNullOrWhiteSpace(watchPath))
+                {
+                    diagnostics.Add(CreateValidationDiagnostic(
+                        string.Create(CultureInfo.InvariantCulture, $"dev.watchPaths[{watchPathIndex}]"),
+                        "dev.watchPaths entries must not be empty."));
+                }
+
+                watchPathIndex++;
+            }
+        }
+
+        private static void ValidateModuleConfig(ModuleConfig? module, ImmutableArray<ConfigDiagnostic>.Builder diagnostics)
+        {
+            if (module is null)
+            {
+                diagnostics.Add(CreateValidationDiagnostic("module", "The module section is required."));
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(module.Prefix))
+                {
+                    diagnostics.Add(CreateValidationDiagnostic(
+                        "module.prefix",
+                        "Module prefix must not be empty."));
+                }
+
+                if (module.Version.Major < 0 || module.Version.Minor < 0)
+                {
+                    diagnostics.Add(CreateValidationDiagnostic(
+                        "module.version",
+                        "Module version major and minor values must be zero or greater."));
+                }
+            }
         }
 
         private static ConfigFileModel ParseConfig(string json, string configPath)
@@ -182,8 +236,8 @@ namespace QmlSharp.Build
                 ImmutableArray.Create("entry", "outDir", "qt", "build", "native", "dev", "module", "name", "version"),
                 diagnostics);
 
-            ValidateOptionalString(root, "entry", "entry", diagnostics);
-            ValidateOptionalString(root, "outDir", "outDir", diagnostics);
+            ValidateOptionalString(root, "entry", "entry", diagnostics, rejectWhitespace: true);
+            ValidateOptionalString(root, "outDir", "outDir", diagnostics, rejectWhitespace: true);
             ValidateOptionalString(root, "name", "name", diagnostics);
             ValidateOptionalString(root, "version", "version", diagnostics);
 
@@ -194,7 +248,7 @@ namespace QmlSharp.Build
             else if (ValidateRequiredObject(qtElement, "qt", diagnostics))
             {
                 ValidateObjectMembers(qtElement, "qt", ImmutableArray.Create("dir", "modules"), diagnostics);
-                ValidateOptionalString(qtElement, "dir", "qt.dir", diagnostics);
+                ValidateOptionalString(qtElement, "dir", "qt.dir", diagnostics, rejectWhitespace: true);
                 ValidateOptionalStringArray(qtElement, "modules", "qt.modules", diagnostics);
             }
 
@@ -262,7 +316,12 @@ namespace QmlSharp.Build
 
             ValidateObjectMembers(devElement, "dev", ImmutableArray.Create("hotReload", "watchPaths", "debounceMs"), diagnostics);
             ValidateOptionalBoolean(devElement, "hotReload", "dev.hotReload", diagnostics);
-            ValidateOptionalStringArray(devElement, "watchPaths", "dev.watchPaths", diagnostics);
+            ValidateOptionalStringArray(
+                devElement,
+                "watchPaths",
+                "dev.watchPaths",
+                diagnostics,
+                rejectWhitespaceEntries: true);
             ValidateOptionalInteger(devElement, "debounceMs", "dev.debounceMs", diagnostics);
         }
 
@@ -311,17 +370,14 @@ namespace QmlSharp.Build
             ImmutableArray<ConfigDiagnostic>.Builder diagnostics)
         {
             HashSet<string> allowed = new(allowedProperties, StringComparer.Ordinal);
-            foreach (JsonProperty property in element.EnumerateObject())
+            foreach (JsonProperty property in element.EnumerateObject().Where(property => !allowed.Contains(property.Name)))
             {
-                if (!allowed.Contains(property.Name))
-                {
-                    string field = pathPrefix.Length == 0
-                        ? property.Name
-                        : string.Create(
-                            CultureInfo.InvariantCulture,
-                            $"{pathPrefix}.{property.Name}");
-                    diagnostics.Add(CreateValidationDiagnostic(field, $"Unknown configuration field '{field}'."));
-                }
+                string field = pathPrefix.Length == 0
+                    ? property.Name
+                    : string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"{pathPrefix}.{property.Name}");
+                diagnostics.Add(CreateValidationDiagnostic(field, $"Unknown configuration field '{field}'."));
             }
         }
 
@@ -343,12 +399,25 @@ namespace QmlSharp.Build
             JsonElement element,
             string propertyName,
             string field,
-            ImmutableArray<ConfigDiagnostic>.Builder diagnostics)
+            ImmutableArray<ConfigDiagnostic>.Builder diagnostics,
+            bool rejectWhitespace = false)
         {
-            if (element.TryGetProperty(propertyName, out JsonElement value) &&
-                value.ValueKind is not JsonValueKind.String and not JsonValueKind.Null)
+            if (!element.TryGetProperty(propertyName, out JsonElement value))
+            {
+                return;
+            }
+
+            if (value.ValueKind is not JsonValueKind.String and not JsonValueKind.Null)
             {
                 diagnostics.Add(CreateValidationDiagnostic(field, $"{field} must be a string."));
+                return;
+            }
+
+            if (rejectWhitespace &&
+                value.ValueKind == JsonValueKind.String &&
+                string.IsNullOrWhiteSpace(value.GetString()))
+            {
+                diagnostics.Add(CreateValidationDiagnostic(field, $"{field} must not be empty."));
             }
         }
 
@@ -386,7 +455,8 @@ namespace QmlSharp.Build
             JsonElement element,
             string propertyName,
             string field,
-            ImmutableArray<ConfigDiagnostic>.Builder diagnostics)
+            ImmutableArray<ConfigDiagnostic>.Builder diagnostics,
+            bool rejectWhitespaceEntries = false)
         {
             if (!element.TryGetProperty(propertyName, out JsonElement value))
             {
@@ -407,6 +477,12 @@ namespace QmlSharp.Build
                     diagnostics.Add(CreateValidationDiagnostic(
                         string.Create(CultureInfo.InvariantCulture, $"{field}[{index}]"),
                         $"{field} entries must be strings."));
+                }
+                else if (rejectWhitespaceEntries && string.IsNullOrWhiteSpace(item.GetString()))
+                {
+                    diagnostics.Add(CreateValidationDiagnostic(
+                        string.Create(CultureInfo.InvariantCulture, $"{field}[{index}]"),
+                        $"{field} entries must not be empty."));
                 }
 
                 index++;
