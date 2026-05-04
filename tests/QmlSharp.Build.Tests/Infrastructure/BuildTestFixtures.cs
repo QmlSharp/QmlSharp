@@ -35,7 +35,7 @@ namespace QmlSharp.Build.Tests.Infrastructure
             {
                 Config = config,
                 ProjectDir = effectiveProjectDir,
-                OutputDir = System.IO.Path.Combine(effectiveProjectDir, "dist"),
+                OutputDir = System.IO.Path.Join(System.IO.Path.GetFullPath(effectiveProjectDir), "dist"),
                 QtDir = config.Qt.Dir ?? "C:/Qt/6.11.0/msvc2022_64",
             };
         }
@@ -74,20 +74,20 @@ namespace QmlSharp.Build.Tests.Infrastructure
 
         public static CppGenerationOptions CreateDefaultCppOptions(string? outputDir = null)
         {
-            string effectiveOutputDir = outputDir ?? System.IO.Path.Combine(Directory.GetCurrentDirectory(), "dist");
+            string effectiveOutputDir = outputDir ?? System.IO.Path.Join(Directory.GetCurrentDirectory(), "dist");
             return new CppGenerationOptions
             {
                 OutputDir = effectiveOutputDir,
                 QtDir = "C:/Qt/6.11.0/msvc2022_64",
-                AbiSourceDir = System.IO.Path.Combine(Directory.GetCurrentDirectory(), "native"),
+                AbiSourceDir = System.IO.Path.Join(Directory.GetCurrentDirectory(), "native"),
             };
         }
 
         public static TempDirectory CreateFixtureProject(string testName)
         {
             TempDirectory directory = new($"qmlsharp-build-{testName}");
-            _ = Directory.CreateDirectory(System.IO.Path.Combine(directory.Path, "src"));
-            _ = Directory.CreateDirectory(System.IO.Path.Combine(directory.Path, "assets"));
+            _ = Directory.CreateDirectory(System.IO.Path.Join(directory.Path, "src"));
+            _ = Directory.CreateDirectory(System.IO.Path.Join(directory.Path, "assets"));
             return directory;
         }
 
@@ -97,11 +97,14 @@ namespace QmlSharp.Build.Tests.Infrastructure
             TempDirectory directory = new("qmlsharp-build-nuget");
             foreach ((string packageId, string version, string? manifest) in packages)
             {
-                string packageRoot = System.IO.Path.Combine(directory.Path, packageId, version);
+                ValidatePathSegment(packageId, nameof(packageId));
+                ValidatePathSegment(version, nameof(version));
+
+                string packageRoot = System.IO.Path.Join(directory.Path, packageId, version);
                 _ = Directory.CreateDirectory(packageRoot);
                 if (manifest is not null)
                 {
-                    File.WriteAllText(System.IO.Path.Combine(packageRoot, "qmlsharp.module.json"), manifest);
+                    File.WriteAllText(System.IO.Path.Join(packageRoot, "qmlsharp.module.json"), manifest);
                 }
             }
 
@@ -124,7 +127,7 @@ namespace QmlSharp.Build.Tests.Infrastructure
             DirectoryInfo? current = new(AppContext.BaseDirectory);
             while (current is not null)
             {
-                if (File.Exists(System.IO.Path.Combine(current.FullName, "QmlSharp.slnx")))
+                if (File.Exists(System.IO.Path.Join(current.FullName, "QmlSharp.slnx")))
                 {
                     return current.FullName;
                 }
@@ -133,6 +136,23 @@ namespace QmlSharp.Build.Tests.Infrastructure
             }
 
             throw new DirectoryNotFoundException("Could not locate repository root containing QmlSharp.slnx.");
+        }
+
+        private static void ValidatePathSegment(string value, string paramName)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                throw new ArgumentException("Path segment must not be empty.", paramName);
+            }
+
+            if (System.IO.Path.IsPathRooted(value) ||
+                value.Contains('/') ||
+                value.Contains('\\') ||
+                value == "." ||
+                value == "..")
+            {
+                throw new ArgumentException("Path segment must be a single relative segment.", paramName);
+            }
         }
     }
 }

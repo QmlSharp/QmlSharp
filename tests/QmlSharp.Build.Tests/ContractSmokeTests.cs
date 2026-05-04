@@ -39,7 +39,6 @@ namespace QmlSharp.Build.Tests
                 "MyApp",
                 "1.0.0",
                 "development",
-                DateTimeOffset.UnixEpoch,
                 "6.11.0",
                 Environment.Version.ToString(),
                 ImmutableArray.Create("QmlSharp.MyApp"),
@@ -53,6 +52,14 @@ namespace QmlSharp.Build.Tests
             Assert.True(phase.Success);
             Assert.Empty(artifacts.QmlFiles);
             Assert.Equal("MyApp", manifest.ProjectName);
+        }
+
+        [Fact]
+        public void ProductManifest_DoesNotExposeWallClockTimestamp()
+        {
+            Assert.DoesNotContain(
+                typeof(ProductManifest).GetProperties(),
+                static property => property.PropertyType == typeof(DateTimeOffset));
         }
 
         [Fact]
@@ -90,6 +97,15 @@ namespace QmlSharp.Build.Tests
             Assert.Equal(8, phases.Length);
             Assert.Equal(1, (int)BuildPhase.ConfigLoading);
             Assert.Equal(8, (int)BuildPhase.OutputAssembly);
+        }
+
+        [Fact]
+        public void CliExitCode_MatchesStep0800LockedDecision()
+        {
+            Assert.Equal(0, CliExitCode.Success);
+            Assert.Equal(1, CliExitCode.BuildError);
+            Assert.Equal(2, CliExitCode.ConfigOrCommandError);
+            Assert.Equal(130, CliExitCode.Cancelled);
         }
     }
 }

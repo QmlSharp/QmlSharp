@@ -10,9 +10,21 @@ namespace QmlSharp.Build.Tests
         {
             string repoRoot = BuildTestFixtures.FindRepositoryRoot();
             ImmutableArray<string> references = ReadProjectReferences(
-                System.IO.Path.Combine(repoRoot, "src", "QmlSharp.Cli", "QmlSharp.Cli.csproj"));
+                System.IO.Path.Join(repoRoot, "src", "QmlSharp.Cli", "QmlSharp.Cli.csproj"));
 
             Assert.Contains(@"..\QmlSharp.Build\QmlSharp.Build.csproj", references);
+        }
+
+        [Fact]
+        public void CliProject_IsExecutable()
+        {
+            string repoRoot = BuildTestFixtures.FindRepositoryRoot();
+            XDocument document = XDocument.Load(
+                System.IO.Path.Join(repoRoot, "src", "QmlSharp.Cli", "QmlSharp.Cli.csproj"));
+
+            Assert.Contains(
+                document.Descendants("OutputType").Select(static element => element.Value),
+                outputType => string.Equals(outputType, "Exe", StringComparison.Ordinal));
         }
 
         [Fact]
@@ -20,7 +32,7 @@ namespace QmlSharp.Build.Tests
         {
             string repoRoot = BuildTestFixtures.FindRepositoryRoot();
             ImmutableArray<string> references = ReadProjectReferences(
-                System.IO.Path.Combine(repoRoot, "src", "QmlSharp.Build", "QmlSharp.Build.csproj"));
+                System.IO.Path.Join(repoRoot, "src", "QmlSharp.Build", "QmlSharp.Build.csproj"));
 
             Assert.DoesNotContain(references, reference =>
                 reference.Contains("QmlSharp.Cli", StringComparison.OrdinalIgnoreCase));

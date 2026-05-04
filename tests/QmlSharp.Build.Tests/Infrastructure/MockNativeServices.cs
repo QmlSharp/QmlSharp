@@ -21,7 +21,7 @@ namespace QmlSharp.Build.Tests.Infrastructure
 
         public string GetOutputLibraryPath(string buildDir)
         {
-            return System.IO.Path.Combine(buildDir, "qmlsharp_native.dll");
+            return System.IO.Path.Join(buildDir, "qmlsharp_native.dll");
         }
 
         private static CMakeStepResult Success()

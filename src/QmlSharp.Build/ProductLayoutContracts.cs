@@ -61,7 +61,6 @@ namespace QmlSharp.Build
     /// <param name="ProjectName">Project name.</param>
     /// <param name="Version">Project version.</param>
     /// <param name="BuildMode">Build mode.</param>
-    /// <param name="BuildTimestamp">Build timestamp.</param>
     /// <param name="QtVersion">Qt version.</param>
     /// <param name="DotNetVersion">.NET version.</param>
     /// <param name="QmlModules">QML modules in the product.</param>
@@ -73,7 +72,6 @@ namespace QmlSharp.Build
         string ProjectName,
         string Version,
         string BuildMode,
-        DateTimeOffset BuildTimestamp,
         string QtVersion,
         string DotNetVersion,
         ImmutableArray<string> QmlModules,

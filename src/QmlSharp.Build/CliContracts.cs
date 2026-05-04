@@ -2,6 +2,22 @@
 
 namespace QmlSharp.Build
 {
+    /// <summary>Stable process exit codes used by QmlSharp CLI commands.</summary>
+    public static class CliExitCode
+    {
+        /// <summary>Command completed successfully.</summary>
+        public const int Success = 0;
+
+        /// <summary>Build or runtime work failed.</summary>
+        public const int BuildError = 1;
+
+        /// <summary>Configuration or command usage failed.</summary>
+        public const int ConfigOrCommandError = 2;
+
+        /// <summary>Command was cancelled by the user or caller.</summary>
+        public const int Cancelled = 130;
+    }
+
     /// <summary>CLI options for the build command.</summary>
     public sealed record BuildCommandOptions
     {
