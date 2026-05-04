@@ -26,6 +26,7 @@ namespace QmlSharp.Host.Tests.CommandRouting
             Assert.Equal(7, invocation.CommandId);
             Assert.Equal("increment", invocation.CommandName);
             Assert.Equal("[1,\"two\",true]", invocation.ArgsJson);
+            await WaitForMetric(() => context.Registry.GetMetrics().TotalCommandsDispatched == 1, "total dispatched commands");
             Assert.Equal(1, context.Registry.GetMetrics().TotalCommandsDispatched);
         }
 
@@ -124,6 +125,7 @@ namespace QmlSharp.Host.Tests.CommandRouting
             CommandInvocation invocation = await WaitFor(handled.Task);
 
             Assert.Equal("increment", invocation.CommandName);
+            await WaitForMetric(() => context.Registry.GetMetrics().TotalCommandsDispatched == 1, "total dispatched commands");
             Assert.Equal(0, context.Registry.GetMetrics().QueuedCommandCount);
             Assert.Equal(1, context.Registry.GetMetrics().TotalCommandsDispatched);
         }
@@ -152,6 +154,7 @@ namespace QmlSharp.Host.Tests.CommandRouting
             _ = await WaitFor(handled.Task);
 
             Assert.Equal(new[] { "[1]", "[2]" }, received.ToArray());
+            await WaitForMetric(() => context.Registry.GetMetrics().TotalCommandsDispatched == 2, "total dispatched commands");
             Assert.Equal(0, context.Registry.GetMetrics().QueuedCommandCount);
             Assert.Equal(2, context.Registry.GetMetrics().TotalCommandsDispatched);
         }
@@ -259,6 +262,7 @@ namespace QmlSharp.Host.Tests.CommandRouting
                 .ToArray();
             await Task.WhenAll(tasks);
             _ = await WaitFor(completed.Task);
+            await WaitForMetric(() => context.Registry.GetMetrics().TotalCommandsDispatched == DispatchCount, "total dispatched commands");
 
             Assert.Equal(DispatchCount, context.Registry.GetMetrics().TotalCommandsDispatched);
         }
@@ -367,6 +371,22 @@ namespace QmlSharp.Host.Tests.CommandRouting
             }
 
             await task;
+        }
+
+        private static async Task WaitForMetric(Func<bool> predicate, string metricName)
+        {
+            DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                if (predicate())
+                {
+                    return;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(10));
+            }
+
+            throw new TimeoutException("Timed out waiting for " + metricName + ".");
         }
 
         private static string NewInstanceId()
