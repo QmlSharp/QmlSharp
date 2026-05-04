@@ -89,6 +89,9 @@ namespace QmlSharp.Build
         /// <summary>Build timing and output statistics.</summary>
         public required BuildStats Stats { get; init; }
 
+        /// <summary>Artifacts produced by completed build phases.</summary>
+        public BuildArtifacts Artifacts { get; init; } = new();
+
         /// <summary>Product manifest when output assembly produced one.</summary>
         public ProductManifest? Manifest { get; init; }
     }

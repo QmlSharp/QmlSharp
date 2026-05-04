@@ -26,6 +26,13 @@ namespace QmlSharp.Build
         string PackagePath,
         PackageManifest? Manifest);
 
+    /// <summary>Result of NuGet package resolution.</summary>
+    /// <param name="Packages">Resolved QmlSharp packages.</param>
+    /// <param name="Diagnostics">Diagnostics emitted while resolving packages.</param>
+    public sealed record PackageResolutionResult(
+        ImmutableArray<ResolvedPackage> Packages,
+        ImmutableArray<BuildDiagnostic> Diagnostics);
+
     /// <summary>QmlSharp package manifest from qmlsharp.module.json.</summary>
     /// <param name="PackageId">Package identifier.</param>
     /// <param name="ModuleUri">QML module URI.</param>
@@ -63,6 +70,13 @@ namespace QmlSharp.Build
         ResourceType Type,
         long SizeBytes);
 
+    /// <summary>Result of resource collection.</summary>
+    /// <param name="Resources">Resources discovered under configured asset roots.</param>
+    /// <param name="Diagnostics">Diagnostics emitted while collecting resources.</param>
+    public sealed record ResourceCollectionResult(
+        ImmutableArray<ResourceEntry> Resources,
+        ImmutableArray<BuildDiagnostic> Diagnostics);
+
     /// <summary>Resource type classification.</summary>
     public enum ResourceType
     {
@@ -91,7 +105,12 @@ namespace QmlSharp.Build
         int FilesCopied,
         long TotalBytes,
         ImmutableArray<string> OutputPaths,
-        string? QrcPath);
+        string? QrcPath)
+    {
+        /// <summary>Diagnostics emitted while copying resources.</summary>
+        public ImmutableArray<BuildDiagnostic> Diagnostics { get; init; } =
+            ImmutableArray<BuildDiagnostic>.Empty;
+    }
 }
 
 #pragma warning restore MA0048

@@ -7,8 +7,11 @@ namespace QmlSharp.Build.Tests
         [Fact]
         public async Task BP01_FullPipeline_ProducesAllEightPhaseResults()
         {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(BP01_FullPipeline_ProducesAllEightPhaseResults));
+            string iconPath = Path.Join(project.Path, "assets", "icon.png");
+            await File.WriteAllTextAsync(iconPath, "icon");
             BuildPipeline pipeline = new();
-            BuildContext context = BuildTestFixtures.CreateDefaultContext();
+            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
 
             BuildResult result = await pipeline.BuildAsync(context);
 
@@ -19,6 +22,7 @@ namespace QmlSharp.Build.Tests
             Assert.True(result.Stats.SchemasGenerated > 0);
             Assert.True(result.Stats.CppFilesGenerated > 0);
             Assert.True(result.Stats.AssetsCollected > 0);
+            Assert.Contains(Path.Join(context.OutputDir, "assets", "icon.png"), result.Artifacts.AssetFiles);
             Assert.True(result.Stats.NativeLibBuilt);
             Assert.True(result.Stats.TotalDuration >= TimeSpan.Zero);
         }
