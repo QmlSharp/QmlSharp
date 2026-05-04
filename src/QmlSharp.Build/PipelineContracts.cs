@@ -39,6 +39,9 @@ namespace QmlSharp.Build
         /// <summary>True when building reusable library output.</summary>
         public bool LibraryMode { get; init; }
 
+        /// <summary>True when the invocation validates context without writing output.</summary>
+        public bool DryRun { get; init; }
+
         /// <summary>Optional source file filter.</summary>
         public string? FileFilter { get; init; }
     }

@@ -2,9 +2,9 @@ namespace QmlSharp.Cli
 {
     internal static class Program
     {
-        private static int Main()
+        private static async Task<int> Main(string[] args)
         {
-            return 0;
+            return await QmlSharpCli.InvokeAsync(args, Console.Out, Console.Error).ConfigureAwait(false);
         }
     }
 }
