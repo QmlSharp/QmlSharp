@@ -53,10 +53,19 @@ namespace QmlSharp.Host.Exceptions
     }
 
     /// <summary>Thrown when a native-host API rejects its arguments before doing work.</summary>
-    public sealed class InvalidNativeArgumentException : NativeHostException
+    public class NativeInvalidArgumentException : NativeHostException
+    {
+        public NativeInvalidArgumentException(string message)
+            : base(-2, message)
+        {
+        }
+    }
+
+    /// <summary>Thrown when a native-host API rejects its arguments before doing work.</summary>
+    public sealed class InvalidNativeArgumentException : NativeInvalidArgumentException
     {
         public InvalidNativeArgumentException(string message)
-            : base(-2, message)
+            : base(message)
         {
         }
     }

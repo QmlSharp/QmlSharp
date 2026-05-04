@@ -28,6 +28,15 @@ namespace QmlSharp.Host.Tests.Interop
         }
 
         [Fact]
+        public void Create_InvalidArgumentCode_PreservesLegacyCatchCompatibility()
+        {
+            NativeHostException exception = NativeErrorMapper.Create(-2, "native failure");
+
+            _ = Assert.IsType<InvalidNativeArgumentException>(exception);
+            _ = Assert.IsAssignableFrom<NativeInvalidArgumentException>(exception);
+        }
+
+        [Fact]
         public void ThrowIfFailed_UsesNativeLastErrorDetail()
         {
             FakeNativeHostInterop interop = new()
