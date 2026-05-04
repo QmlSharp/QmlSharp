@@ -74,16 +74,11 @@ namespace QmlSharp.Build
             ImmutableArray<QmldirViewEntry> schemaEntries,
             ImmutableArray<string> qmlFiles)
         {
-            ImmutableHashSet<string>.Builder generatedFileNames =
-                ImmutableHashSet.CreateBuilder<string>(StringComparer.Ordinal);
-            foreach (string qmlFile in qmlFiles)
-            {
-                string? fileName = Path.GetFileName(qmlFile);
-                if (!string.IsNullOrEmpty(fileName) && fileName.EndsWith(".qml", StringComparison.Ordinal))
-                {
-                    _ = generatedFileNames.Add(fileName);
-                }
-            }
+            ImmutableHashSet<string> generatedFileNames = qmlFiles
+                .Select(static qmlFile => Path.GetFileName(qmlFile))
+                .Where(static fileName => !string.IsNullOrEmpty(fileName) &&
+                    fileName.EndsWith(".qml", StringComparison.Ordinal))
+                .ToImmutableHashSet(StringComparer.Ordinal);
 
             return schemaEntries
                 .Where(entry => generatedFileNames.Contains(entry.FileName))
@@ -94,14 +89,17 @@ namespace QmlSharp.Build
             ImmutableArray<ViewModelSchema> schemas,
             string versionText)
         {
-            ImmutableArray<QmldirViewEntry>.Builder builder = ImmutableArray.CreateBuilder<QmldirViewEntry>();
-            foreach (ViewModelSchema schema in schemas.IsDefault ? ImmutableArray<ViewModelSchema>.Empty : schemas)
-            {
-                string viewName = DeriveViewName(schema);
-                builder.Add(new QmldirViewEntry(viewName, versionText, $"{viewName}.qml"));
-            }
+            ImmutableArray<ViewModelSchema> effectiveSchemas = schemas.IsDefault
+                ? ImmutableArray<ViewModelSchema>.Empty
+                : schemas;
 
-            return builder.ToImmutable();
+            return effectiveSchemas
+                .Select(schema =>
+                {
+                    string viewName = DeriveViewName(schema);
+                    return new QmldirViewEntry(viewName, versionText, $"{viewName}.qml");
+                })
+                .ToImmutableArray();
         }
 
         private static string DeriveViewName(ViewModelSchema schema)
