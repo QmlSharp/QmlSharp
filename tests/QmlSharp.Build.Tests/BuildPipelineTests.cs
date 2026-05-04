@@ -172,6 +172,30 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public async Task EH05_StageException_BecomesFailedPhaseAndSkipsDependents()
+        {
+            RecordingBuildStage cppStage = CreateThrowingStage(
+                BuildPhase.CppCodeGenAndBuild,
+                new InvalidOperationException("native build process failed"));
+            ImmutableArray<RecordingBuildStage> stages = CreateRecordingStages(cppStage);
+            BuildPipeline pipeline = CreatePipeline(stages);
+
+            BuildResult result = await pipeline.BuildAsync(BuildTestFixtures.CreateDefaultContext());
+
+            Assert.False(result.Success);
+            Assert.Equal(8, result.PhaseResults.Length);
+            Assert.False(result.PhaseResults.Single(static phase => phase.Phase == BuildPhase.CppCodeGenAndBuild).Success);
+            Assert.False(result.PhaseResults.Single(static phase => phase.Phase == BuildPhase.OutputAssembly).Success);
+            Assert.Contains(result.Diagnostics, static diagnostic =>
+                diagnostic.Code == BuildDiagnosticCode.InternalError &&
+                diagnostic.Phase == BuildPhase.CppCodeGenAndBuild &&
+                diagnostic.Message.Contains("native build process failed", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, static diagnostic =>
+                diagnostic.Phase == BuildPhase.OutputAssembly &&
+                diagnostic.Message.Contains("was skipped", StringComparison.Ordinal));
+        }
+
+        [Fact]
         public async Task BuildAsync_Cancellation_ThrowsOperationCanceledException()
         {
             BuildPipeline pipeline = new();
@@ -180,6 +204,19 @@ namespace QmlSharp.Build.Tests
 
             _ = await Assert.ThrowsAsync<OperationCanceledException>(async () =>
                 await pipeline.BuildAsync(BuildTestFixtures.CreateDefaultContext(), cancellation.Token));
+        }
+
+        [Fact]
+        public async Task BuildPhasesAsync_UnknownPhase_ThrowsArgumentException()
+        {
+            BuildPipeline pipeline = new();
+
+            ArgumentException exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+                await pipeline.BuildPhasesAsync(
+                    BuildTestFixtures.CreateDefaultContext(),
+                    ImmutableArray.Create((BuildPhase)999)));
+
+            Assert.Contains("Unknown build phase", exception.Message, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -251,6 +288,11 @@ namespace QmlSharp.Build.Tests
             return new RecordingBuildStage(phase, BuildStageResult.Failed(diagnostic));
         }
 
+        private static RecordingBuildStage CreateThrowingStage(BuildPhase phase, Exception exception)
+        {
+            return RecordingBuildStage.Throwing(phase, exception);
+        }
+
         private static BuildStageResult CreateDefaultStageResult(BuildPhase phase)
         {
             return phase switch
@@ -293,6 +335,11 @@ namespace QmlSharp.Build.Tests
             public RecordingBuildStage(BuildPhase phase, BuildStageResult result)
                 : this(phase, (context, cancellationToken) => Task.FromResult(result))
             {
+            }
+
+            public static RecordingBuildStage Throwing(BuildPhase phase, Exception exception)
+            {
+                return new RecordingBuildStage(phase, (context, cancellationToken) => throw exception);
             }
 
             private RecordingBuildStage(

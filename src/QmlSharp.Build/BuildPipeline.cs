@@ -175,17 +175,35 @@ namespace QmlSharp.Build
             }
 
             Stopwatch phaseStopwatch = Stopwatch.StartNew();
-            BuildStageResult stageResult = await stage.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
-            phaseStopwatch.Stop();
-
-            ImmutableArray<BuildDiagnostic> diagnostics = NormalizeDiagnostics(stageResult.Diagnostics);
-            bool success = stageResult.Success && !diagnostics.Any(IsBlockingDiagnostic);
-            if (success)
+            try
             {
-                statsBuilder.Add(stageResult.Stats);
-            }
+                BuildStageResult stageResult = await stage.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+                phaseStopwatch.Stop();
 
-            return new PhaseResult(phase, success, phaseStopwatch.Elapsed, diagnostics);
+                ImmutableArray<BuildDiagnostic> diagnostics = NormalizeDiagnostics(stageResult.Diagnostics);
+                bool success = stageResult.Success && !diagnostics.Any(IsBlockingDiagnostic);
+                if (success)
+                {
+                    statsBuilder.Add(stageResult.Stats);
+                }
+
+                return new PhaseResult(phase, success, phaseStopwatch.Elapsed, diagnostics);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                phaseStopwatch.Stop();
+                BuildDiagnostic diagnostic = new(
+                    BuildDiagnosticCode.InternalError,
+                    BuildDiagnosticSeverity.Error,
+                    $"Build Stage {(int)phase} ({phase}) failed unexpectedly: {ex.Message}",
+                    phase,
+                    null);
+                return new PhaseResult(phase, false, phaseStopwatch.Elapsed, ImmutableArray.Create(diagnostic));
+            }
         }
 
         private static ImmutableArray<BuildPhase> OrderRequestedPhases(ImmutableArray<BuildPhase> phases)
@@ -196,13 +214,18 @@ namespace QmlSharp.Build
             }
 
             ImmutableHashSet<BuildPhase> requested = phases.ToImmutableHashSet();
-            ImmutableArray<BuildPhase>.Builder ordered = ImmutableArray.CreateBuilder<BuildPhase>(requested.Count);
-            foreach (BuildPhase phase in CanonicalPhases)
+            foreach (BuildPhase phase in requested)
             {
-                if (requested.Contains(phase))
+                if (!CanonicalPhases.Contains(phase))
                 {
-                    ordered.Add(phase);
+                    throw new ArgumentException($"Unknown build phase '{phase}'.", nameof(phases));
                 }
+            }
+
+            ImmutableArray<BuildPhase>.Builder ordered = ImmutableArray.CreateBuilder<BuildPhase>(requested.Count);
+            foreach (BuildPhase phase in CanonicalPhases.Where(requested.Contains))
+            {
+                ordered.Add(phase);
             }
 
             return ordered.ToImmutable();
