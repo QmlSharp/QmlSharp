@@ -14,7 +14,7 @@ namespace QmlSharp.Build
             ImmutableArray<IBuildStage>.Builder builder = ImmutableArray.CreateBuilder<IBuildStage>(8);
             builder.Add(new FakeBuildStage(BuildPhase.ConfigLoading));
             builder.Add(new FakeBuildStage(BuildPhase.CSharpCompilation));
-            builder.Add(new FakeBuildStage(BuildPhase.ModuleMetadata));
+            builder.Add(new ModuleMetadataBuildStage());
             builder.Add(new FakeBuildStage(BuildPhase.DependencyResolution));
             builder.Add(new FakeBuildStage(BuildPhase.AssetBundling));
             builder.Add(new FakeBuildStage(BuildPhase.QmlValidation));
