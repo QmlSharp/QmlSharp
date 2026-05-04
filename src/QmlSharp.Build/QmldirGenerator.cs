@@ -55,9 +55,10 @@ namespace QmlSharp.Build
             string versionText = string.Create(
                 CultureInfo.InvariantCulture,
                 $"{version.Major}.{version.Minor}");
+            ImmutableArray<QmldirViewEntry> schemaEntries = CreateEntriesFromSchemas(schemas, versionText);
             ImmutableArray<QmldirViewEntry> entries = qmlFiles.IsDefaultOrEmpty
-                ? CreateEntriesFromSchemas(schemas, versionText)
-                : CreateEntriesFromQmlFiles(qmlFiles, versionText);
+                ? schemaEntries
+                : FilterEntriesByGeneratedQmlFiles(schemaEntries, qmlFiles);
 
             return entries
                 .GroupBy(static entry => entry.FileName, StringComparer.Ordinal)
@@ -69,24 +70,24 @@ namespace QmlSharp.Build
                 .ToImmutableArray();
         }
 
-        private static ImmutableArray<QmldirViewEntry> CreateEntriesFromQmlFiles(
-            ImmutableArray<string> qmlFiles,
-            string versionText)
+        private static ImmutableArray<QmldirViewEntry> FilterEntriesByGeneratedQmlFiles(
+            ImmutableArray<QmldirViewEntry> schemaEntries,
+            ImmutableArray<string> qmlFiles)
         {
-            ImmutableArray<QmldirViewEntry>.Builder builder = ImmutableArray.CreateBuilder<QmldirViewEntry>();
+            ImmutableHashSet<string>.Builder generatedFileNames =
+                ImmutableHashSet.CreateBuilder<string>(StringComparer.Ordinal);
             foreach (string qmlFile in qmlFiles)
             {
-                string fileName = Path.GetFileName(qmlFile);
-                if (!fileName.EndsWith(".qml", StringComparison.Ordinal))
+                string? fileName = Path.GetFileName(qmlFile);
+                if (!string.IsNullOrEmpty(fileName) && fileName.EndsWith(".qml", StringComparison.Ordinal))
                 {
-                    continue;
+                    _ = generatedFileNames.Add(fileName);
                 }
-
-                string viewName = Path.GetFileNameWithoutExtension(fileName);
-                builder.Add(new QmldirViewEntry(viewName, versionText, ModuleMetadataPaths.ToQmlRelativePath(fileName)));
             }
 
-            return builder.ToImmutable();
+            return schemaEntries
+                .Where(entry => generatedFileNames.Contains(entry.FileName))
+                .ToImmutableArray();
         }
 
         private static ImmutableArray<QmldirViewEntry> CreateEntriesFromSchemas(

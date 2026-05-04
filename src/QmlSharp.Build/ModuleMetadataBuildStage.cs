@@ -36,7 +36,7 @@ namespace QmlSharp.Build
             ArgumentNullException.ThrowIfNull(context);
             cancellationToken.ThrowIfCancellationRequested();
 
-            string schemaRoot = Path.Combine(context.OutputDir, "schemas");
+            string schemaRoot = Path.Join(context.OutputDir, "schemas");
             if (!Directory.Exists(schemaRoot) || context.DryRun)
             {
                 return BuildStageResult.Succeeded();
@@ -82,10 +82,28 @@ namespace QmlSharp.Build
                 .ToImmutableArray();
             string moduleUri = moduleGroup.Key;
             QmlVersion moduleVersion = ResolveVersion(moduleSchemas, context.Config.Module.Version);
-            string moduleDirectory = ModuleMetadataPaths.GetModuleDirectory(context.OutputDir, moduleUri);
+            string moduleDirectory;
+            string qmldirPath;
+            string qmltypesPath;
+            try
+            {
+                moduleDirectory = ModuleMetadataPaths.GetModuleDirectory(context.OutputDir, moduleUri);
+                qmldirPath = Path.Join(moduleDirectory, "qmldir");
+                string generatedQmltypesFileName = ModuleMetadataPaths.GetQmltypesFileName(moduleUri);
+                string? qmltypesFileName = Path.GetFileName(generatedQmltypesFileName);
+                if (string.IsNullOrEmpty(qmltypesFileName))
+                {
+                    throw new InvalidOperationException("Qmltypes file name must resolve to a file name.");
+                }
+
+                qmltypesPath = Path.Join(moduleDirectory, qmltypesFileName);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                return Failed(BuildDiagnosticCode.QmltypesGenerationFailed, context.OutputDir, exception);
+            }
+
             ImmutableArray<string> qmlFiles = DiscoverQmlFiles(moduleDirectory);
-            string qmldirPath = Path.Combine(moduleDirectory, "qmldir");
-            string qmltypesPath = Path.Combine(moduleDirectory, ModuleMetadataPaths.GetQmltypesFileName(moduleUri));
 
             string qmldirContent;
             try

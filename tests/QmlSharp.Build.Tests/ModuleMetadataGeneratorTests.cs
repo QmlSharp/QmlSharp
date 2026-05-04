@@ -17,7 +17,21 @@ namespace QmlSharp.Build.Tests
         {
             string directory = ModuleMetadataPaths.GetModuleDirectory("dist", "Company.App.ViewModels");
 
-            Assert.Equal(Path.Combine("dist", "qml", "Company", "App", "ViewModels"), directory);
+            Assert.Equal(Path.Join("dist", "qml", "Company", "App", "ViewModels"), directory);
+        }
+
+        [Theory]
+        [InlineData("Company..App")]
+        [InlineData("..")]
+        [InlineData(".")]
+        [InlineData("/tmp/app")]
+        [InlineData("Company/App")]
+        [InlineData(@"Company\App")]
+        [InlineData("Company:CSharp")]
+        public void MM03_ModuleDirectory_RejectsUnsafeModuleUriSegments(string moduleUri)
+        {
+            _ = Assert.Throws<ArgumentException>(() =>
+                ModuleMetadataPaths.GetModuleDirectory("dist", moduleUri));
         }
 
         [Fact]
@@ -42,7 +56,22 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
-        public void QD02_QmldirGenerator_FallsBackToSchemaViewNames()
+        public void QD02_QmldirGenerator_IgnoresStaleQmlFiles()
+        {
+            QmldirGenerator generator = new();
+
+            string content = generator.Generate(
+                "QmlSharp.MyApp",
+                new QmlSharp.Build.QmlVersion(1, 0),
+                ImmutableArray.Create(BuildTestFixtures.CreateCounterSchema()),
+                ImmutableArray.Create("CounterView.qml", "RemovedView.qml"));
+
+            Assert.Contains("CounterView 1.0 CounterView.qml\n", content, StringComparison.Ordinal);
+            Assert.DoesNotContain("RemovedView", content, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void QD03_QmldirGenerator_FallsBackToSchemaViewNames()
         {
             QmldirGenerator generator = new();
 
@@ -100,34 +129,36 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
-        public async Task MM03_ModuleMetadataStage_WritesQmldirAndQmltypesFromSchemaFixtures()
+        public async Task MM04_ModuleMetadataStage_WritesQmldirAndQmltypesFromSchemaFixtures()
         {
-            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(MM03_ModuleMetadataStage_WritesQmldirAndQmltypesFromSchemaFixtures));
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(MM04_ModuleMetadataStage_WritesQmldirAndQmltypesFromSchemaFixtures));
             BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
             WriteSchemaFixture(context, BuildTestFixtures.CreateCounterSchema());
             WriteSchemaFixture(context, CreateTodoSchema());
             string moduleDirectory = ModuleMetadataPaths.GetModuleDirectory(context.OutputDir, "QmlSharp.MyApp");
             _ = Directory.CreateDirectory(moduleDirectory);
-            await File.WriteAllTextAsync(Path.Combine(moduleDirectory, "TodoView.qml"), "Item {}\n");
-            await File.WriteAllTextAsync(Path.Combine(moduleDirectory, "CounterView.qml"), "Item {}\n");
+            await File.WriteAllTextAsync(Path.Join(moduleDirectory, "TodoView.qml"), "Item {}\n");
+            await File.WriteAllTextAsync(Path.Join(moduleDirectory, "CounterView.qml"), "Item {}\n");
+            await File.WriteAllTextAsync(Path.Join(moduleDirectory, "RemovedView.qml"), "Item {}\n");
             ModuleMetadataBuildStage stage = new();
 
             BuildStageResult result = await stage.ExecuteAsync(context, CancellationToken.None);
 
             Assert.True(result.Success);
-            string qmldir = await File.ReadAllTextAsync(Path.Combine(moduleDirectory, "qmldir"));
-            string qmltypes = await File.ReadAllTextAsync(Path.Combine(moduleDirectory, "qmlsharp_myapp.qmltypes"));
+            string qmldir = await File.ReadAllTextAsync(Path.Join(moduleDirectory, "qmldir"));
+            string qmltypes = await File.ReadAllTextAsync(Path.Join(moduleDirectory, "qmlsharp_myapp.qmltypes"));
             Assert.Equal(
                 GetExpectedQmldir(),
                 qmldir);
+            Assert.DoesNotContain("RemovedView", qmldir, StringComparison.Ordinal);
             Assert.Contains("name: \"CounterViewModel\"", qmltypes, StringComparison.Ordinal);
             Assert.Contains("name: \"TodoViewModel\"", qmltypes, StringComparison.Ordinal);
         }
 
         [Fact]
-        public async Task MM04_ModuleMetadataStage_ReportsB030WhenQmldirGenerationFails()
+        public async Task MM05_ModuleMetadataStage_ReportsB030WhenQmldirGenerationFails()
         {
-            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(MM04_ModuleMetadataStage_ReportsB030WhenQmldirGenerationFails));
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(MM05_ModuleMetadataStage_ReportsB030WhenQmldirGenerationFails));
             BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
             WriteSchemaFixture(context, BuildTestFixtures.CreateCounterSchema());
             ModuleMetadataBuildStage stage = new(
@@ -144,9 +175,9 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
-        public async Task MM05_ModuleMetadataStage_ReportsB031WhenQmltypesGenerationFails()
+        public async Task MM06_ModuleMetadataStage_ReportsB031WhenQmltypesGenerationFails()
         {
-            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(MM05_ModuleMetadataStage_ReportsB031WhenQmltypesGenerationFails));
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(MM06_ModuleMetadataStage_ReportsB031WhenQmltypesGenerationFails));
             BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
             WriteSchemaFixture(context, BuildTestFixtures.CreateCounterSchema());
             ModuleMetadataBuildStage stage = new(
@@ -162,12 +193,31 @@ namespace QmlSharp.Build.Tests
             Assert.Equal(BuildPhase.ModuleMetadata, diagnostic.Phase);
         }
 
+        [Fact]
+        public async Task MM07_ModuleMetadataStage_ReportsB031WhenSchemaModuleUriIsUnsafe()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(MM07_ModuleMetadataStage_ReportsB031WhenSchemaModuleUriIsUnsafe));
+            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
+            WriteSchemaFixture(context, BuildTestFixtures.CreateCounterSchema() with
+            {
+                ModuleUri = "../escape",
+            });
+            ModuleMetadataBuildStage stage = new();
+
+            BuildStageResult result = await stage.ExecuteAsync(context, CancellationToken.None);
+
+            Assert.False(result.Success);
+            BuildDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(BuildDiagnosticCode.QmltypesGenerationFailed, diagnostic.Code);
+            Assert.Equal(BuildPhase.ModuleMetadata, diagnostic.Phase);
+        }
+
         private static void WriteSchemaFixture(BuildContext context, ViewModelSchema schema)
         {
-            string schemaDirectory = Path.Combine(context.OutputDir, "schemas");
+            string schemaDirectory = Path.Join(context.OutputDir, "schemas");
             _ = Directory.CreateDirectory(schemaDirectory);
             ViewModelSchemaSerializer serializer = new();
-            string path = Path.Combine(schemaDirectory, $"{schema.ClassName}.schema.json");
+            string path = Path.Join(schemaDirectory, $"{schema.ClassName}.schema.json");
             File.WriteAllText(path, serializer.Serialize(schema));
         }
 
