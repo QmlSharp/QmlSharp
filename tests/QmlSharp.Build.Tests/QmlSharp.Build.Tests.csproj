@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Build.Tests</AssemblyName>
+    <RootNamespace>QmlSharp.Build.Tests</RootNamespace>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\QmlSharp.Build\QmlSharp.Build.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Cli\QmlSharp.Cli.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Compiler\QmlSharp.Compiler.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Qt.Tools\QmlSharp.Qt.Tools.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="testdata\golden\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

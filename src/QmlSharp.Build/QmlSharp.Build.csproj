@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Build</AssemblyName>
+    <RootNamespace>QmlSharp.Build</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QmlSharp.Compiler\QmlSharp.Compiler.csproj" />
+    <ProjectReference Include="..\QmlSharp.Host\QmlSharp.Host.csproj" />
+    <ProjectReference Include="..\QmlSharp.Qt.Tools\QmlSharp.Qt.Tools.csproj" />
+  </ItemGroup>
+</Project>
