@@ -50,15 +50,21 @@ namespace QmlSharp.Build
             {
                 throw;
             }
-            catch (Exception exception)
+            catch (InvalidOperationException exception)
             {
-                BuildDiagnostic diagnostic = new(
-                    BuildDiagnosticCode.PackageResolutionFailed,
-                    BuildDiagnosticSeverity.Error,
-                    $"Package resolution failed: {exception.Message}",
-                    BuildPhase.DependencyResolution,
-                    context.ProjectDir);
-                return Task.FromResult(BuildStageResult.Failed(diagnostic));
+                return Failed(context.ProjectDir, exception);
+            }
+            catch (IOException exception)
+            {
+                return Failed(context.ProjectDir, exception);
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return Failed(context.ProjectDir, exception);
+            }
+            catch (ArgumentException exception)
+            {
+                return Failed(context.ProjectDir, exception);
             }
         }
 
@@ -77,6 +83,17 @@ namespace QmlSharp.Build
         private static bool IsBlockingDiagnostic(BuildDiagnostic diagnostic)
         {
             return diagnostic.Severity is BuildDiagnosticSeverity.Error or BuildDiagnosticSeverity.Fatal;
+        }
+
+        private static Task<BuildStageResult> Failed(string projectDir, Exception exception)
+        {
+            BuildDiagnostic diagnostic = new(
+                BuildDiagnosticCode.PackageResolutionFailed,
+                BuildDiagnosticSeverity.Error,
+                $"Package resolution failed: {exception.Message}",
+                BuildPhase.DependencyResolution,
+                projectDir);
+            return Task.FromResult(BuildStageResult.Failed(diagnostic));
         }
     }
 }

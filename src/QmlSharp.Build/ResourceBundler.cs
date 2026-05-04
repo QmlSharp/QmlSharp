@@ -63,9 +63,8 @@ namespace QmlSharp.Build
             ImmutableArray<ResourceEntry>.Builder resources = ImmutableArray.CreateBuilder<ResourceEntry>();
             ImmutableArray<BuildDiagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<BuildDiagnostic>();
 
-            foreach (string assetRoot in _assetRoots)
+            foreach (string normalizedRoot in _assetRoots.Select(assetRoot => NormalizeAssetRoot(assetRoot)))
             {
-                string normalizedRoot = NormalizeAssetRoot(assetRoot);
                 if (!Directory.Exists(normalizedRoot))
                 {
                     if (_reportMissingRoots)
@@ -99,16 +98,15 @@ namespace QmlSharp.Build
             int filesCopied = 0;
             long totalBytes = 0;
 
-            foreach (ResourceEntry resource in resources
+            foreach (ResourceCopyResult copyResult in resources
                 .Where(static resource => !string.IsNullOrWhiteSpace(resource.RelativePath))
-                .OrderBy(static resource => resource.RelativePath, StringComparer.Ordinal))
+                .OrderBy(static resource => resource.RelativePath, StringComparer.Ordinal)
+                .Select(resource => CopyResource(resource, assetsOutputDir, diagnostics))
+                .Where(static result => result.Success))
             {
-                if (TryCopyResource(resource, assetsOutputDir, diagnostics, out string outputPath))
-                {
-                    outputPaths.Add(outputPath);
-                    filesCopied++;
-                    totalBytes += resource.SizeBytes;
-                }
+                outputPaths.Add(copyResult.OutputPath);
+                filesCopied++;
+                totalBytes += copyResult.SizeBytes;
             }
 
             string? qrcPath = WriteQrcIfRequested(resources, assetsOutputDir, outputPaths, diagnostics);
@@ -126,20 +124,19 @@ namespace QmlSharp.Build
             };
         }
 
-        private static bool TryCopyResource(
+        private static ResourceCopyResult CopyResource(
             ResourceEntry resource,
             string assetsOutputDir,
-            ImmutableArray<BuildDiagnostic>.Builder diagnostics,
-            out string outputPath)
+            ImmutableArray<BuildDiagnostic>.Builder diagnostics)
         {
-            outputPath = string.Empty;
+            string outputPath = string.Empty;
             if (!File.Exists(resource.SourcePath))
             {
                 diagnostics.Add(CreateDiagnostic(
                     BuildDiagnosticCode.AssetNotFound,
                     $"Asset '{resource.SourcePath}' does not exist.",
                     resource.SourcePath));
-                return false;
+                return ResourceCopyResult.Failed;
             }
 
             try
@@ -152,15 +149,23 @@ namespace QmlSharp.Build
                 }
 
                 File.Copy(resource.SourcePath, outputPath, overwrite: true);
-                return true;
+                return new ResourceCopyResult(true, outputPath, resource.SizeBytes);
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            catch (IOException exception)
             {
                 diagnostics.Add(CreateDiagnostic(
                     BuildDiagnosticCode.AssetCopyFailed,
                     $"Asset '{resource.SourcePath}' could not be copied to '{outputPath}': {exception.Message}",
                     resource.SourcePath));
-                return false;
+                return ResourceCopyResult.Failed;
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                diagnostics.Add(CreateDiagnostic(
+                    BuildDiagnosticCode.AssetCopyFailed,
+                    $"Asset '{resource.SourcePath}' could not be copied to '{outputPath}': {exception.Message}",
+                    resource.SourcePath));
+                return ResourceCopyResult.Failed;
             }
         }
 
@@ -183,7 +188,15 @@ namespace QmlSharp.Build
                 outputPaths.Add(qrcPath);
                 return qrcPath;
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            catch (IOException exception)
+            {
+                diagnostics.Add(CreateDiagnostic(
+                    BuildDiagnosticCode.AssetCopyFailed,
+                    $"QRC file could not be written: {exception.Message}",
+                    qrcPath));
+                return null;
+            }
+            catch (UnauthorizedAccessException exception)
             {
                 diagnostics.Add(CreateDiagnostic(
                     BuildDiagnosticCode.AssetCopyFailed,
@@ -264,16 +277,36 @@ namespace QmlSharp.Build
 
         private static string ResolveOutputPath(string assetsOutputDir, string relativePath)
         {
+            if (Path.IsPathRooted(relativePath))
+            {
+                throw new IOException("Asset relative paths must not be rooted.");
+            }
+
             string normalizedRelativePath = relativePath
                 .Replace('\\', Path.DirectorySeparatorChar)
                 .Replace('/', Path.DirectorySeparatorChar);
             string[] segments = normalizedRelativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Any(static segment => segment is "." or ".."))
+            if (segments.Length == 0)
             {
-                throw new IOException("Asset relative paths must not contain traversal segments.");
+                throw new IOException("Asset relative paths must contain at least one file segment.");
             }
 
-            string outputPath = Path.GetFullPath(Path.Join(assetsOutputDir, Path.Combine(segments)));
+            if (segments.Any(static segment => segment is "." or ".." ||
+                    Path.IsPathRooted(segment) ||
+                    segment.Contains(':')))
+            {
+                throw new IOException("Asset relative paths must not contain rooted, drive, or traversal segments.");
+            }
+
+            string relativeSubpath = string.Empty;
+            foreach (string segment in segments)
+            {
+                relativeSubpath = string.IsNullOrEmpty(relativeSubpath)
+                    ? segment
+                    : Path.Join(relativeSubpath, segment);
+            }
+
+            string outputPath = Path.GetFullPath(Path.Join(assetsOutputDir, relativeSubpath));
             string normalizedRoot = Path.GetFullPath(assetsOutputDir);
             string rootPrefix = normalizedRoot.EndsWith(Path.DirectorySeparatorChar)
                 ? normalizedRoot
@@ -319,6 +352,11 @@ namespace QmlSharp.Build
                 message,
                 BuildPhase.AssetBundling,
                 path);
+        }
+
+        private sealed record ResourceCopyResult(bool Success, string OutputPath, long SizeBytes)
+        {
+            public static ResourceCopyResult Failed { get; } = new(false, string.Empty, 0);
         }
     }
 }

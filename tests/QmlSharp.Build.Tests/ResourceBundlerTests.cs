@@ -151,6 +151,43 @@ namespace QmlSharp.Build.Tests
             Assert.Equal(BuildDiagnosticCode.AssetCopyFailed, diagnostic.Code);
         }
 
+        [Theory]
+        [InlineData("../escape.png")]
+        [InlineData("drive:escape.png")]
+        public void Bundle_UnsafeRelativePath_ReportsB051(string relativePath)
+        {
+            using TempDirectory project = new("qmlsharp unsafe asset path");
+            string assetsRoot = CreateAssetsRoot(project.Path);
+            string sourcePath = WriteAsset(assetsRoot, "safe.png", "png");
+            string outputDir = Path.Join(project.Path, "dist");
+            ResourceEntry resource = new(sourcePath, relativePath, ResourceType.Image, new FileInfo(sourcePath).Length);
+            ResourceBundler bundler = CreateBundler(project.Path);
+
+            ResourceBundleResult result = bundler.Bundle(ImmutableArray.Create(resource), outputDir);
+
+            Assert.Equal(0, result.FilesCopied);
+            BuildDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(BuildDiagnosticCode.AssetCopyFailed, diagnostic.Code);
+        }
+
+        [Fact]
+        public void Bundle_RootedRelativePath_ReportsB051()
+        {
+            using TempDirectory project = new("qmlsharp rooted asset path");
+            string assetsRoot = CreateAssetsRoot(project.Path);
+            string sourcePath = WriteAsset(assetsRoot, "safe.png", "png");
+            string outputDir = Path.Join(project.Path, "dist");
+            string rootedRelativePath = Path.GetFullPath(Path.Join(project.Path, "outside.png"));
+            ResourceEntry resource = new(sourcePath, rootedRelativePath, ResourceType.Image, new FileInfo(sourcePath).Length);
+            ResourceBundler bundler = CreateBundler(project.Path);
+
+            ResourceBundleResult result = bundler.Bundle(ImmutableArray.Create(resource), outputDir);
+
+            Assert.Equal(0, result.FilesCopied);
+            BuildDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(BuildDiagnosticCode.AssetCopyFailed, diagnostic.Code);
+        }
+
         [Fact]
         public async Task Stage05_AssetBundling_ReturnsArtifactsAndStatsForLaterStages()
         {

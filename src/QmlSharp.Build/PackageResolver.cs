@@ -29,7 +29,23 @@ namespace QmlSharp.Build
             {
                 normalizedProjectDir = Path.GetFullPath(projectDir);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (ArgumentException exception)
+            {
+                diagnostics.Add(CreateDiagnostic(
+                    BuildDiagnosticCode.PackageResolutionFailed,
+                    $"Package resolution failed: {exception.Message}",
+                    projectDir));
+                return new PackageResolutionResult(ImmutableArray<ResolvedPackage>.Empty, diagnostics.ToImmutable());
+            }
+            catch (NotSupportedException exception)
+            {
+                diagnostics.Add(CreateDiagnostic(
+                    BuildDiagnosticCode.PackageResolutionFailed,
+                    $"Package resolution failed: {exception.Message}",
+                    projectDir));
+                return new PackageResolutionResult(ImmutableArray<ResolvedPackage>.Empty, diagnostics.ToImmutable());
+            }
+            catch (PathTooLongException exception)
             {
                 diagnostics.Add(CreateDiagnostic(
                     BuildDiagnosticCode.PackageResolutionFailed,
@@ -264,7 +280,6 @@ namespace QmlSharp.Build
         private static ImmutableArray<string> GetPackageSearchRoots(string projectDir)
         {
             ImmutableArray<string>.Builder roots = ImmutableArray.CreateBuilder<string>();
-            roots.Add(projectDir);
             roots.Add(Path.Join(projectDir, "packages"));
             roots.Add(Path.Join(projectDir, ".nuget", "packages"));
             return roots
@@ -343,16 +358,40 @@ namespace QmlSharp.Build
                         packagePath,
                         manifest));
                 }
-                catch (Exception exception) when (exception is JsonException or FormatException or InvalidOperationException or IOException or UnauthorizedAccessException)
+                catch (JsonException exception)
                 {
-                    diagnostics.Add(CreateDiagnostic(
-                        BuildDiagnosticCode.ManifestParseError,
-                        $"Package manifest '{manifestPath}' could not be parsed: {exception.Message}",
-                        manifestPath));
+                    AddManifestParseDiagnostic(diagnostics, manifestPath, exception);
+                }
+                catch (FormatException exception)
+                {
+                    AddManifestParseDiagnostic(diagnostics, manifestPath, exception);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    AddManifestParseDiagnostic(diagnostics, manifestPath, exception);
+                }
+                catch (IOException exception)
+                {
+                    AddManifestParseDiagnostic(diagnostics, manifestPath, exception);
+                }
+                catch (UnauthorizedAccessException exception)
+                {
+                    AddManifestParseDiagnostic(diagnostics, manifestPath, exception);
                 }
             }
 
             return packages.ToImmutable();
+        }
+
+        private static void AddManifestParseDiagnostic(
+            ImmutableArray<BuildDiagnostic>.Builder diagnostics,
+            string manifestPath,
+            Exception exception)
+        {
+            diagnostics.Add(CreateDiagnostic(
+                BuildDiagnosticCode.ManifestParseError,
+                $"Package manifest '{manifestPath}' could not be parsed: {exception.Message}",
+                manifestPath));
         }
 
         private static PackageManifest ReadManifest(string fallbackPackageId, string manifestPath)

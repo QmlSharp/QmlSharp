@@ -39,6 +39,20 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public void PR02B_ResolveProject_DoesNotTreatProjectRootDirectoriesAsPackages()
+        {
+            using TempDirectory project = new("qmlsharp source folders");
+            _ = Directory.CreateDirectory(Path.Join(project.Path, "QmlSharp.Local", "src"));
+            _ = Directory.CreateDirectory(Path.Join(project.Path, "QmlSharp.Local", "bin"));
+            PackageResolver resolver = new();
+
+            PackageResolutionResult result = resolver.ResolveWithDiagnostics(project.Path);
+
+            Assert.Empty(result.Packages);
+            Assert.Empty(result.Diagnostics);
+        }
+
+        [Fact]
         public void PR03_ResolveProjectWithMultipleQmlSharpPackages_ReturnsAllMatchingPackages()
         {
             using TempDirectory project = new("qmlsharp many packages");
@@ -205,7 +219,7 @@ namespace QmlSharp.Build.Tests
             string version,
             string? manifest)
         {
-            string packageRoot = Path.Join(projectDir, packageId, version);
+            string packageRoot = Path.Join(projectDir, "packages", packageId, version);
             _ = Directory.CreateDirectory(packageRoot);
             if (manifest is not null)
             {
@@ -217,7 +231,7 @@ namespace QmlSharp.Build.Tests
 
         private static string CreateNonQmlSharpPackage(string projectDir, string packageId, string version)
         {
-            string packageRoot = Path.Join(projectDir, packageId, version);
+            string packageRoot = Path.Join(projectDir, "packages", packageId, version);
             _ = Directory.CreateDirectory(packageRoot);
             return packageRoot;
         }
