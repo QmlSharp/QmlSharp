@@ -370,13 +370,15 @@ namespace QmlSharp.Build
             ImmutableArray<ConfigDiagnostic>.Builder diagnostics)
         {
             HashSet<string> allowed = new(allowedProperties, StringComparer.Ordinal);
-            foreach (JsonProperty property in element.EnumerateObject().Where(property => !allowed.Contains(property.Name)))
-            {
-                string field = pathPrefix.Length == 0
+            IEnumerable<string> fields = element.EnumerateObject()
+                .Where(property => !allowed.Contains(property.Name))
+                .Select(property => pathPrefix.Length == 0
                     ? property.Name
                     : string.Create(
                         CultureInfo.InvariantCulture,
-                        $"{pathPrefix}.{property.Name}");
+                        $"{pathPrefix}.{property.Name}"));
+            foreach (string field in fields)
+            {
                 diagnostics.Add(CreateValidationDiagnostic(field, $"Unknown configuration field '{field}'."));
             }
         }
