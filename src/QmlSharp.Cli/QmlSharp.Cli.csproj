@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.Cli</AssemblyName>
+    <RootNamespace>QmlSharp.Cli</RootNamespace>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QmlSharp.Build\QmlSharp.Build.csproj" />
+  </ItemGroup>
+</Project>
