@@ -20,7 +20,7 @@ namespace QmlSharp.Build
             CancellationToken cancellationToken = default);
     }
 
-    /// <summary>Mock shell build pipeline used until Step 08.04 implements real orchestration.</summary>
+    /// <summary>Simple command-shell build pipeline retained for command-layer tests.</summary>
     public sealed class CommandShellBuildPipeline : IBuildPipeline
     {
         private Action<BuildProgress>? _progress;

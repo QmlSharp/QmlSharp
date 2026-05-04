@@ -23,13 +23,13 @@ namespace QmlSharp.Cli
         /// <summary>Clean service used by the clean command.</summary>
         public required ICleanService CleanService { get; init; }
 
-        /// <summary>Creates default mock shell services for Step 08.03.</summary>
+        /// <summary>Creates default command services for the current build-system implementation wave.</summary>
         public static CliCommandServices CreateDefault()
         {
             return new CliCommandServices
             {
                 ConfigLoader = new ConfigLoader(),
-                BuildPipeline = new CommandShellBuildPipeline(),
+                BuildPipeline = new BuildPipeline(),
                 DevSession = new CommandShellDevSession(),
                 Doctor = new CommandShellDoctor(),
                 InitService = new CommandShellInitService(),
