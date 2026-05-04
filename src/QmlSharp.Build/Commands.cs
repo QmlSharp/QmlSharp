@@ -234,10 +234,13 @@ namespace QmlSharp.Build
                 if (!failedChecks.IsDefaultOrEmpty && options.Fix)
                 {
                     ImmutableArray<DoctorFixResult> fixes = await _doctor.AutoFixAsync(failedChecks).ConfigureAwait(false);
-                    if (fixes.All(static fix => fix.Fixed))
-                    {
-                        failedChecks = ImmutableArray<DoctorCheckResult>.Empty;
-                    }
+                    HashSet<string> fixedCheckIds = fixes
+                        .Where(static fix => fix.Fixed)
+                        .Select(static fix => fix.CheckId)
+                        .ToHashSet(StringComparer.Ordinal);
+                    failedChecks = failedChecks
+                        .Where(check => !fixedCheckIds.Contains(check.CheckId))
+                        .ToImmutableArray();
                 }
 
                 CommandServiceResult result = failedChecks.IsDefaultOrEmpty

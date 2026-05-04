@@ -288,13 +288,7 @@ namespace QmlSharp.Build.Tests
         [Fact]
         public async Task DoctorCommand_FixOptionRunsAutoFix()
         {
-            DoctorCheckResult failedCheck = new(
-                DoctorCheckId.QtInstalled,
-                "Qt SDK",
-                DoctorCheckStatus.Fail,
-                null,
-                "Qt missing.",
-                true);
+            DoctorCheckResult failedCheck = CreateFailedDoctorCheck(DoctorCheckId.QtInstalled, "Qt SDK");
             FakeDoctor doctor = new(ImmutableArray.Create(failedCheck))
             {
                 FixResults = ImmutableArray.Create(new DoctorFixResult(DoctorCheckId.QtInstalled, true, "Fixed.")),
@@ -305,6 +299,54 @@ namespace QmlSharp.Build.Tests
 
             Assert.Equal(CliExitCode.Success, exitCode);
             Assert.Equal(1, doctor.FixCallCount);
+        }
+
+        [Fact]
+        public async Task DoctorCommand_FixWithNoResultsKeepsFailure()
+        {
+            DoctorCheckResult failedCheck = CreateFailedDoctorCheck(DoctorCheckId.QtInstalled, "Qt SDK");
+            FakeDoctor doctor = new(ImmutableArray.Create(failedCheck));
+            CliCommandServices services = CreateServices(doctor: doctor);
+            using StringWriter output = new();
+            using StringWriter error = new();
+
+            int exitCode = await QmlSharpCli.InvokeAsync(
+                new[] { "doctor", "--fix" },
+                services,
+                output,
+                error);
+
+            Assert.Equal(CliExitCode.BuildError, exitCode);
+            Assert.Equal(1, doctor.FixCallCount);
+            Assert.Contains(DoctorCheckId.QtInstalled, error.ToString(), StringComparison.Ordinal);
+            Assert.Equal(string.Empty, output.ToString());
+        }
+
+        [Fact]
+        public async Task DoctorCommand_FixWithPartialResultsKeepsUnfixedFailures()
+        {
+            DoctorCheckResult qtCheck = CreateFailedDoctorCheck(DoctorCheckId.QtInstalled, "Qt SDK");
+            DoctorCheckResult dotNetCheck = CreateFailedDoctorCheck(DoctorCheckId.DotNetVersion, ".NET SDK");
+            FakeDoctor doctor = new(ImmutableArray.Create(qtCheck, dotNetCheck))
+            {
+                FixResults = ImmutableArray.Create(new DoctorFixResult(DoctorCheckId.QtInstalled, true, "Fixed.")),
+            };
+            CliCommandServices services = CreateServices(doctor: doctor);
+            using StringWriter output = new();
+            using StringWriter error = new();
+
+            int exitCode = await QmlSharpCli.InvokeAsync(
+                new[] { "doctor", "--fix" },
+                services,
+                output,
+                error);
+
+            string errorText = error.ToString();
+            Assert.Equal(CliExitCode.BuildError, exitCode);
+            Assert.Equal(1, doctor.FixCallCount);
+            Assert.Contains(DoctorCheckId.DotNetVersion, errorText, StringComparison.Ordinal);
+            Assert.DoesNotContain(DoctorCheckId.QtInstalled, errorText, StringComparison.Ordinal);
+            Assert.Equal(string.Empty, output.ToString());
         }
 
         [Fact]
@@ -417,6 +459,17 @@ namespace QmlSharp.Build.Tests
                 Diagnostics = ImmutableArray.Create(diagnostic),
                 Stats = new BuildStats(TimeSpan.Zero, 0, 0, 0, 0, false),
             };
+        }
+
+        private static DoctorCheckResult CreateFailedDoctorCheck(string checkId, string description)
+        {
+            return new DoctorCheckResult(
+                checkId,
+                description,
+                DoctorCheckStatus.Fail,
+                null,
+                $"{description} failed.",
+                true);
         }
 
         private sealed class FakeConfigLoader : IConfigLoader

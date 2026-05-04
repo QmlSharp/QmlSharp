@@ -191,9 +191,10 @@ namespace QmlSharp.Build
                 }
             }
 
-            foreach (BuildDiagnostic diagnostic in result.Diagnostics)
+            IEnumerable<string> diagnosticLines = result.Diagnostics
+                .Select(diagnostic => $"{diagnostic.Code}: {diagnostic.Message}");
+            foreach (string line in diagnosticLines)
             {
-                string line = $"{diagnostic.Code}: {diagnostic.Message}";
                 if (result.Success)
                 {
                     output.WriteLine(line);
