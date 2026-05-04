@@ -176,7 +176,7 @@ namespace QmlSharp.Build.Tests
         {
             RecordingBuildStage cppStage = CreateThrowingStage(
                 BuildPhase.CppCodeGenAndBuild,
-                new InvalidOperationException("native build process failed"));
+                new BuildStageException("native build process failed"));
             ImmutableArray<RecordingBuildStage> stages = CreateRecordingStages(cppStage);
             BuildPipeline pipeline = CreatePipeline(stages);
 
@@ -193,6 +193,21 @@ namespace QmlSharp.Build.Tests
             Assert.Contains(result.Diagnostics, static diagnostic =>
                 diagnostic.Phase == BuildPhase.OutputAssembly &&
                 diagnostic.Message.Contains("was skipped", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public async Task UnexpectedStageException_BubblesToCaller()
+        {
+            RecordingBuildStage cppStage = CreateThrowingStage(
+                BuildPhase.CppCodeGenAndBuild,
+                new InvalidOperationException("unexpected implementation bug"));
+            ImmutableArray<RecordingBuildStage> stages = CreateRecordingStages(cppStage);
+            BuildPipeline pipeline = CreatePipeline(stages);
+
+            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await pipeline.BuildAsync(BuildTestFixtures.CreateDefaultContext()));
+
+            Assert.Contains("unexpected implementation bug", exception.Message, StringComparison.Ordinal);
         }
 
         [Fact]

@@ -193,7 +193,7 @@ namespace QmlSharp.Build
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (BuildStageException ex)
             {
                 phaseStopwatch.Stop();
                 BuildDiagnostic diagnostic = new(
@@ -214,12 +214,9 @@ namespace QmlSharp.Build
             }
 
             ImmutableHashSet<BuildPhase> requested = phases.ToImmutableHashSet();
-            foreach (BuildPhase phase in requested)
+            foreach (BuildPhase phase in requested.Where(phase => !CanonicalPhases.Contains(phase)))
             {
-                if (!CanonicalPhases.Contains(phase))
-                {
-                    throw new ArgumentException($"Unknown build phase '{phase}'.", nameof(phases));
-                }
+                throw new ArgumentException($"Unknown build phase '{phase}'.", nameof(phases));
             }
 
             ImmutableArray<BuildPhase>.Builder ordered = ImmutableArray.CreateBuilder<BuildPhase>(requested.Count);
