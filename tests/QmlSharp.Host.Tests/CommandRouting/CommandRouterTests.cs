@@ -3,6 +3,7 @@ using System.Globalization;
 using QmlSharp.Host.Commands;
 using QmlSharp.Host.Diagnostics;
 using QmlSharp.Host.Instances;
+using QmlSharp.Host.Tests.Fixtures;
 using ManagedInstanceRegistry = QmlSharp.Host.Instances.InstanceRegistry;
 
 namespace QmlSharp.Host.Tests.CommandRouting
@@ -262,6 +263,59 @@ namespace QmlSharp.Host.Tests.CommandRouting
             Assert.Equal(DispatchCount, context.Registry.GetMetrics().TotalCommandsDispatched);
         }
 
+        [Fact]
+        [Trait("Category", TestCategories.Performance)]
+        public async Task OnCommand_HandlerReentersRouter_DispatchesNestedCommandWithoutDeadlock()
+        {
+            TestContext context = CreateContext();
+            _ = context.Router.MarkReady(context.Instance.InstanceId);
+            TaskCompletionSource<CommandDispatchResult> nestedResult = NewCompletionSource<CommandDispatchResult>();
+            TaskCompletionSource<CommandInvocation> innerHandled = NewCompletionSource<CommandInvocation>();
+            context.Router.RegisterCommandHandler(context.Instance.InstanceId, 1, "inner", innerHandled.SetResult);
+            context.Router.RegisterCommandHandler(context.Instance.InstanceId, 2, "outer", _ =>
+            {
+                CommandDispatchResult result = context.Router.OnCommand(context.Instance.InstanceId, "inner", "[]");
+                nestedResult.SetResult(result);
+            });
+
+            CommandDispatchResult outerResult = context.Router.OnCommand(context.Instance.InstanceId, "outer", "[]");
+
+            Assert.Equal(CommandDispatchStatus.Dispatched, outerResult.Status);
+            Assert.Equal(CommandDispatchStatus.Dispatched, (await WaitFor(nestedResult.Task)).Status);
+            CommandInvocation invocation = await WaitFor(innerHandled.Task);
+            Assert.Equal("inner", invocation.CommandName);
+        }
+
+        [Fact]
+        [Trait("Category", TestCategories.Performance)]
+        public async Task Dispose_DuringInFlightHandler_AllowsHandlerToDrainAndRejectsNewCommands()
+        {
+            TestContext context = CreateContext();
+            _ = context.Router.MarkReady(context.Instance.InstanceId);
+            TaskCompletionSource<bool> entered = NewCompletionSource<bool>();
+            TaskCompletionSource<bool> release = NewCompletionSource<bool>();
+            TaskCompletionSource<bool> completed = NewCompletionSource<bool>();
+            context.Router.RegisterCommandHandler(context.Instance.InstanceId, 1, "slow", async invocation =>
+            {
+                entered.SetResult(true);
+                bool released = await release.Task.ConfigureAwait(false);
+                Assert.True(released);
+                Assert.Equal("slow", invocation.CommandName);
+                completed.SetResult(true);
+            });
+
+            CommandDispatchResult result = context.Router.OnCommand(context.Instance.InstanceId, "slow", "[]");
+            _ = await WaitFor(entered.Task);
+
+            context.Router.Dispose();
+            release.SetResult(true);
+            _ = await WaitFor(completed.Task);
+            CommandDispatchResult afterDispose = context.Router.OnCommand(context.Instance.InstanceId, "slow", "[]");
+
+            Assert.Equal(CommandDispatchStatus.Dispatched, result.Status);
+            Assert.Equal(CommandDispatchStatus.Disposed, afterDispose.Status);
+        }
+
         private static TestContext CreateContext()
         {
             ManagedInstanceRegistry registry = new();
@@ -302,6 +356,17 @@ namespace QmlSharp.Host.Tests.CommandRouting
             }
 
             return await task;
+        }
+
+        private static async Task WaitFor(Task task)
+        {
+            Task completed = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5)));
+            if (completed != task)
+            {
+                throw new TimeoutException("Timed out waiting for command routing test callback.");
+            }
+
+            await task;
         }
 
         private static string NewInstanceId()

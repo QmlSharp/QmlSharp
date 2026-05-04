@@ -390,6 +390,7 @@ namespace QmlSharp.Host.Engine
                     interop.EngineShutdown(handleToShutdown);
                     return 0;
                 });
+                ClearActiveManagedInstances();
                 engineHandle = IntPtr.Zero;
                 errorOverlay = null;
                 interop.SetCommandCallback(null);
@@ -525,6 +526,14 @@ namespace QmlSharp.Host.Engine
             Commands.ClearInstance(instanceId);
             Effects.ClearInstance(instanceId);
             _ = Instances.Unregister(instanceId);
+        }
+
+        private void ClearActiveManagedInstances()
+        {
+            foreach (string instanceId in Instances.GetAll().Select(static instance => instance.InstanceId).ToArray())
+            {
+                OnNativeInstanceDestroyed(instanceId);
+            }
         }
 
         private void OnNativeCommand(string instanceId, string commandName, string argsJson)

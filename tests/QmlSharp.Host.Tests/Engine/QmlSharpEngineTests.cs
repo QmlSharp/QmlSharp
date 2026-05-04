@@ -204,6 +204,32 @@ namespace QmlSharp.Host.Tests.Engine
         }
 
         [Fact]
+        [Trait("Category", TestCategories.Performance)]
+        public void InitializeShutdown_RepeatedCycles_ClearCallbacksAndManagedState()
+        {
+            for (int index = 0; index < 25; ++index)
+            {
+                FakeNativeHostInterop interop = new();
+                using QmlSharpEngine engine = CreateEngine(interop);
+                string instanceId = "77777777-7777-4777-8777-" + index.ToString("D12", System.Globalization.CultureInfo.InvariantCulture);
+
+                engine.Initialize();
+                interop.InstanceCreatedCallback?.Invoke(instanceId, "ManagedCounterViewModel", "MainView::__qmlsharp_vm0");
+                engine.InstanceReady(instanceId);
+                engine.Shutdown();
+
+                Assert.False(engine.IsInitialized);
+                Assert.Empty(engine.Instances.GetAll());
+                Assert.Null(interop.InstanceCreatedCallback);
+                Assert.Null(interop.InstanceDestroyedCallback);
+                Assert.Null(interop.CommandCallback);
+                Assert.Contains(interop.Calls, static call => call.Kind == "engine_shutdown");
+                Assert.Contains(interop.Calls, static call => call.Kind == "set_instance_callbacks" && (string?)call.Value == "clear");
+                Assert.Contains(interop.Calls, static call => call.Kind == "set_command_callback" && (string?)call.Value == "clear");
+            }
+        }
+
+        [Fact]
         [Trait("Category", TestCategories.RequiresNative)]
         public void Initialize_WithRealNativeLibrary_InitializesAndShutsDown()
         {

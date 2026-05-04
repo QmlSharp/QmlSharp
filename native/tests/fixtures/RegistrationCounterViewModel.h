@@ -14,6 +14,11 @@ class RegistrationCounterViewModel : public QObject {
     Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)
     Q_PROPERTY(QString title READ title WRITE setTitle NOTIFY titleChanged)
     Q_PROPERTY(QVariant metadata READ metadata WRITE setMetadata NOTIFY metadataChanged)
+    Q_PROPERTY(int extra0 READ extra0 WRITE setExtra0 NOTIFY extra0Changed)
+    Q_PROPERTY(int extra1 READ extra1 WRITE setExtra1 NOTIFY extra1Changed)
+    Q_PROPERTY(int extra2 READ extra2 WRITE setExtra2 NOTIFY extra2Changed)
+    Q_PROPERTY(int extra3 READ extra3 WRITE setExtra3 NOTIFY extra3Changed)
+    Q_PROPERTY(int extra4 READ extra4 WRITE setExtra4 NOTIFY extra4Changed)
 
 public:
     explicit RegistrationCounterViewModel(QObject* parent = nullptr);
@@ -31,6 +36,16 @@ public:
     void setTitle(const QString& value);
     QVariant metadata() const;
     void setMetadata(const QVariant& value);
+    int extra0() const;
+    void setExtra0(int value);
+    int extra1() const;
+    void setExtra1(int value);
+    int extra2() const;
+    void setExtra2(int value);
+    int extra3() const;
+    void setExtra3(int value);
+    int extra4() const;
+    void setExtra4(int value);
     bool wasCountReadOnOwnerThread() const;
     void resetCountReadProbe();
 
@@ -48,6 +63,11 @@ signals:
     void enabledChanged();
     void titleChanged();
     void metadataChanged();
+    void extra0Changed();
+    void extra1Changed();
+    void extra2Changed();
+    void extra3Changed();
+    void extra4Changed();
     void effectDispatched(const QString& effectName, const QString& payloadJson);
 
 private:
@@ -58,5 +78,10 @@ private:
     bool enabled_ = false;
     QString title_;
     QVariant metadata_;
+    int extra0_ = 0;
+    int extra1_ = 0;
+    int extra2_ = 0;
+    int extra3_ = 0;
+    int extra4_ = 0;
     mutable bool count_read_on_owner_thread_ = false;
 };
