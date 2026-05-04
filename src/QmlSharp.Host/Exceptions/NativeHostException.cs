@@ -53,10 +53,19 @@ namespace QmlSharp.Host.Exceptions
     }
 
     /// <summary>Thrown when a native-host API rejects its arguments before doing work.</summary>
-    public sealed class NativeInvalidArgumentException : NativeHostException
+    public class NativeInvalidArgumentException : NativeHostException
     {
         public NativeInvalidArgumentException(string message)
             : base(-2, message)
+        {
+        }
+    }
+
+    /// <summary>Thrown when a native-host API rejects its arguments before doing work.</summary>
+    public sealed class InvalidNativeArgumentException : NativeInvalidArgumentException
+    {
+        public InvalidNativeArgumentException(string message)
+            : base(message)
         {
         }
     }
@@ -85,6 +94,15 @@ namespace QmlSharp.Host.Exceptions
 
         /// <summary>The root QML path that failed to load.</summary>
         public string QmlPath { get; }
+    }
+
+    /// <summary>Thrown when the native host rejects a generated QML type registration.</summary>
+    public sealed class TypeRegistrationException : NativeHostException
+    {
+        public TypeRegistrationException(string message)
+            : base(-6, message)
+        {
+        }
     }
 
     /// <summary>Thrown when a state synchronization property name is not part of the known schema.</summary>

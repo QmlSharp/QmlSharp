@@ -32,10 +32,15 @@ namespace QmlSharp.Host.Interop
         {
             return resultCode switch
             {
-                -2 => new NativeInvalidArgumentException(detail),
+                -2 => new InvalidNativeArgumentException(detail),
                 -3 => new InstanceNotFoundException(string.IsNullOrWhiteSpace(instanceId) ? "unknown" : instanceId),
                 -4 => new EngineNotInitializedException(detail),
                 -5 => new QmlLoadException(string.IsNullOrWhiteSpace(qmlPath) ? "unknown" : qmlPath, detail),
+                -6 => new TypeRegistrationException(detail),
+                -7 => new PropertyNotFoundException(
+                    string.IsNullOrWhiteSpace(instanceId) ? "unknown" : instanceId,
+                    "unknown",
+                    detail),
                 -8 => new NativeJsonException(detail),
                 _ => new NativeHostException(resultCode, detail)
             };
