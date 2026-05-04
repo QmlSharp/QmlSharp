@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
     <ProjectReference Include="..\QmlSharp.Build\QmlSharp.Build.csproj" />
   </ItemGroup>
 </Project>
