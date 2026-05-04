@@ -15,6 +15,58 @@ namespace QmlSharp.Build.Tests.Infrastructure
         }
     }
 
+    public sealed class MockQtToolchain : IQtToolchain
+    {
+        private readonly QtInstallation? _installation;
+        private readonly Exception? _exception;
+
+        public MockQtToolchain(QtInstallation? installation)
+        {
+            _installation = installation;
+        }
+
+        public MockQtToolchain(Exception exception)
+        {
+            _exception = exception;
+        }
+
+        public int DiscoverCallCount { get; private set; }
+
+        public QtToolchainConfig? LastConfig { get; private set; }
+
+        public QtInstallation? Installation { get; private set; }
+
+        public Task<QtInstallation> DiscoverAsync(QtToolchainConfig? config = null, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            DiscoverCallCount++;
+            LastConfig = config;
+
+            if (_exception is not null)
+            {
+                throw _exception;
+            }
+
+            if (_installation is null)
+            {
+                throw new InvalidOperationException("Mock Qt installation was not configured.");
+            }
+
+            Installation = _installation;
+            return Task.FromResult(_installation);
+        }
+
+        public Task<ToolAvailability> CheckToolsAsync(CancellationToken ct = default)
+        {
+            throw new NotSupportedException("Config loader tests do not call CheckToolsAsync.");
+        }
+
+        public Task<ToolInfo> GetToolInfoAsync(string toolName, CancellationToken ct = default)
+        {
+            throw new NotSupportedException("Config loader tests do not call GetToolInfoAsync.");
+        }
+    }
+
     public sealed class MockQmlFormat : IQmlFormat
     {
         public Task<QmlFormatResult> FormatFileAsync(

@@ -131,10 +131,12 @@ namespace QmlSharp.Build
     }
 
     /// <summary>A configuration validation diagnostic.</summary>
+    /// <param name="Code">Stable build-system diagnostic code.</param>
     /// <param name="Field">Configuration field path.</param>
     /// <param name="Message">Human-readable validation message.</param>
     /// <param name="Severity">Validation severity.</param>
     public sealed record ConfigDiagnostic(
+        string Code,
         string Field,
         string Message,
         ConfigDiagnosticSeverity Severity);
@@ -147,6 +149,50 @@ namespace QmlSharp.Build
 
         /// <summary>Error diagnostic.</summary>
         Error,
+    }
+
+    /// <summary>Thrown when qmlsharp.json cannot be loaded into a valid configuration.</summary>
+    public sealed class ConfigParseException : Exception
+    {
+        /// <summary>Create a configuration parse exception from one diagnostic.</summary>
+        public ConfigParseException(BuildDiagnostic diagnostic)
+            : this(ImmutableArray.Create(diagnostic))
+        {
+        }
+
+        /// <summary>Create a configuration parse exception from one or more diagnostics.</summary>
+        public ConfigParseException(ImmutableArray<BuildDiagnostic> diagnostics)
+            : base(CreateMessage(diagnostics))
+        {
+            if (diagnostics.IsDefaultOrEmpty)
+            {
+                throw new ArgumentException("At least one diagnostic is required.", nameof(diagnostics));
+            }
+
+            Diagnostics = diagnostics;
+        }
+
+        /// <summary>Diagnostics that explain why loading failed.</summary>
+        public ImmutableArray<BuildDiagnostic> Diagnostics { get; }
+
+        /// <summary>The primary diagnostic.</summary>
+        public BuildDiagnostic Diagnostic => Diagnostics[0];
+
+        /// <summary>The primary diagnostic code.</summary>
+        public string Code => Diagnostic.Code;
+
+        /// <summary>The primary related configuration field or file path.</summary>
+        public string? Field => Diagnostic.FilePath;
+
+        private static string CreateMessage(ImmutableArray<BuildDiagnostic> diagnostics)
+        {
+            if (diagnostics.IsDefaultOrEmpty)
+            {
+                return "Configuration could not be loaded.";
+            }
+
+            return diagnostics[0].Message;
+        }
     }
 }
 
