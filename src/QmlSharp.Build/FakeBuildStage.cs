@@ -15,8 +15,8 @@ namespace QmlSharp.Build
             builder.Add(new FakeBuildStage(BuildPhase.ConfigLoading));
             builder.Add(new FakeBuildStage(BuildPhase.CSharpCompilation));
             builder.Add(new ModuleMetadataBuildStage());
-            builder.Add(new FakeBuildStage(BuildPhase.DependencyResolution));
-            builder.Add(new FakeBuildStage(BuildPhase.AssetBundling));
+            builder.Add(new PackageResolutionBuildStage());
+            builder.Add(new ResourceBundlingBuildStage());
             builder.Add(new FakeBuildStage(BuildPhase.QmlValidation));
             builder.Add(new FakeBuildStage(BuildPhase.CppCodeGenAndBuild));
             builder.Add(new FakeBuildStage(BuildPhase.OutputAssembly));

@@ -129,6 +129,7 @@ namespace QmlSharp.Build
                 PhaseResults = finalPhaseResults,
                 Diagnostics = finalDiagnostics,
                 Stats = stats,
+                Artifacts = statsBuilder.ToBuildArtifacts(),
             };
         }
 
@@ -185,6 +186,7 @@ namespace QmlSharp.Build
                 if (success)
                 {
                     statsBuilder.Add(stageResult.Stats);
+                    statsBuilder.AddArtifacts(stageResult.Artifacts);
                 }
 
                 return new PhaseResult(phase, success, phaseStopwatch.Elapsed, diagnostics);
@@ -312,6 +314,18 @@ namespace QmlSharp.Build
             private int _cppFilesGenerated;
             private int _assetsCollected;
             private bool _nativeLibBuilt;
+            private ImmutableArray<string> _qmlFiles = ImmutableArray<string>.Empty;
+            private ImmutableArray<string> _schemaFiles = ImmutableArray<string>.Empty;
+            private ImmutableArray<string> _sourceMapFiles = ImmutableArray<string>.Empty;
+            private ImmutableArray<string> _moduleMetadataFiles = ImmutableArray<string>.Empty;
+            private ImmutableArray<string> _qmlImportPaths = ImmutableArray<string>.Empty;
+            private ImmutableArray<string> _thirdPartySchemaFiles = ImmutableArray<string>.Empty;
+            private ImmutableArray<string> _packagePaths = ImmutableArray<string>.Empty;
+            private ImmutableArray<string> _assetFiles = ImmutableArray<string>.Empty;
+            private string? _eventBindingsFile;
+            private string? _qrcFile;
+            private string? _nativeLibraryPath;
+            private string? _assemblyPath;
 
             public void Add(BuildStatsDelta delta)
             {
@@ -324,6 +338,24 @@ namespace QmlSharp.Build
                 _nativeLibBuilt |= delta.NativeLibBuilt;
             }
 
+            public void AddArtifacts(BuildArtifacts artifacts)
+            {
+                ArgumentNullException.ThrowIfNull(artifacts);
+
+                _qmlFiles = AddDistinct(_qmlFiles, artifacts.QmlFiles);
+                _schemaFiles = AddDistinct(_schemaFiles, artifacts.SchemaFiles);
+                _sourceMapFiles = AddDistinct(_sourceMapFiles, artifacts.SourceMapFiles);
+                _moduleMetadataFiles = AddDistinct(_moduleMetadataFiles, artifacts.ModuleMetadataFiles);
+                _qmlImportPaths = AddDistinct(_qmlImportPaths, artifacts.QmlImportPaths);
+                _thirdPartySchemaFiles = AddDistinct(_thirdPartySchemaFiles, artifacts.ThirdPartySchemaFiles);
+                _packagePaths = AddDistinct(_packagePaths, artifacts.PackagePaths);
+                _assetFiles = AddDistinct(_assetFiles, artifacts.AssetFiles);
+                _eventBindingsFile ??= artifacts.EventBindingsFile;
+                _qrcFile ??= artifacts.QrcFile;
+                _nativeLibraryPath ??= artifacts.NativeLibraryPath;
+                _assemblyPath ??= artifacts.AssemblyPath;
+            }
+
             public BuildStats ToBuildStats(TimeSpan totalDuration)
             {
                 return new BuildStats(
@@ -333,6 +365,42 @@ namespace QmlSharp.Build
                     _cppFilesGenerated,
                     _assetsCollected,
                     _nativeLibBuilt);
+            }
+
+            public BuildArtifacts ToBuildArtifacts()
+            {
+                return new BuildArtifacts
+                {
+                    QmlFiles = _qmlFiles,
+                    SchemaFiles = _schemaFiles,
+                    EventBindingsFile = _eventBindingsFile,
+                    SourceMapFiles = _sourceMapFiles,
+                    ModuleMetadataFiles = _moduleMetadataFiles,
+                    QmlImportPaths = _qmlImportPaths,
+                    ThirdPartySchemaFiles = _thirdPartySchemaFiles,
+                    PackagePaths = _packagePaths,
+                    AssetFiles = _assetFiles,
+                    QrcFile = _qrcFile,
+                    NativeLibraryPath = _nativeLibraryPath,
+                    AssemblyPath = _assemblyPath,
+                };
+            }
+
+            private static ImmutableArray<string> AddDistinct(
+                ImmutableArray<string> existing,
+                ImmutableArray<string> additions)
+            {
+                if (additions.IsDefaultOrEmpty)
+                {
+                    return existing;
+                }
+
+                return existing
+                    .AddRange(additions)
+                    .Where(static item => !string.IsNullOrWhiteSpace(item))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(static item => item, StringComparer.Ordinal)
+                    .ToImmutableArray();
             }
         }
     }

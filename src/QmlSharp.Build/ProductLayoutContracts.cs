@@ -36,8 +36,20 @@ namespace QmlSharp.Build
         /// <summary>Generated module metadata file paths.</summary>
         public ImmutableArray<string> ModuleMetadataFiles { get; init; } = ImmutableArray<string>.Empty;
 
+        /// <summary>QML import paths discovered from dependency packages.</summary>
+        public ImmutableArray<string> QmlImportPaths { get; init; } = ImmutableArray<string>.Empty;
+
+        /// <summary>Third-party schema files discovered from dependency packages.</summary>
+        public ImmutableArray<string> ThirdPartySchemaFiles { get; init; } = ImmutableArray<string>.Empty;
+
+        /// <summary>Resolved package root paths.</summary>
+        public ImmutableArray<string> PackagePaths { get; init; } = ImmutableArray<string>.Empty;
+
         /// <summary>Bundled asset file paths.</summary>
         public ImmutableArray<string> AssetFiles { get; init; } = ImmutableArray<string>.Empty;
+
+        /// <summary>Generated Qt resource collection file path.</summary>
+        public string? QrcFile { get; init; }
 
         /// <summary>Compiled native library path.</summary>
         public string? NativeLibraryPath { get; init; }

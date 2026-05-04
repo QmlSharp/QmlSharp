@@ -9,12 +9,15 @@ namespace QmlSharp.Build
 
         public BuildStatsDelta Stats { get; init; } = BuildStatsDelta.Empty;
 
-        public static BuildStageResult Succeeded(BuildStatsDelta? stats = null)
+        public BuildArtifacts Artifacts { get; init; } = new();
+
+        public static BuildStageResult Succeeded(BuildStatsDelta? stats = null, BuildArtifacts? artifacts = null)
         {
             return new BuildStageResult
             {
                 Success = true,
                 Stats = stats ?? BuildStatsDelta.Empty,
+                Artifacts = artifacts ?? new BuildArtifacts(),
             };
         }
 
