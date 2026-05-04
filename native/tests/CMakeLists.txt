@@ -74,6 +74,29 @@ if(WIN32 AND DEFINED ENV{QT_DIR} AND NOT "$ENV{QT_DIR}" STREQUAL "")
   )
 endif()
 
+add_executable(qmlsharp_native_performance_tests
+  native_host_performance_tests.cpp
+  ${QMLSHARP_NATIVE_TEST_CORE_SOURCES}
+  ${QMLSHARP_NATIVE_TEST_FIXTURE_SOURCES}
+)
+
+qmlsharp_configure_native_test_target(qmlsharp_native_performance_tests)
+
+set_target_properties(qmlsharp_native_performance_tests
+  PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
+add_test(NAME qmlsharp_native_performance_tests COMMAND qmlsharp_native_performance_tests)
+set_tests_properties(qmlsharp_native_performance_tests PROPERTIES TIMEOUT 120 LABELS "RequiresQt;Native;Performance")
+
+if(WIN32 AND DEFINED ENV{QT_DIR} AND NOT "$ENV{QT_DIR}" STREQUAL "")
+  set_tests_properties(qmlsharp_native_performance_tests
+    PROPERTIES
+      ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$ENV{QT_DIR}/bin"
+  )
+endif()
+
 add_library(qmlsharp_native_integration_fixture SHARED
   ${QMLSHARP_NATIVE_TEST_CORE_SOURCES}
   ${QMLSHARP_NATIVE_TEST_FIXTURE_SOURCES}

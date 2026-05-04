@@ -4,5 +4,6 @@ namespace QmlSharp.Host.Tests.Fixtures
     {
         public const string Smoke = "Smoke";
         public const string RequiresNative = "RequiresNative";
+        public const string Performance = "Performance";
     }
 }

@@ -100,6 +100,71 @@ void RegistrationCounterViewModel::setMetadata(const QVariant& value) {
     emit metadataChanged();
 }
 
+int RegistrationCounterViewModel::extra0() const {
+    return extra0_;
+}
+
+void RegistrationCounterViewModel::setExtra0(int value) {
+    if (extra0_ == value) {
+        return;
+    }
+
+    extra0_ = value;
+    emit extra0Changed();
+}
+
+int RegistrationCounterViewModel::extra1() const {
+    return extra1_;
+}
+
+void RegistrationCounterViewModel::setExtra1(int value) {
+    if (extra1_ == value) {
+        return;
+    }
+
+    extra1_ = value;
+    emit extra1Changed();
+}
+
+int RegistrationCounterViewModel::extra2() const {
+    return extra2_;
+}
+
+void RegistrationCounterViewModel::setExtra2(int value) {
+    if (extra2_ == value) {
+        return;
+    }
+
+    extra2_ = value;
+    emit extra2Changed();
+}
+
+int RegistrationCounterViewModel::extra3() const {
+    return extra3_;
+}
+
+void RegistrationCounterViewModel::setExtra3(int value) {
+    if (extra3_ == value) {
+        return;
+    }
+
+    extra3_ = value;
+    emit extra3Changed();
+}
+
+int RegistrationCounterViewModel::extra4() const {
+    return extra4_;
+}
+
+void RegistrationCounterViewModel::setExtra4(int value) {
+    if (extra4_ == value) {
+        return;
+    }
+
+    extra4_ = value;
+    emit extra4Changed();
+}
+
 bool RegistrationCounterViewModel::wasCountReadOnOwnerThread() const {
     return count_read_on_owner_thread_;
 }
