@@ -155,7 +155,7 @@ namespace QmlSharp.Build
         {
             cancellationToken.ThrowIfCancellationRequested();
             string normalizedTargetPath = Path.GetFullPath(targetPath);
-            if (!IsDirectoryBelowProjectRoot(projectRoot, normalizedTargetPath))
+            if (!IsDirectoryBelowProjectRoot(projectRoot, normalizedTargetPath, GetPathComparison()))
             {
                 diagnostics.Add(CreateDiagnostic(
                     BuildDiagnosticCode.OutputValidationFailed,
@@ -190,16 +190,19 @@ namespace QmlSharp.Build
             }
         }
 
-        private static bool IsDirectoryBelowProjectRoot(string projectRoot, string targetPath)
+        internal static bool IsDirectoryBelowProjectRoot(
+            string projectRoot,
+            string targetPath,
+            StringComparison comparison)
         {
             string normalizedProjectRoot = EnsureTrailingDirectorySeparator(Path.GetFullPath(projectRoot));
             string normalizedTarget = EnsureTrailingDirectorySeparator(Path.GetFullPath(targetPath));
-            if (string.Equals(normalizedProjectRoot, normalizedTarget, GetPathComparison()))
+            if (string.Equals(normalizedProjectRoot, normalizedTarget, comparison))
             {
                 return false;
             }
 
-            return normalizedTarget.StartsWith(normalizedProjectRoot, GetPathComparison());
+            return normalizedTarget.StartsWith(normalizedProjectRoot, comparison);
         }
 
         private static string EnsureTrailingDirectorySeparator(string path)
@@ -214,7 +217,7 @@ namespace QmlSharp.Build
 
         private static StringComparison GetPathComparison()
         {
-            return OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            return OperatingSystem.IsWindows()
                 ? StringComparison.OrdinalIgnoreCase
                 : StringComparison.Ordinal;
         }

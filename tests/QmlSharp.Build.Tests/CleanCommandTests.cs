@@ -149,6 +149,18 @@ namespace QmlSharp.Build.Tests
             Assert.True(File.Exists(Path.Join(project.Path, "qmlsharp.json")));
         }
 
+        [Fact]
+        public void CleanPathContainmentUsesCaseSensitiveComparisonWhenRequested()
+        {
+            string root = Path.Join(Path.GetTempPath(), "qmlsharp-clean-case", "project");
+            string target = Path.Join(Path.GetTempPath(), "qmlsharp-clean-case", "Project", "dist");
+
+            Assert.False(CleanService.IsDirectoryBelowProjectRoot(
+                root,
+                target,
+                StringComparison.Ordinal));
+        }
+
         private static string WriteConfig(string projectDirectory, string outDir)
         {
             _ = Directory.CreateDirectory(projectDirectory);

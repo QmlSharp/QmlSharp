@@ -181,7 +181,11 @@ namespace QmlSharp.Build.Tests
             process.StartInfo.ArgumentList.Add("restore");
             process.StartInfo.ArgumentList.Add(projectPath);
             process.StartInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
-            process.StartInfo.Environment["QT_DIR"] = Environment.GetEnvironmentVariable("QT_DIR") ?? "C:\\Qt\\6.11.0\\msvc2022_64";
+            string? qtDirectory = Environment.GetEnvironmentVariable("QT_DIR");
+            if (!string.IsNullOrWhiteSpace(qtDirectory))
+            {
+                process.StartInfo.Environment["QT_DIR"] = qtDirectory;
+            }
 
             _ = process.Start();
             Task<string> stdout = process.StandardOutput.ReadToEndAsync();

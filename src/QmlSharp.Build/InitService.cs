@@ -328,13 +328,12 @@ namespace QmlSharp.Build
         {
             public static string ResolveTemplateRoot()
             {
-                foreach (string candidate in EnumerateTemplateRootCandidates())
+                foreach (string candidate in EnumerateTemplateRootCandidates()
+                             .Where(static candidate =>
+                                 Directory.Exists(Path.Join(candidate, AppTemplateDirectoryName)) &&
+                                 Directory.Exists(Path.Join(candidate, LibraryTemplateDirectoryName))))
                 {
-                    if (Directory.Exists(Path.Join(candidate, AppTemplateDirectoryName)) &&
-                        Directory.Exists(Path.Join(candidate, LibraryTemplateDirectoryName)))
-                    {
-                        return candidate;
-                    }
+                    return candidate;
                 }
 
                 return Path.Join(AppContext.BaseDirectory, "templates");
