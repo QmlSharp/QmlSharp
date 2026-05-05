@@ -79,10 +79,15 @@ namespace QmlSharp.Build
     public interface ICMakeBuilder
     {
         /// <summary>Runs cmake configure with a preset.</summary>
-        Task<CMakeStepResult> ConfigureAsync(string buildDir, string preset);
+        Task<CMakeStepResult> ConfigureAsync(
+            string buildDir,
+            string preset,
+            CancellationToken cancellationToken = default);
 
         /// <summary>Runs cmake build for the native library.</summary>
-        Task<CMakeStepResult> BuildAsync(string buildDir);
+        Task<CMakeStepResult> BuildAsync(
+            string buildDir,
+            CancellationToken cancellationToken = default);
 
         /// <summary>Returns the expected output path for the native library.</summary>
         string GetOutputLibraryPath(string buildDir);

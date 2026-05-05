@@ -20,10 +20,10 @@ namespace QmlSharp.Build.Tests
             Assert.All(result.PhaseResults, static phase => Assert.True(phase.Success));
             Assert.True(result.Stats.FilesCompiled > 0);
             Assert.True(result.Stats.SchemasGenerated > 0);
-            Assert.True(result.Stats.CppFilesGenerated > 0);
+            Assert.Equal(0, result.Stats.CppFilesGenerated);
             Assert.True(result.Stats.AssetsCollected > 0);
             Assert.Contains(Path.Join(context.OutputDir, "assets", "icon.png"), result.Artifacts.AssetFiles);
-            Assert.True(result.Stats.NativeLibBuilt);
+            Assert.False(result.Stats.NativeLibBuilt);
             Assert.True(result.Stats.TotalDuration >= TimeSpan.Zero);
         }
 
@@ -89,7 +89,7 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
-        public async Task BP05_SchemaChangeDetected_RunsStageSevenFakeCodegen()
+        public async Task BP05_DefaultPipelineWithoutCompilerSchemaOutput_SkipsNativeBuild()
         {
             BuildPipeline pipeline = new();
 
@@ -97,8 +97,8 @@ namespace QmlSharp.Build.Tests
 
             Assert.True(result.Success);
             Assert.True(result.PhaseResults.Single(static phase => phase.Phase == BuildPhase.CppCodeGenAndBuild).Success);
-            Assert.True(result.Stats.CppFilesGenerated > 0);
-            Assert.True(result.Stats.NativeLibBuilt);
+            Assert.Equal(0, result.Stats.CppFilesGenerated);
+            Assert.False(result.Stats.NativeLibBuilt);
         }
 
         [Fact]

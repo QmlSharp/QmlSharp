@@ -18,7 +18,7 @@ namespace QmlSharp.Build
             builder.Add(new PackageResolutionBuildStage());
             builder.Add(new ResourceBundlingBuildStage());
             builder.Add(new FakeBuildStage(BuildPhase.QmlValidation));
-            builder.Add(new FakeBuildStage(BuildPhase.CppCodeGenAndBuild));
+            builder.Add(new NativeBuildStage());
             builder.Add(new FakeBuildStage(BuildPhase.OutputAssembly));
             return builder.ToImmutable();
         }
@@ -40,12 +40,6 @@ namespace QmlSharp.Build
                 BuildPhase.AssetBundling => BuildStageResult.Succeeded(new BuildStatsDelta
                 {
                     AssetsCollected = 1,
-                }),
-                BuildPhase.CppCodeGenAndBuild when context.LibraryMode => BuildStageResult.Succeeded(),
-                BuildPhase.CppCodeGenAndBuild => BuildStageResult.Succeeded(new BuildStatsDelta
-                {
-                    CppFilesGenerated = 2,
-                    NativeLibBuilt = true,
                 }),
                 _ => BuildStageResult.Succeeded(),
             };
