@@ -16,15 +16,24 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
-        public void CG02_GenerateHeader_ReadonlyStringProperty_HasNoWriteAccessor()
+        public void CG02_GenerateHeader_ReadonlyStringProperty_HasWritableMetaPropertyForManagedSync()
         {
             string header = GenerateHeader(Property("label", "string", readOnly: true, defaultValue: "Ready"));
 
             Assert.Contains(
-                "Q_PROPERTY(QString label READ label NOTIFY labelChanged)",
+                "Q_PROPERTY(QString label READ label WRITE setLabel NOTIFY labelChanged)",
                 header,
                 StringComparison.Ordinal);
-            Assert.DoesNotContain("WRITE setLabel", header, StringComparison.Ordinal);
+            Assert.Contains("void setLabel(const QString& value);", header, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void CG02B_GenerateImplementation_ReadonlyStringProperty_UsesSetterForManagedSync()
+        {
+            string implementation = GenerateImplementation(Property("label", "string", readOnly: true, defaultValue: "Ready"));
+
+            Assert.Contains("void CounterViewModel::setLabel(const QString& value)", implementation, StringComparison.Ordinal);
+            Assert.Contains("setLabel(qmlsharpValue);", implementation, StringComparison.Ordinal);
         }
 
         [Fact]

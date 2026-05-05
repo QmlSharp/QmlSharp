@@ -142,12 +142,8 @@ namespace QmlSharp.Build
             builder.Append(property.Name);
             builder.Append(" READ ");
             builder.Append(GetterName(property));
-            if (!property.ReadOnly)
-            {
-                builder.Append(" WRITE ");
-                builder.Append(SetterName(property));
-            }
-
+            builder.Append(" WRITE ");
+            builder.Append(SetterName(property));
             builder.Append(" NOTIFY ");
             builder.Append(ChangedSignalName(property));
             builder.Append(")\n");
@@ -181,14 +177,11 @@ namespace QmlSharp.Build
                 builder.Append(' ');
                 builder.Append(GetterName(property));
                 builder.Append("() const;\n");
-                if (!property.ReadOnly)
-                {
-                    builder.Append("    void ");
-                    builder.Append(SetterName(property));
-                    builder.Append('(');
-                    builder.Append(SetterParameterType(mapping));
-                    builder.Append(" value);\n");
-                }
+                builder.Append("    void ");
+                builder.Append(SetterName(property));
+                builder.Append('(');
+                builder.Append(SetterParameterType(mapping));
+                builder.Append(" value);\n");
             }
 
             if (!schema.Properties.IsDefaultOrEmpty)
@@ -576,18 +569,15 @@ namespace QmlSharp.Build
                 builder.Append(";\n");
                 builder.Append("}\n\n");
 
-                if (!property.ReadOnly)
-                {
-                    builder.Append("void ");
-                    builder.Append(schema.ClassName);
-                    builder.Append("::");
-                    builder.Append(SetterName(property));
-                    builder.Append('(');
-                    builder.Append(SetterParameterType(mapping));
-                    builder.Append(" value) {\n");
-                    AppendSetterBody(builder, property, "value", mapping, indent: 4);
-                    builder.Append("}\n\n");
-                }
+                builder.Append("void ");
+                builder.Append(schema.ClassName);
+                builder.Append("::");
+                builder.Append(SetterName(property));
+                builder.Append('(');
+                builder.Append(SetterParameterType(mapping));
+                builder.Append(" value) {\n");
+                AppendSetterBody(builder, property, "value", mapping, indent: 4);
+                builder.Append("}\n\n");
             }
         }
 
@@ -651,7 +641,7 @@ namespace QmlSharp.Build
             {
                 CppTypeMapping mapping = CppTypeMap.Map(property.Type);
                 AppendPropertyNameBranchPrefix(builder, property, hasAnyJsonBranch, indent: 4);
-                AppendPropertyAssignment(builder, property, ConvertFromVariantExpression(mapping), mapping, indent: 8);
+                AppendPropertyAssignment(builder, property, ConvertFromVariantExpression(mapping), indent: 8);
                 builder.Append("        return;\n");
                 builder.Append("    }\n");
                 hasAnyJsonBranch = true;
@@ -698,7 +688,7 @@ namespace QmlSharp.Build
                 }
 
                 AppendPropertyNameBranchPrefix(builder, property, hasBranch, indent: 4);
-                AppendPropertyAssignment(builder, property, valueExpression, mapping, indent: 8);
+                AppendPropertyAssignment(builder, property, valueExpression, indent: 8);
                 builder.Append("        return;\n");
                 builder.Append("    }\n");
                 hasBranch = true;
@@ -732,7 +722,7 @@ namespace QmlSharp.Build
                 }
 
                 AppendPropertyNameBranchPrefix(builder, property, hasBranch, indent: 4);
-                AppendPropertyAssignment(builder, property, "qmlsharpValue", mapping, indent: 8);
+                AppendPropertyAssignment(builder, property, "qmlsharpValue", indent: 8);
                 builder.Append("        return;\n");
                 builder.Append("    }\n");
                 hasBranch = true;
@@ -772,20 +762,13 @@ namespace QmlSharp.Build
             StringBuilder builder,
             StateEntry property,
             string valueExpression,
-            CppTypeMapping mapping,
             int indent)
         {
-            if (!property.ReadOnly)
-            {
-                builder.Append(' ', indent);
-                builder.Append(SetterName(property));
-                builder.Append('(');
-                builder.Append(valueExpression);
-                builder.Append(");\n");
-                return;
-            }
-
-            AppendSetterBody(builder, property, valueExpression, mapping, indent);
+            builder.Append(' ', indent);
+            builder.Append(SetterName(property));
+            builder.Append('(');
+            builder.Append(valueExpression);
+            builder.Append(");\n");
         }
 
         private static void AppendSetterBody(
