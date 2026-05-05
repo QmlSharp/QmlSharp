@@ -401,9 +401,8 @@ namespace QmlSharp.Build
                 return false;
             }
 
-            foreach (SchemaFile schemaFile in schemaFiles)
+            foreach (string className in schemaFiles.Select(static schemaFile => schemaFile.Schema.ClassName))
             {
-                string className = schemaFile.Schema.ClassName;
                 if (!File.Exists(Path.Join(paths.GeneratedDir, className + ".h")) ||
                     !File.Exists(Path.Join(paths.GeneratedDir, className + ".cpp")))
                 {

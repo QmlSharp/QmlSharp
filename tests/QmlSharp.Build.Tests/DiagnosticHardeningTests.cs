@@ -32,9 +32,17 @@ namespace QmlSharp.Build.Tests
         [Fact]
         public void EH01_ConfigErrorMessage_IncludesFieldAndExpectedFormat()
         {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(EH01_ConfigErrorMessage_IncludesFieldAndExpectedFormat));
+            string qtDir = Path.Join(project.Path, "qt");
+            _ = Directory.CreateDirectory(qtDir);
+
             ConfigLoader loader = new(new MissingQtToolchain());
             QmlSharpConfig config = BuildTestFixtures.CreateDefaultConfig() with
             {
+                Qt = new QtConfig
+                {
+                    Dir = qtDir,
+                },
                 Build = new BuildConfig
                 {
                     Mode = "staging",
