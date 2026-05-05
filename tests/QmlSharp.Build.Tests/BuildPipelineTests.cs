@@ -7,11 +7,9 @@ namespace QmlSharp.Build.Tests
         [Fact]
         public async Task BP01_FullPipeline_ProducesAllEightPhaseResults()
         {
-            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(BP01_FullPipeline_ProducesAllEightPhaseResults));
-            string iconPath = Path.Join(project.Path, "assets", "icon.png");
-            await File.WriteAllTextAsync(iconPath, "icon");
-            BuildPipeline pipeline = new();
-            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
+            ImmutableArray<RecordingBuildStage> stages = CreateRecordingStages();
+            BuildPipeline pipeline = CreatePipeline(stages);
+            BuildContext context = BuildTestFixtures.CreateDefaultContext();
 
             BuildResult result = await pipeline.BuildAsync(context);
 
@@ -20,10 +18,9 @@ namespace QmlSharp.Build.Tests
             Assert.All(result.PhaseResults, static phase => Assert.True(phase.Success));
             Assert.True(result.Stats.FilesCompiled > 0);
             Assert.True(result.Stats.SchemasGenerated > 0);
-            Assert.Equal(0, result.Stats.CppFilesGenerated);
+            Assert.True(result.Stats.CppFilesGenerated > 0);
             Assert.True(result.Stats.AssetsCollected > 0);
-            Assert.Contains(Path.Join(context.OutputDir, "assets", "icon.png"), result.Artifacts.AssetFiles);
-            Assert.False(result.Stats.NativeLibBuilt);
+            Assert.True(result.Stats.NativeLibBuilt);
             Assert.True(result.Stats.TotalDuration >= TimeSpan.Zero);
         }
 
@@ -89,9 +86,13 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
-        public async Task BP05_DefaultPipelineWithoutCompilerSchemaOutput_SkipsNativeBuild()
+        public async Task BP05_NoSchemaChangeStageResult_SkipsNativeBuildStats()
         {
-            BuildPipeline pipeline = new();
+            RecordingBuildStage cppStage = new(
+                BuildPhase.CppCodeGenAndBuild,
+                BuildStageResult.Succeeded());
+            ImmutableArray<RecordingBuildStage> stages = CreateRecordingStages(cppStage);
+            BuildPipeline pipeline = CreatePipeline(stages);
 
             BuildResult result = await pipeline.BuildAsync(BuildTestFixtures.CreateDefaultContext());
 
@@ -104,7 +105,8 @@ namespace QmlSharp.Build.Tests
         [Fact]
         public async Task BP06_ProgressCallbacks_FireForAllStagesInCanonicalOrder()
         {
-            BuildPipeline pipeline = new();
+            ImmutableArray<RecordingBuildStage> stages = CreateRecordingStages();
+            BuildPipeline pipeline = CreatePipeline(stages);
             List<BuildProgress> firstListenerEvents = new();
             List<BuildProgress> secondListenerEvents = new();
             pipeline.OnProgress(firstListenerEvents.Add);
@@ -142,7 +144,11 @@ namespace QmlSharp.Build.Tests
         [Fact]
         public async Task BP08_LibraryMode_SkipsStageSevenNativeStats()
         {
-            BuildPipeline pipeline = new();
+            RecordingBuildStage cppStage = new(
+                BuildPhase.CppCodeGenAndBuild,
+                BuildStageResult.Succeeded());
+            ImmutableArray<RecordingBuildStage> stages = CreateRecordingStages(cppStage);
+            BuildPipeline pipeline = CreatePipeline(stages);
             BuildContext context = BuildTestFixtures.CreateDefaultContext() with
             {
                 LibraryMode = true,
