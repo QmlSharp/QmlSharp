@@ -119,6 +119,73 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public void ValidateOutput_EmptyApplicationOutputReportsAllRequiredArtifacts()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(ValidateOutput_EmptyApplicationOutputReportsAllRequiredArtifacts));
+            string outputRoot = Path.Join(project.Path, "dist");
+            _ = Directory.CreateDirectory(outputRoot);
+            ProductLayout layout = new();
+
+            ImmutableArray<BuildDiagnostic> diagnostics = layout.ValidateOutput(outputRoot);
+
+            Assert.Contains(diagnostics, static diagnostic =>
+                diagnostic.Message.Contains("manifest.json is missing", StringComparison.Ordinal));
+            Assert.Contains(diagnostics, static diagnostic =>
+                diagnostic.Message.Contains("no QML files", StringComparison.Ordinal));
+            Assert.Contains(diagnostics, static diagnostic =>
+                diagnostic.Message.Contains("no schema files", StringComparison.Ordinal));
+            Assert.Contains(diagnostics, static diagnostic =>
+                diagnostic.Code == BuildDiagnosticCode.OutputValidationFailed &&
+                diagnostic.Message.Contains("native library is missing", StringComparison.Ordinal));
+            Assert.Contains(diagnostics, static diagnostic =>
+                diagnostic.Message.Contains("no managed assembly", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void ValidateOutput_InvalidLibraryOutputReportsForbiddenApplicationArtifacts()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(ValidateOutput_InvalidLibraryOutputReportsForbiddenApplicationArtifacts));
+            string outputRoot = Path.Join(project.Path, "lib");
+            _ = WriteFile(Path.Join(outputRoot, "qmlsharp.module.json"), "{}\n");
+            _ = WriteFile(Path.Join(outputRoot, "event-bindings.json"), "{}\n");
+            _ = WriteFile(Path.Join(outputRoot, "native", NativeLibraryNames.GetFileName("qmlsharp_native")), "native");
+            _ = WriteFile(Path.Join(outputRoot, "managed", "MyApp.dll"), "managed");
+            ProductLayout layout = new();
+
+            ImmutableArray<BuildDiagnostic> diagnostics = layout.ValidateOutput(outputRoot);
+
+            Assert.Contains(diagnostics, static diagnostic =>
+                diagnostic.Message.Contains("must not contain application event-bindings", StringComparison.Ordinal));
+            Assert.Contains(diagnostics, static diagnostic =>
+                diagnostic.Message.Contains("no library QML files", StringComparison.Ordinal));
+            Assert.Contains(diagnostics, static diagnostic =>
+                diagnostic.Message.Contains("no library schema files", StringComparison.Ordinal));
+            Assert.Contains(diagnostics, static diagnostic =>
+                diagnostic.Message.Contains("must not contain native or managed", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void OutputAssembly_MissingSourceArtifactReportsB070()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(OutputAssembly_MissingSourceArtifactReportsB070));
+            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
+            ProductLayout layout = new();
+            FixtureArtifacts fixture = CreateFixtureArtifacts(project.Path);
+            BuildArtifacts artifacts = fixture.Artifacts with
+            {
+                QmlFiles = ImmutableArray.Create(Path.Join(project.Path, "missing", "CounterView.qml")),
+            };
+
+            ProductAssemblyResult result = layout.Assemble(context, artifacts);
+
+            Assert.False(result.Success);
+            BuildDiagnostic diagnostic = Assert.Single(result.Diagnostics, static item =>
+                item.Code == BuildDiagnosticCode.OutputAssemblyFailed &&
+                item.Message.Contains("source artifact", StringComparison.Ordinal));
+            Assert.Equal(BuildPhase.OutputAssembly, diagnostic.Phase);
+        }
+
+        [Fact]
         public async Task BP09_OutputAssemblyStage_WritesManifestWithCorrectMetadata()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(BP09_OutputAssemblyStage_WritesManifestWithCorrectMetadata));
@@ -182,6 +249,22 @@ namespace QmlSharp.Build.Tests
             string second = NormalizeTimestamp(layout.GenerateManifest(buildResult, context));
 
             Assert.Equal(first, second);
+        }
+
+        [Fact]
+        public void ManifestMetadata_InvalidSchemaJsonFallsBackToSchemaFileName()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(ManifestMetadata_InvalidSchemaJsonFallsBackToSchemaFileName));
+            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
+            ProductLayout layout = new();
+            FixtureArtifacts fixture = CreateFixtureArtifacts(project.Path);
+            File.WriteAllText(fixture.Artifacts.SchemaFiles[0], "{");
+
+            ProductAssemblyResult result = layout.Assemble(context, fixture.Artifacts);
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Manifest);
+            Assert.Contains("CounterViewModel", result.Manifest.ViewModels);
         }
 
         [Fact]

@@ -26,6 +26,58 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public async Task CommandShellBuildPipeline_BuildsAndPublishesProgress()
+        {
+            CommandShellBuildPipeline pipeline = new();
+            List<BuildProgress> progress = new();
+            pipeline.OnProgress(progress.Add);
+            BuildContext context = BuildTestFixtures.CreateDefaultContext();
+
+            BuildResult fullBuild = await pipeline.BuildAsync(context);
+            BuildResult phaseBuild = await pipeline.BuildPhasesAsync(
+                context,
+                ImmutableArray.Create(BuildPhase.ConfigLoading));
+
+            Assert.True(fullBuild.Success);
+            Assert.True(phaseBuild.Success);
+            Assert.Equal(2, pipeline.BuildCallCount);
+            Assert.Same(context, pipeline.LastContext);
+            Assert.Equal(2, progress.Count);
+            Assert.All(progress, static item => Assert.Equal(BuildPhase.ConfigLoading, item.Phase));
+        }
+
+        [Fact]
+        public async Task CommandShellDefaultServices_DelegateToInitCleanAndDoctor()
+        {
+            using TempDirectory root = new("qmlsharp-command-shell-defaults");
+            string targetDirectory = Path.Join(root.Path, "Shell App");
+            CommandShellInitService initService = new();
+            CommandServiceResult init = await initService.InitAsync(new InitCommandOptions
+            {
+                TargetDir = targetDirectory,
+            });
+            string dist = Path.Join(targetDirectory, "dist");
+            _ = Directory.CreateDirectory(dist);
+            File.WriteAllText(Path.Join(dist, "manifest.json"), "{}");
+            CommandShellCleanService cleanService = new();
+            CommandShellDoctor doctor = new(targetDirectory);
+
+            CommandServiceResult clean = await cleanService.CleanAsync(new CleanCommandOptions
+            {
+                ProjectDir = targetDirectory,
+            });
+            DoctorCheckResult configCheck = await doctor.RunCheckAsync(DoctorCheckId.ConfigValid);
+            ImmutableArray<DoctorFixResult> fixes = await doctor.AutoFixAsync(ImmutableArray<DoctorCheckResult>.Empty);
+
+            Assert.True(init.Success);
+            Assert.True(File.Exists(Path.Join(targetDirectory, "qmlsharp.json")));
+            Assert.True(clean.Success);
+            Assert.False(Directory.Exists(dist));
+            Assert.Equal(DoctorCheckStatus.Pass, configCheck.Status);
+            Assert.Empty(fixes);
+        }
+
+        [Fact]
         public async Task BuildCommand_ParsingBindsOptionsAndCreatesBuildContext()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject("bc-options");
