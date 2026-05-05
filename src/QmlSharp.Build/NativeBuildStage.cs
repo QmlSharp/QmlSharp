@@ -422,9 +422,8 @@ namespace QmlSharp.Build
                 yield break;
             }
 
-            foreach (string relativeRoot in new[] { "include", "src" })
+            foreach (string root in new[] { "include", "src" }.Select(relativeRoot => Path.Join(abiSourceDir, relativeRoot)))
             {
-                string root = Path.Join(abiSourceDir, relativeRoot);
                 if (!Directory.Exists(root))
                 {
                     continue;

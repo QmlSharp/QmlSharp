@@ -35,12 +35,9 @@ namespace QmlSharp.Build.Tests.Infrastructure
 
             foreach (string directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                foreach (string candidateName in GetCandidateNames(name))
+                if (GetCandidateNames(name).Any(candidateName => File.Exists(Path.Join(directory, candidateName))))
                 {
-                    if (File.Exists(Path.Join(directory, candidateName)))
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
 

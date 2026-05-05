@@ -131,16 +131,30 @@ namespace QmlSharp.Build
             string preset)
         {
             string normalizedPreset = string.IsNullOrWhiteSpace(preset) ? "default" : preset.Trim();
+            ImmutableArray<string>.Builder builder = ImmutableArray.CreateBuilder<string>();
             if (HasCMakePresets(sourceDir))
             {
-                return ImmutableArray.Create("--preset", normalizedPreset);
+                builder.Add("--preset");
+                builder.Add(normalizedPreset);
+                builder.Add("-B");
+                builder.Add(buildDir);
+                AddConfigureCacheVariables(builder, buildDir, normalizedPreset);
+                return builder.ToImmutable();
             }
 
-            ImmutableArray<string>.Builder builder = ImmutableArray.CreateBuilder<string>();
             builder.Add("-S");
             builder.Add(sourceDir);
             builder.Add("-B");
             builder.Add(buildDir);
+            AddConfigureCacheVariables(builder, buildDir, normalizedPreset);
+            return builder.ToImmutable();
+        }
+
+        private void AddConfigureCacheVariables(
+            ImmutableArray<string>.Builder builder,
+            string buildDir,
+            string normalizedPreset)
+        {
             AddCacheVariable(builder, "CMAKE_BUILD_TYPE", InferBuildType(normalizedPreset));
             if (!string.IsNullOrWhiteSpace(options.QtDir))
             {
@@ -154,21 +168,10 @@ namespace QmlSharp.Build
                 AddCacheVariable(builder, "CMAKE_RUNTIME_OUTPUT_DIRECTORY", nativeOutputDir);
                 AddCacheVariable(builder, "CMAKE_ARCHIVE_OUTPUT_DIRECTORY", Path.Join(buildDir, "lib"));
             }
-
-            return builder.ToImmutable();
         }
 
-        private ImmutableArray<string> CreateBuildArguments(string buildDir)
+        private static ImmutableArray<string> CreateBuildArguments(string buildDir)
         {
-            string sourceDir = Path.GetFullPath(options.SourceDir);
-            string? buildPreset = string.IsNullOrWhiteSpace(options.BuildPreset)
-                ? null
-                : options.BuildPreset.Trim();
-            if (buildPreset is not null && HasCMakePresets(sourceDir))
-            {
-                return ImmutableArray.Create("--build", "--preset", buildPreset);
-            }
-
             return ImmutableArray.Create("--build", buildDir);
         }
 

@@ -38,7 +38,7 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
-        public async Task ConfigureAsync_WithPresetFile_UsesConfiguredPreset()
+        public async Task ConfigureAsync_WithPresetFile_UsesConfiguredPresetAndRequestedBuildDir()
         {
             using TempDirectory source = new("qmlsharp-cmake-preset-source");
             using TempDirectory build = new("qmlsharp-cmake-preset-build");
@@ -54,7 +54,31 @@ namespace QmlSharp.Build.Tests
             _ = await builder.ConfigureAsync(build.Path, "windows-debug");
 
             ProcessRunRequest request = Assert.Single(processRunner.Requests);
-            Assert.Equal(new[] { "--preset", "windows-debug" }, request.Arguments.AsEnumerable());
+            Assert.Contains("--preset", request.Arguments);
+            Assert.Contains("windows-debug", request.Arguments);
+            Assert.Contains("-B", request.Arguments);
+            Assert.Contains(Path.GetFullPath(build.Path), request.Arguments);
+        }
+
+        [Fact]
+        public async Task BuildAsync_WithPresetFile_UsesRequestedBuildDir()
+        {
+            using TempDirectory source = new("qmlsharp-cmake-build-preset-source");
+            using TempDirectory build = new("qmlsharp-cmake-build-preset-dir");
+            await File.WriteAllTextAsync(Path.Join(source.Path, "CMakePresets.json"), "{}");
+            RecordingProcessRunner processRunner = new(Success(string.Empty, string.Empty));
+            CMakeBuilder builder = new(
+                new CMakeBuilderOptions
+                {
+                    SourceDir = source.Path,
+                    BuildPreset = "windows-debug",
+                },
+                processRunner);
+
+            _ = await builder.BuildAsync(build.Path);
+
+            ProcessRunRequest request = Assert.Single(processRunner.Requests);
+            Assert.Equal(new[] { "--build", Path.GetFullPath(build.Path) }, request.Arguments.AsEnumerable());
         }
 
         [Fact]
