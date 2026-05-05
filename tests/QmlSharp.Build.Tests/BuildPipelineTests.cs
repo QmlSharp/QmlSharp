@@ -163,6 +163,22 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public async Task BP09_DefaultPipelineFakeConfigStage_CompletesRequestedConfigPhase()
+        {
+            BuildPipeline pipeline = new();
+
+            BuildResult result = await pipeline.BuildPhasesAsync(
+                BuildTestFixtures.CreateDefaultContext(),
+                ImmutableArray.Create(BuildPhase.ConfigLoading));
+
+            Assert.True(result.Success);
+            Assert.Equal(BuildPhase.ConfigLoading, Assert.Single(result.PhaseResults).Phase);
+            Assert.Equal(0, result.Stats.FilesCompiled);
+            Assert.Equal(0, result.Stats.SchemasGenerated);
+            Assert.Equal(0, result.Stats.AssetsCollected);
+        }
+
+        [Fact]
         public async Task EH05_PhaseFailure_DoesNotCrashAndKeepsAllPhaseResults()
         {
             RecordingBuildStage cppStage = CreateFailedStage(

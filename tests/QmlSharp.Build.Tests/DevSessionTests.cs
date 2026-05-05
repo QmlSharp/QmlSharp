@@ -35,6 +35,77 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public async Task DC07_DefaultWatcherFactory_CreatesWatchersOnlyForExistingDirectories()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("dc07-watchers");
+            string missing = Path.Join(project.Path, "missing");
+            string existing = Path.Join(project.Path, "src");
+            _ = Directory.CreateDirectory(existing);
+            FileSystemDevFileWatcherFactory factory = new();
+
+            ImmutableArray<IDevFileWatcher> watchers = factory.CreateWatchers(ImmutableArray.Create(missing, existing));
+
+            IDevFileWatcher watcher = Assert.Single(watchers);
+            watcher.Start();
+            await watcher.DisposeAsync();
+            Assert.Empty(factory.CreateWatchers(ImmutableArray.Create(missing)));
+        }
+
+        [Fact]
+        public async Task DC08_TimerDebouncer_FlushesCancelsAndIgnoresSchedulesAfterDispose()
+        {
+            TimerDevDebouncerFactory factory = new();
+            IDevDebouncer immediate = factory.Create(TimeSpan.Zero);
+            int runCount = 0;
+            immediate.Schedule(_ =>
+            {
+                runCount++;
+                return Task.CompletedTask;
+            });
+
+            await immediate.FlushAsync();
+            await immediate.DisposeAsync();
+            immediate.Schedule(_ =>
+            {
+                runCount++;
+                return Task.CompletedTask;
+            });
+            await immediate.FlushAsync();
+            await immediate.DisposeAsync();
+
+            IDevDebouncer delayed = factory.Create(TimeSpan.FromSeconds(30));
+            delayed.Schedule(_ => throw new InvalidOperationException("should be canceled before execution"));
+            await delayed.DisposeAsync();
+            await delayed.FlushAsync();
+
+            Assert.Equal(1, runCount);
+        }
+
+        [Fact]
+        public async Task DC09_NoOpDevHostHook_ValidatesRequestsAndCancellation()
+        {
+            using CancellationTokenSource cancellation = new();
+            await cancellation.CancelAsync();
+            NoOpDevHostHook hook = NoOpDevHostHook.Instance;
+            DevCommandOptions options = new();
+            BuildResult result = CreateSuccessfulBuildResult();
+            DevHostStartRequest start = new(options, "project", "dist", "Main.qml", result);
+            DevHostReloadRequest reload = new(
+                options,
+                "project",
+                "dist",
+                "Main.qml",
+                ImmutableArray.Create("Main.qml"),
+                result);
+
+            await hook.StartAsync(start);
+            await hook.ReloadAsync(reload);
+            await hook.StopAsync();
+            await hook.DisposeAsync();
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => hook.StopAsync(cancellation.Token));
+        }
+
+        [Fact]
         public async Task DC02_FileChange_DebouncesAndRunsOneDeterministicRebuild()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject("dc02-dev-rebuild");

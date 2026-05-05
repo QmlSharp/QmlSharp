@@ -129,6 +129,32 @@ namespace QmlSharp.Build.Tests
             Assert.Equal(DoctorCheckStatus.Pass, linuxClang.Status);
         }
 
+        [Theory]
+        [InlineData(DoctorCheckId.QtInstalled, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.QtVersion, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.QmlFormatAvailable, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.QmlLintAvailable, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.QmlCachegenAvailable, DoctorCheckStatus.Warning)]
+        [InlineData(DoctorCheckId.DotNetVersion, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.CMakeAvailable, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.CMakeVersion, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.MsvcAvailable, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.ClangAvailable, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.NinjaAvailable, DoctorCheckStatus.Warning)]
+        [InlineData(DoctorCheckId.ConfigValid, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.NativeLibExists, DoctorCheckStatus.Fail)]
+        [InlineData(DoctorCheckId.NuGetResolved, DoctorCheckStatus.Fail)]
+        public async Task Doctor_AllChecksHaveNegativeCoverage(string checkId, DoctorCheckStatus expectedStatus)
+        {
+            using DoctorFixture fixture = CreateNegativeCoverageFixture(checkId);
+            Doctor doctor = fixture.CreateDoctor();
+
+            DoctorCheckResult result = await doctor.RunCheckAsync(checkId);
+
+            Assert.Equal(expectedStatus, result.Status);
+            Assert.False(string.IsNullOrWhiteSpace(result.Detail));
+        }
+
         [Fact]
         public async Task Doctor_WindowsClangCheckFailsWhenClangClIsMissing()
         {
@@ -250,6 +276,71 @@ namespace QmlSharp.Build.Tests
             stopwatch.Stop();
             Assert.DoesNotContain(checks, static check => check.Status == DoctorCheckStatus.Fail);
             Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"Doctor took {stopwatch.Elapsed}.");
+        }
+
+        private static DoctorFixture CreateNegativeCoverageFixture(string checkId)
+        {
+            DoctorFixture fixture = checkId switch
+            {
+                DoctorCheckId.QtVersion => DoctorFixture.CreateHealthy(
+                    platform: PlatformTarget.WindowsX64,
+                    qtVersion: new QtVersion { Major = 6, Minor = 10, Patch = 0 }),
+                DoctorCheckId.NuGetResolved => DoctorFixture.CreateHealthy(
+                    platform: PlatformTarget.WindowsX64,
+                    includeNuGetAssets: false),
+                _ => DoctorFixture.CreateHealthy(platform: PlatformTarget.WindowsX64),
+            };
+
+            switch (checkId)
+            {
+                case DoctorCheckId.QtInstalled:
+                    fixture.QtToolchain.DiscoveryException = new QtInstallationNotFoundError(
+                        "Qt installation was not found.",
+                        ImmutableArray.Create("QT_DIR: not set"));
+                    break;
+                case DoctorCheckId.QmlFormatAvailable:
+                    fixture.Environment.RemoveExecutable("qmlformat");
+                    break;
+                case DoctorCheckId.QmlLintAvailable:
+                    fixture.Environment.RemoveExecutable("qmllint");
+                    break;
+                case DoctorCheckId.QmlCachegenAvailable:
+                    fixture.Environment.RemoveExecutable("qmlcachegen");
+                    break;
+                case DoctorCheckId.DotNetVersion:
+                    fixture.Environment.RemoveExecutable("dotnet");
+                    break;
+                case DoctorCheckId.CMakeAvailable:
+                    fixture.Environment.RemoveExecutable("cmake");
+                    break;
+                case DoctorCheckId.CMakeVersion:
+                    fixture.Environment.SetProcessResult(
+                        "cmake",
+                        new DoctorProcessResult(true, 0, "cmake version 3.20.0\n", string.Empty));
+                    break;
+                case DoctorCheckId.MsvcAvailable:
+                    fixture.Environment.RemoveExecutable("cl");
+                    break;
+                case DoctorCheckId.ClangAvailable:
+                    fixture.Environment.RemoveExecutable("clang-cl");
+                    break;
+                case DoctorCheckId.NinjaAvailable:
+                    fixture.Environment.RemoveExecutable("ninja");
+                    break;
+                case DoctorCheckId.ConfigValid:
+                    fixture.ConfigLoader.Exception = new ConfigParseException(new BuildDiagnostic(
+                        BuildDiagnosticCode.ConfigValidationError,
+                        BuildDiagnosticSeverity.Error,
+                        "module.prefix: Module prefix must not be empty.",
+                        BuildPhase.ConfigLoading,
+                        "module.prefix"));
+                    break;
+                case DoctorCheckId.NativeLibExists:
+                    File.Delete(Path.Join(fixture.Config.OutDir, "native", "qmlsharp_native.dll"));
+                    break;
+            }
+
+            return fixture;
         }
 
         private sealed class DoctorFixture : IDisposable

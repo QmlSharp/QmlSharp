@@ -125,6 +125,67 @@ namespace QmlSharp.Build.Tests
                 outputPath);
         }
 
+        [Fact]
+        public void GetOutputLibraryPath_FindsKnownConfigurationOutputBeforeDefaultPath()
+        {
+            using TempDirectory source = new("qmlsharp-cmake-output-source");
+            string buildDir = Path.Join(source.Path, "build");
+            string debugOutput = Path.Join(buildDir, "Debug", NativeLibraryNames.GetFileName("qmlsharp_native"));
+            string? debugDirectory = Path.GetDirectoryName(debugOutput);
+            Assert.False(string.IsNullOrWhiteSpace(debugDirectory));
+            _ = Directory.CreateDirectory(debugDirectory);
+            File.WriteAllText(debugOutput, "native");
+            CMakeBuilder builder = new(new CMakeBuilderOptions
+            {
+                SourceDir = source.Path,
+            });
+
+            string outputPath = builder.GetOutputLibraryPath(buildDir);
+
+            Assert.Equal(debugOutput, outputPath);
+        }
+
+        [Fact]
+        public async Task ProcessRunner_CapturesStdoutStderrExitCodeAndEnvironment()
+        {
+            using TempDirectory work = new("qmlsharp-process-runner");
+            ProcessRunner runner = new();
+            ProcessRunRequest request = CreateShellRequest(
+                "echo qmlsharp-out && echo %QMLSHARP_PROCESS_TEST% && echo qmlsharp-err 1>&2 && exit /b 3",
+                "printf 'qmlsharp-out\\n%s\\n' \"$QMLSHARP_PROCESS_TEST\"; printf 'qmlsharp-err\\n' >&2; exit 3",
+                work.Path) with
+            {
+                EnvironmentVariables = ImmutableDictionary<string, string>.Empty.Add("QMLSHARP_PROCESS_TEST", "env-ok"),
+            };
+
+            ProcessRunResult result = await runner.RunAsync(request, CancellationToken.None);
+
+            Assert.Equal(3, result.ExitCode);
+            Assert.Contains("qmlsharp-out", result.Stdout, StringComparison.Ordinal);
+            Assert.Contains("env-ok", result.Stdout, StringComparison.Ordinal);
+            Assert.Contains("qmlsharp-err", result.Stderr, StringComparison.Ordinal);
+            Assert.True(result.Duration >= TimeSpan.Zero);
+        }
+
+        [Fact]
+        public async Task ProcessRunner_TimeoutKillsProcessAndReturnsTimeoutResult()
+        {
+            using TempDirectory work = new("qmlsharp-process-timeout");
+            ProcessRunner runner = new();
+            ProcessRunRequest request = CreateShellRequest(
+                "ping -n 6 127.0.0.1 >nul",
+                "sleep 5",
+                work.Path) with
+            {
+                Timeout = TimeSpan.FromMilliseconds(10),
+            };
+
+            ProcessRunResult result = await runner.RunAsync(request, CancellationToken.None);
+
+            Assert.Equal(-1, result.ExitCode);
+            Assert.Contains("Process timed out", result.Stderr, StringComparison.Ordinal);
+        }
+
         [RequiresCMakeQtFact]
         [Trait("Category", BuildTestCategories.Integration)]
         [Trait("Category", BuildTestCategories.RequiresCMake)]
@@ -166,6 +227,26 @@ namespace QmlSharp.Build.Tests
         private static ProcessRunResult Success(string stdout, string stderr)
         {
             return new ProcessRunResult(stdout, stderr, TimeSpan.FromMilliseconds(1), 0);
+        }
+
+        private static ProcessRunRequest CreateShellRequest(
+            string windowsCommand,
+            string unixCommand,
+            string workingDirectory)
+        {
+            return OperatingSystem.IsWindows()
+                ? new ProcessRunRequest
+                {
+                    FileName = "cmd.exe",
+                    Arguments = ImmutableArray.Create("/c", windowsCommand),
+                    WorkingDirectory = workingDirectory,
+                }
+                : new ProcessRunRequest
+                {
+                    FileName = "/bin/sh",
+                    Arguments = ImmutableArray.Create("-c", unixCommand),
+                    WorkingDirectory = workingDirectory,
+                };
         }
 
         private sealed class RecordingProcessRunner : IProcessRunner

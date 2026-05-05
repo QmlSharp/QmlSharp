@@ -54,6 +54,43 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public void PD04B_GetQtRuntimeDependencies_ExpandsControlsQmlAndCustomModulesPerTarget()
+        {
+            PlatformDistributor distributor = new();
+
+            ImmutableArray<string> windowsDependencies = distributor.GetQtRuntimeDependencies(
+                PlatformTarget.WindowsX64,
+                ImmutableArray.Create(" Quick.Controls ", "QtSvg", string.Empty, "QtQml"));
+            ImmutableArray<string> linuxDependencies = distributor.GetQtRuntimeDependencies(
+                PlatformTarget.LinuxX64,
+                ImmutableArray.Create("QtQuick.Controls"));
+            ImmutableArray<string> macDependencies = distributor.GetQtRuntimeDependencies(
+                PlatformTarget.MacOsArm64,
+                ImmutableArray.Create("Qml"));
+
+            Assert.Contains("Qt6QuickControls2.dll", windowsDependencies);
+            Assert.Contains("Qt6QuickTemplates2.dll", windowsDependencies);
+            Assert.Contains("Qt6Svg.dll", windowsDependencies);
+            Assert.Contains("Qt6Qml.dll", windowsDependencies);
+            Assert.DoesNotContain("Qt6.dll", windowsDependencies);
+            Assert.Contains("libQt6QuickControls2.so", linuxDependencies);
+            Assert.Contains("libQt6QuickTemplates2.so", linuxDependencies);
+            Assert.Contains("QtQml.framework", macDependencies);
+        }
+
+        [Fact]
+        public void PD04C_InvalidPlatformTargets_AreRejected()
+        {
+            PlatformDistributor distributor = new();
+            PlatformTarget invalidTarget = (PlatformTarget)999;
+
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => distributor.GetNativeLibExtension(invalidTarget));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => distributor.GetQtRuntimeDependencies(
+                invalidTarget,
+                ImmutableArray.Create("QtQuick")));
+        }
+
+        [Fact]
         public void PD05_PackageIncludesRequiredFilesAndTotalSize()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject("pd05-package");
@@ -76,8 +113,36 @@ namespace QmlSharp.Build.Tests
             Assert.Contains("native/" + GetNativeLibraryFileName(), result.IncludedFiles);
             Assert.Contains("qml/QmlSharp/MyApp/CounterView.qml", result.IncludedFiles);
             Assert.Contains("assets/icon.png", result.IncludedFiles);
+            Assert.Contains(result.IncludedFiles, static file => file.StartsWith("Qt6/", StringComparison.Ordinal));
             Assert.True(result.IncludedFiles.SequenceEqual(result.IncludedFiles.OrderBy(static item => item, StringComparer.Ordinal)));
             Assert.Equal(ComputeSize(result.OutputPath, result.IncludedFiles), result.TotalSizeBytes);
+        }
+
+        [Fact]
+        public void PD05B_PackageFailedBuildOrMissingOutput_ReturnsFailureWithoutCreatingPackage()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("pd05b-package-failure");
+            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path) with
+            {
+                OutputDir = Path.Join(project.Path, "missing-dist"),
+            };
+            PlatformDistributor distributor = new();
+            BuildResult failedResult = BuildTestFixtures.CreateSuccessfulBuildResult() with
+            {
+                Success = false,
+            };
+
+            DistributionResult failedBuild = distributor.Package(
+                failedResult,
+                context);
+            DistributionResult missingOutput = distributor.Package(
+                BuildTestFixtures.CreateSuccessfulBuildResult(),
+                context);
+
+            Assert.False(failedBuild.Success);
+            Assert.Empty(failedBuild.IncludedFiles);
+            Assert.False(missingOutput.Success);
+            Assert.Empty(missingOutput.IncludedFiles);
         }
 
         private static BuildContext CreateDistributionFixture(string projectDir)
@@ -105,7 +170,29 @@ namespace QmlSharp.Build.Tests
             WriteFile(Path.Join(context.OutputDir, "manifest.json"), "{}\n");
             WriteFile(Path.Join(context.OutputDir, "event-bindings.json"), "{}\n");
             WriteFile(Path.Join(context.OutputDir + "-" + GetCurrentTargetMoniker(), "stale.txt"), "stale");
+            WriteCurrentPlatformQtRuntimeDependencies(context);
             return context;
+        }
+
+        private static void WriteCurrentPlatformQtRuntimeDependencies(BuildContext context)
+        {
+            PlatformTarget target = GetCurrentPlatformTarget();
+            PlatformDistributor distributor = new();
+            string runtimeSourceDir = target is PlatformTarget.WindowsX64
+                ? Path.Join(context.QtDir, "bin")
+                : Path.Join(context.QtDir, "lib");
+
+            foreach (string dependency in distributor.GetQtRuntimeDependencies(target, context.Config.Qt.Modules))
+            {
+                if (dependency.EndsWith(".framework", StringComparison.Ordinal))
+                {
+                    WriteFile(Path.Join(runtimeSourceDir, dependency, "marker.txt"), dependency);
+                }
+                else
+                {
+                    WriteFile(Path.Join(runtimeSourceDir, dependency), dependency);
+                }
+            }
         }
 
         private static void WriteFile(string path, string content)
@@ -139,6 +226,26 @@ namespace QmlSharp.Build.Tests
             }
 
             return "libqmlsharp_native.so";
+        }
+
+        private static PlatformTarget GetCurrentPlatformTarget()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                return PlatformTarget.WindowsX64;
+            }
+
+            if (OperatingSystem.IsMacOS() && RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+            {
+                return PlatformTarget.MacOsArm64;
+            }
+
+            if (OperatingSystem.IsMacOS())
+            {
+                return PlatformTarget.MacOsX64;
+            }
+
+            return PlatformTarget.LinuxX64;
         }
 
         private static string GetCurrentTargetMoniker()
