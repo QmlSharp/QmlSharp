@@ -1,0 +1,26 @@
+{
+  "name": "CounterLibrary",
+  "version": "1.0.0",
+  "outDir": "./dist",
+  "qt": {
+    "dir": "__QT_DIR__",
+    "modules": [
+      "QtQuick",
+      "QtQuick.Controls"
+    ]
+  },
+  "build": {
+    "format": true,
+    "lint": true,
+    "sourceMaps": true,
+    "incremental": false,
+    "mode": "development"
+  },
+  "module": {
+    "prefix": "QmlSharp.CounterLibrary",
+    "version": {
+      "major": 1,
+      "minor": 0
+    }
+  }
+}

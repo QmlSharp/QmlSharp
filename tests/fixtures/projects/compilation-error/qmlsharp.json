@@ -1,0 +1,22 @@
+{
+  "name": "CompilationErrorApp",
+  "entry": "./src/Program.cs",
+  "outDir": "./dist",
+  "qt": {
+    "dir": "__QT_DIR__"
+  },
+  "build": {
+    "format": false,
+    "lint": false,
+    "sourceMaps": true,
+    "incremental": false,
+    "mode": "development"
+  },
+  "module": {
+    "prefix": "QmlSharp.CompilationError",
+    "version": {
+      "major": 1,
+      "minor": 0
+    }
+  }
+}

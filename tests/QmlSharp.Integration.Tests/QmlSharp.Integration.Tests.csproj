@@ -23,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\QmlSharp.Build\QmlSharp.Build.csproj" />
     <ProjectReference Include="..\..\src\QmlSharp.Compiler\QmlSharp.Compiler.csproj" />
     <ProjectReference Include="..\..\src\QmlSharp.Host\QmlSharp.Host.csproj" />
   </ItemGroup>

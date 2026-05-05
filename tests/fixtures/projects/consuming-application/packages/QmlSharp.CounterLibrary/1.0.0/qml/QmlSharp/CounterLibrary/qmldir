@@ -1,0 +1,3 @@
+module QmlSharp.CounterLibrary
+LibraryCounterView 1.0 LibraryCounterView.qml
+typeinfo QmlSharp_CounterLibrary.qmltypes

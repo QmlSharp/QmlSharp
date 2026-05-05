@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutputType>Exe</OutputType>
+    <QmlSharpRepoRoot Condition="'$(QmlSharpRepoRoot)' == ''">$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', '..', '..', '..'))</QmlSharpRepoRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(QmlSharpRepoRoot)/src/QmlSharp.Core/QmlSharp.Core.csproj" />
+  </ItemGroup>
+</Project>
