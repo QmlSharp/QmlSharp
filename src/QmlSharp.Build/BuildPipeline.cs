@@ -197,7 +197,8 @@ namespace QmlSharp.Build
             {
                 throw;
             }
-            catch (BuildStageException ex)
+            catch (Exception ex)
+                when (ex is not OperationCanceledException)
             {
                 phaseStopwatch.Stop();
                 BuildDiagnostic diagnostic = new(
@@ -287,7 +288,17 @@ namespace QmlSharp.Build
         private static ImmutableArray<BuildDiagnostic> NormalizeDiagnostics(
             ImmutableArray<BuildDiagnostic> diagnostics)
         {
-            return diagnostics.IsDefault ? ImmutableArray<BuildDiagnostic>.Empty : diagnostics;
+            if (diagnostics.IsDefaultOrEmpty)
+            {
+                return ImmutableArray<BuildDiagnostic>.Empty;
+            }
+
+            return diagnostics
+                .OrderBy(static diagnostic => diagnostic.Phase)
+                .ThenBy(static diagnostic => diagnostic.FilePath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(static diagnostic => diagnostic.Code, StringComparer.Ordinal)
+                .ThenBy(static diagnostic => diagnostic.Message, StringComparer.Ordinal)
+                .ToImmutableArray();
         }
 
         private static bool IsBlockingDiagnostic(BuildDiagnostic diagnostic)

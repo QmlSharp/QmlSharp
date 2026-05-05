@@ -185,6 +185,23 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public void ManifestWriteFailure_ReportsB071()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(ManifestWriteFailure_ReportsB071));
+            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
+            ProductLayout layout = new();
+            FixtureArtifacts fixture = CreateFixtureArtifacts(project.Path);
+            _ = Directory.CreateDirectory(context.OutputDir);
+            _ = Directory.CreateDirectory(Path.Join(context.OutputDir, "manifest.json"));
+
+            ProductAssemblyResult result = layout.Assemble(context, fixture.Artifacts);
+
+            Assert.False(result.Success);
+            Assert.Contains(result.Diagnostics, static diagnostic =>
+                diagnostic.Code == BuildDiagnosticCode.ManifestWriteFailed);
+        }
+
+        [Fact]
         public void ApplicationLayout_FileHashesUsePortablePathsWithSpaces()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(ApplicationLayout_FileHashesUsePortablePathsWithSpaces));

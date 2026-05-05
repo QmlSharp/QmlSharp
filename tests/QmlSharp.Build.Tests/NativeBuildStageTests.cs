@@ -55,6 +55,74 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public async Task IncrementalForceRebuild_BypassesNativeFingerprintAndRunsCMake()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(IncrementalForceRebuild_BypassesNativeFingerprintAndRunsCMake));
+            BuildContext initialContext = BuildTestFixtures.CreateDefaultContext(project.Path);
+            await WriteSchemaAsync(initialContext, BuildTestFixtures.CreateCounterSchema());
+            NativeBuildStage firstStage = CreateStage(new CppCodeGenerator(), new MockCMakeBuilder());
+            BuildStageResult firstResult = await firstStage.ExecuteAsync(initialContext, CancellationToken.None);
+            MockCMakeBuilder secondCMakeBuilder = new();
+            NativeBuildStage secondStage = CreateStage(new CppCodeGenerator(), secondCMakeBuilder);
+            BuildContext forceContext = initialContext with
+            {
+                ForceRebuild = true,
+            };
+
+            BuildStageResult secondResult = await secondStage.ExecuteAsync(forceContext, CancellationToken.None);
+
+            Assert.True(firstResult.Success);
+            Assert.True(secondResult.Success);
+            Assert.Equal(1, secondCMakeBuilder.ConfigureCallCount);
+            Assert.Equal(1, secondCMakeBuilder.BuildCallCount);
+            Assert.True(secondResult.Stats.NativeLibBuilt);
+        }
+
+        [Fact]
+        public async Task IncrementalMissingGeneratedNativeFile_InvalidatesCacheAndRegenerates()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(IncrementalMissingGeneratedNativeFile_InvalidatesCacheAndRegenerates));
+            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
+            await WriteSchemaAsync(context, BuildTestFixtures.CreateCounterSchema());
+            NativeBuildStage firstStage = CreateStage(new CppCodeGenerator(), new MockCMakeBuilder());
+            BuildStageResult firstResult = await firstStage.ExecuteAsync(context, CancellationToken.None);
+            string generatedHeader = Path.Join(context.OutputDir, "native", "generated", "CounterViewModel.h");
+            File.Delete(generatedHeader);
+            MockCMakeBuilder secondCMakeBuilder = new();
+            NativeBuildStage secondStage = CreateStage(new CppCodeGenerator(), secondCMakeBuilder);
+
+            BuildStageResult secondResult = await secondStage.ExecuteAsync(context, CancellationToken.None);
+
+            Assert.True(firstResult.Success);
+            Assert.True(secondResult.Success);
+            Assert.True(File.Exists(generatedHeader));
+            Assert.Equal(1, secondCMakeBuilder.ConfigureCallCount);
+            Assert.Equal(1, secondCMakeBuilder.BuildCallCount);
+        }
+
+        [Fact]
+        public async Task IncrementalMissingNativeLibrary_InvalidatesCacheAndRebuilds()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(IncrementalMissingNativeLibrary_InvalidatesCacheAndRebuilds));
+            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
+            await WriteSchemaAsync(context, BuildTestFixtures.CreateCounterSchema());
+            NativeBuildStage firstStage = CreateStage(new CppCodeGenerator(), new MockCMakeBuilder());
+            BuildStageResult firstResult = await firstStage.ExecuteAsync(context, CancellationToken.None);
+            string nativeLibraryPath = ExpectedNativeLibraryPath(context);
+            File.Delete(nativeLibraryPath);
+            MockCMakeBuilder secondCMakeBuilder = new();
+            NativeBuildStage secondStage = CreateStage(new CppCodeGenerator(), secondCMakeBuilder);
+
+            BuildStageResult secondResult = await secondStage.ExecuteAsync(context, CancellationToken.None);
+
+            Assert.True(firstResult.Success);
+            Assert.True(secondResult.Success);
+            Assert.True(File.Exists(nativeLibraryPath));
+            Assert.Equal(1, secondCMakeBuilder.ConfigureCallCount);
+            Assert.Equal(1, secondCMakeBuilder.BuildCallCount);
+        }
+
+        [Fact]
         public async Task BP08_LibraryMode_SkipsNativeGenerationAndCMake()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(BP08_LibraryMode_SkipsNativeGenerationAndCMake));
