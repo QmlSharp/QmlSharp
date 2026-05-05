@@ -206,11 +206,44 @@ namespace QmlSharp.Build.Tests
             string qmlRelativePath = "qml/QmlSharp/MyApp/Counter View.qml";
             string assetRelativePath = "assets/images/app icon.png";
             Assert.Equal("managed/My App.dll", result.Manifest.ManagedAssembly);
-            Assert.True(result.Manifest.FileHashes.ContainsKey(qmlRelativePath));
+            Assert.True(result.Manifest.FileHashes.TryGetValue(qmlRelativePath, out string? qmlHash));
             Assert.True(result.Manifest.FileHashes.ContainsKey(assetRelativePath));
             Assert.Equal(
                 HashFile(Path.Join(context.OutputDir, "qml", "QmlSharp", "MyApp", "Counter View.qml")),
-                result.Manifest.FileHashes[qmlRelativePath]);
+                qmlHash);
+        }
+
+        [Fact]
+        public void ApplicationLayout_ManifestUsesEntryAssemblyArtifactWhenPublishOutputContainsDependencies()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(ApplicationLayout_ManifestUsesEntryAssemblyArtifactWhenPublishOutputContainsDependencies));
+            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
+            ProductLayout layout = new();
+            FixtureArtifacts fixture = CreateFixtureArtifacts(
+                project.Path,
+                assemblyName: "ZzzApp.dll",
+                dependencyAssemblyName: "A.Dependency.dll");
+
+            ProductAssemblyResult result = layout.Assemble(context, fixture.Artifacts);
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Manifest);
+            Assert.Equal("managed/ZzzApp.dll", result.Manifest.ManagedAssembly);
+        }
+
+        [Fact]
+        public async Task BP11_OutputAssemblyStage_ManifestUsesProjectAssemblyWhenManagedDirectoryContainsDependencyDlls()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(BP11_OutputAssemblyStage_ManifestUsesProjectAssemblyWhenManagedDirectoryContainsDependencyDlls));
+            BuildContext context = BuildTestFixtures.CreateDefaultContext(project.Path);
+            _ = CreateStageInputs(context, dependencyAssemblyName: "A.Dependency.dll");
+            OutputAssemblyBuildStage stage = new();
+
+            BuildStageResult result = await stage.ExecuteAsync(context, CancellationToken.None);
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Manifest);
+            Assert.Equal("managed/MyApp.dll", result.Manifest.ManagedAssembly);
         }
 
         [Fact]
@@ -248,6 +281,7 @@ namespace QmlSharp.Build.Tests
             bool includeManaged = true,
             bool includeSpaces = false,
             string assemblyName = "MyApp.dll",
+            string? dependencyAssemblyName = null,
             string eventBindingsJson = "{\"commands\":[],\"effects\":[]}")
         {
             string artifactRoot = Path.Join(projectDir, "artifact inputs");
@@ -278,6 +312,10 @@ namespace QmlSharp.Build.Tests
             if (assemblyPath is not null)
             {
                 _ = WriteFile(Path.Join(artifactRoot, "publish output", "MyApp.deps.json"), "{}\n");
+                if (!string.IsNullOrWhiteSpace(dependencyAssemblyName))
+                {
+                    _ = WriteFile(Path.Join(artifactRoot, "publish output", dependencyAssemblyName), "dependency");
+                }
             }
 
             return new FixtureArtifacts(
@@ -295,9 +333,9 @@ namespace QmlSharp.Build.Tests
                 generatedPath);
         }
 
-        private static FixtureArtifacts CreateStageInputs(BuildContext context)
+        private static FixtureArtifacts CreateStageInputs(BuildContext context, string? dependencyAssemblyName = null)
         {
-            FixtureArtifacts fixture = CreateFixtureArtifacts(context.ProjectDir);
+            FixtureArtifacts fixture = CreateFixtureArtifacts(context.ProjectDir, dependencyAssemblyName: dependencyAssemblyName);
             ProductAssemblyResult result = new ProductLayout().Assemble(context, fixture.Artifacts);
             Assert.True(result.Success);
             File.Delete(Path.Join(context.OutputDir, "manifest.json"));

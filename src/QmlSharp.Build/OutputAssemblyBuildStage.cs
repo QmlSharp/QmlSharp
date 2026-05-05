@@ -28,7 +28,7 @@ namespace QmlSharp.Build
                 return Task.FromResult(BuildStageResult.Succeeded());
             }
 
-            BuildArtifacts discoveredArtifacts = DiscoverArtifacts(context.OutputDir);
+            BuildArtifacts discoveredArtifacts = DiscoverArtifacts(context.OutputDir, context);
             if (!HasProductInputs(discoveredArtifacts))
             {
                 return Task.FromResult(BuildStageResult.Succeeded());
@@ -47,11 +47,11 @@ namespace QmlSharp.Build
 
             string productRoot = ProductLayout.GetProductRoot(context);
             return Task.FromResult(BuildStageResult.Succeeded(
-                artifacts: DiscoverArtifacts(productRoot),
+                artifacts: DiscoverArtifacts(productRoot, context),
                 manifest: assemblyResult.Manifest));
         }
 
-        private static BuildArtifacts DiscoverArtifacts(string outputRoot)
+        private static BuildArtifacts DiscoverArtifacts(string outputRoot, BuildContext context)
         {
             string root = Path.GetFullPath(outputRoot);
             string qmlRoot = Path.Join(root, "qml");
@@ -71,13 +71,27 @@ namespace QmlSharp.Build
                 ModuleMetadataFiles = EnumerateModuleMetadataFiles(qmlRoot),
                 AssetFiles = EnumerateFiles(assetsRoot, "*"),
                 NativeLibraryPath = File.Exists(nativePath) ? nativePath : null,
-                AssemblyPath = Directory.Exists(managedRoot)
-                    ? Directory
-                        .EnumerateFiles(managedRoot, "*.dll", SearchOption.TopDirectoryOnly)
-                        .OrderBy(static path => path, StringComparer.Ordinal)
-                        .FirstOrDefault()
-                    : null,
+                AssemblyPath = DiscoverManagedAssembly(managedRoot, context),
             };
+        }
+
+        private static string? DiscoverManagedAssembly(string managedRoot, BuildContext context)
+        {
+            if (!Directory.Exists(managedRoot))
+            {
+                return null;
+            }
+
+            string projectAssemblyPath = Path.Join(managedRoot, ProjectName(context) + ".dll");
+            if (File.Exists(projectAssemblyPath))
+            {
+                return projectAssemblyPath;
+            }
+
+            return Directory
+                .EnumerateFiles(managedRoot, "*.dll", SearchOption.TopDirectoryOnly)
+                .OrderBy(static path => path, StringComparer.Ordinal)
+                .FirstOrDefault();
         }
 
         private static bool HasProductInputs(BuildArtifacts artifacts)
@@ -102,6 +116,11 @@ namespace QmlSharp.Build
                 .EnumerateFiles(root, pattern, SearchOption.AllDirectories)
                 .OrderBy(static path => path, StringComparer.Ordinal)
                 .ToImmutableArray();
+        }
+
+        private static string ProjectName(BuildContext context)
+        {
+            return context.Config.Name ?? context.Config.Module.Prefix;
         }
 
         private static ImmutableArray<string> EnumerateModuleMetadataFiles(string qmlRoot)

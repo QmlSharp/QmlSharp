@@ -107,6 +107,7 @@ namespace QmlSharp.Build
                 ref totalBytes);
             ProductManifest? manifest = WriteApplicationManifestIfPossible(
                 context,
+                artifacts,
                 outputRoot,
                 diagnostics,
                 outputFiles,
@@ -263,6 +264,7 @@ namespace QmlSharp.Build
 
         private static ProductManifest? WriteApplicationManifestIfPossible(
             BuildContext context,
+            BuildArtifacts artifacts,
             string outputRoot,
             ImmutableArray<BuildDiagnostic>.Builder diagnostics,
             ImmutableArray<string>.Builder outputFiles,
@@ -275,8 +277,7 @@ namespace QmlSharp.Build
 
             try
             {
-                BuildArtifacts assembledArtifacts = DiscoverOutputArtifacts(outputRoot);
-                ProductManifest manifest = CreateProductManifest(outputRoot, assembledArtifacts, context);
+                ProductManifest manifest = CreateProductManifest(outputRoot, artifacts, context);
                 string manifestPath = Path.Join(outputRoot, ManifestFileName);
                 File.WriteAllText(manifestPath, SerializeManifest(manifest), Utf8NoBom);
                 AddOutputFile(manifestPath, outputFiles, ref totalBytes);
@@ -906,14 +907,23 @@ namespace QmlSharp.Build
             BuildContext context)
         {
             string managedRoot = Path.Join(outputRoot, "managed");
-            string? managedAssembly = Directory.Exists(managedRoot)
-                ? Directory
-                    .EnumerateFiles(managedRoot, "*.dll", SearchOption.TopDirectoryOnly)
-                    .OrderBy(static path => path, StringComparer.Ordinal)
-                    .FirstOrDefault()
-                : null;
-            string fallback = Path.Join(managedRoot, Path.GetFileName(artifacts.AssemblyPath ?? (ProjectName(context) + ".dll")));
-            return ToPortablePath(Path.GetRelativePath(outputRoot, managedAssembly ?? fallback));
+            string projectAssemblyPath = Path.Join(managedRoot, ProjectName(context) + ".dll");
+            string? artifactAssemblyPath = ResolveArtifactManagedAssemblyPath(managedRoot, artifacts.AssemblyPath);
+            string fallback = Path.Join(managedRoot, Path.GetFileName(artifacts.AssemblyPath ?? projectAssemblyPath));
+            string managedAssembly = artifactAssemblyPath ??
+                (File.Exists(projectAssemblyPath) ? projectAssemblyPath : fallback);
+            return ToPortablePath(Path.GetRelativePath(outputRoot, managedAssembly));
+        }
+
+        private static string? ResolveArtifactManagedAssemblyPath(string managedRoot, string? assemblyPath)
+        {
+            if (string.IsNullOrWhiteSpace(assemblyPath))
+            {
+                return null;
+            }
+
+            string candidate = Path.Join(managedRoot, Path.GetFileName(assemblyPath));
+            return File.Exists(candidate) ? candidate : null;
         }
 
         private static string GetApplicationRoot(BuildContext context)
@@ -936,15 +946,10 @@ namespace QmlSharp.Build
             string[] segments = qtDir.Split(
                 new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
                 StringSplitOptions.RemoveEmptyEntries);
-            foreach (string segment in segments)
-            {
-                if (Version.TryParse(segment, out Version? version))
-                {
-                    return version.ToString();
-                }
-            }
-
-            return "unknown";
+            return segments
+                .Where(static segment => Version.TryParse(segment, out _))
+                .Select(static segment => Version.Parse(segment).ToString())
+                .FirstOrDefault() ?? "unknown";
         }
 
         private static string GetQmlRelativePath(BuildContext context, string sourcePath)
