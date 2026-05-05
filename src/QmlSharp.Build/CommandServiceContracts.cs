@@ -2,7 +2,7 @@
 
 namespace QmlSharp.Build
 {
-    /// <summary>Service used by the init command shell before templates are implemented.</summary>
+    /// <summary>Service used by the init command shell.</summary>
     public interface IInitService
     {
         /// <summary>Runs the init command service.</summary>
@@ -11,7 +11,7 @@ namespace QmlSharp.Build
             CancellationToken cancellationToken = default);
     }
 
-    /// <summary>Service used by the clean command shell before real clean behavior is implemented.</summary>
+    /// <summary>Service used by the clean command shell.</summary>
     public interface ICleanService
     {
         /// <summary>Runs the clean command service.</summary>
@@ -120,45 +120,31 @@ namespace QmlSharp.Build
         }
     }
 
-    /// <summary>Mock shell init service used until Step 08.11 implements templates.</summary>
+    /// <summary>Compatibility wrapper for the default filesystem-backed init service.</summary>
     public sealed class CommandShellInitService : IInitService
     {
+        private readonly InitService _inner = new();
+
         /// <inheritdoc />
         public Task<CommandServiceResult> InitAsync(
             InitCommandOptions options,
             CancellationToken cancellationToken = default)
         {
-            ArgumentNullException.ThrowIfNull(options);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (Directory.Exists(options.TargetDir) &&
-                Directory.EnumerateFileSystemEntries(options.TargetDir).Any())
-            {
-                BuildDiagnostic diagnostic = CommandDiagnostics.CreateCommandDiagnostic(
-                    "targetDir",
-                    $"Target directory '{options.TargetDir}' is not empty.");
-                return Task.FromResult(CommandServiceResult.Failed(
-                    CommandResultStatus.ConfigOrCommandError,
-                    diagnostic.Message,
-                    ImmutableArray.Create(diagnostic)));
-            }
-
-            return Task.FromResult(CommandServiceResult.Succeeded("Init command shell completed."));
+            return _inner.InitAsync(options, cancellationToken);
         }
     }
 
-    /// <summary>Mock shell clean service used until Step 08.11 implements artifact deletion.</summary>
+    /// <summary>Compatibility wrapper for the default filesystem-backed clean service.</summary>
     public sealed class CommandShellCleanService : ICleanService
     {
+        private readonly CleanService _inner = new();
+
         /// <inheritdoc />
         public Task<CommandServiceResult> CleanAsync(
             CleanCommandOptions options,
             CancellationToken cancellationToken = default)
         {
-            ArgumentNullException.ThrowIfNull(options);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            return Task.FromResult(CommandServiceResult.Succeeded("Clean command shell completed."));
+            return _inner.CleanAsync(options, cancellationToken);
         }
     }
 

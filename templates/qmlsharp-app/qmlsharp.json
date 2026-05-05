@@ -1,0 +1,34 @@
+{
+  "entry": "./src/Program.cs",
+  "outDir": "./dist",
+  "qt": {
+    "dir": null,
+    "modules": ["QtQuick", "QtQuick.Controls"]
+  },
+  "build": {
+    "aot": false,
+    "lint": true,
+    "format": true,
+    "sourceMaps": true,
+    "incremental": true,
+    "mode": "development"
+  },
+  "native": {
+    "prebuilt": false,
+    "cmakePreset": "default"
+  },
+  "dev": {
+    "hotReload": true,
+    "watchPaths": ["./src"],
+    "debounceMs": 200
+  },
+  "module": {
+    "prefix": "QmlSharp.{{ProjectName}}",
+    "version": {
+      "major": 1,
+      "minor": 0
+    }
+  },
+  "name": "{{ProjectName}}",
+  "version": "0.1.0"
+}

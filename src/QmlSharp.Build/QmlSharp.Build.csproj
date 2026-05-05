@@ -9,4 +9,9 @@
     <ProjectReference Include="..\QmlSharp.Host\QmlSharp.Host.csproj" />
     <ProjectReference Include="..\QmlSharp.Qt.Tools\QmlSharp.Qt.Tools.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\templates\qmlsharp-app\**\*.*" LinkBase="templates\qmlsharp-app" CopyToOutputDirectory="PreserveNewest" Pack="true" PackagePath="templates\qmlsharp-app\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Content Include="..\..\templates\qmlsharp-library\**\*.*" LinkBase="templates\qmlsharp-library" CopyToOutputDirectory="PreserveNewest" Pack="true" PackagePath="templates\qmlsharp-library\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

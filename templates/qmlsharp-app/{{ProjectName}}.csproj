@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>{{RootNamespace}}</RootNamespace>
+    <QmlSharpRepoRoot>{{QmlSharpRepoRoot}}</QmlSharpRepoRoot>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(QmlSharpRepoRoot)' != ''">
+    <ProjectReference Include="$(QmlSharpRepoRoot)/src/QmlSharp.Core/QmlSharp.Core.csproj" />
+    <ProjectReference Include="$(QmlSharpRepoRoot)/src/QmlSharp.Dsl/QmlSharp.Dsl.csproj" />
+    <ProjectReference Include="$(QmlSharpRepoRoot)/src/QmlSharp.Host/QmlSharp.Host.csproj" />
+  </ItemGroup>
+</Project>

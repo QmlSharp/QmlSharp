@@ -32,8 +32,8 @@ namespace QmlSharp.Cli
                 BuildPipeline = new BuildPipeline(),
                 DevSession = new CommandShellDevSession(),
                 Doctor = new CommandShellDoctor(),
-                InitService = new CommandShellInitService(),
-                CleanService = new CommandShellCleanService(),
+                InitService = new InitService(),
+                CleanService = new CleanService(),
             };
         }
     }
