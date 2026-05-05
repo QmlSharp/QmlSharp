@@ -37,23 +37,24 @@ namespace QmlSharp.Integration.Tests.Fixtures
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(fixtureName);
 
+            string safeFixtureName = NormalizeFixtureName(fixtureName);
             string repositoryRoot = FindRepositoryRoot();
-            string sourceDirectory = Path.Join(repositoryRoot, "tests", "fixtures", "projects", fixtureName);
+            string sourceDirectory = Path.Join(repositoryRoot, "tests", "fixtures", "projects", safeFixtureName);
             if (!Directory.Exists(sourceDirectory))
             {
-                throw new DirectoryNotFoundException($"Fixture project '{fixtureName}' was not found at '{sourceDirectory}'.");
+                throw new DirectoryNotFoundException($"Fixture project '{safeFixtureName}' was not found at '{sourceDirectory}'.");
             }
 
             string qtDir = RequireQtDir();
-            string tempRoot = Path.Combine(
+            string tempRoot = Path.Join(
                 Path.GetTempPath(),
                 "qmlsharp-step08-14",
-                fixtureName + "-" + Guid.NewGuid().ToString("N"));
+                safeFixtureName + "-" + Guid.NewGuid().ToString("N"));
             CopyDirectory(sourceDirectory, tempRoot);
             ReplaceQtDirToken(tempRoot, qtDir);
             WriteRepositoryRootProps(tempRoot, repositoryRoot);
 
-            return new BuildFixtureProject(fixtureName, sourceDirectory, tempRoot, repositoryRoot, qtDir);
+            return new BuildFixtureProject(safeFixtureName, sourceDirectory, tempRoot, repositoryRoot, qtDir);
         }
 
         public void Dispose()
@@ -63,7 +64,7 @@ namespace QmlSharp.Integration.Tests.Fixtures
                 return;
             }
 
-            string tempRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "qmlsharp-step08-14"));
+            string tempRoot = Path.GetFullPath(Path.Join(Path.GetTempPath(), "qmlsharp-step08-14"));
             string projectRoot = Path.GetFullPath(ProjectDirectory);
             string rootPrefix = tempRoot.EndsWith(Path.DirectorySeparatorChar)
                 ? tempRoot
@@ -74,6 +75,21 @@ namespace QmlSharp.Integration.Tests.Fixtures
             }
 
             Directory.Delete(projectRoot, recursive: true);
+        }
+
+        private static string NormalizeFixtureName(string fixtureName)
+        {
+            string safeFixtureName = Path.GetFileName(fixtureName);
+            if (string.IsNullOrWhiteSpace(safeFixtureName) ||
+                Path.IsPathRooted(fixtureName) ||
+                !string.Equals(fixtureName, safeFixtureName, StringComparison.Ordinal) ||
+                safeFixtureName.Contains('/') ||
+                safeFixtureName.Contains('\\'))
+            {
+                throw new ArgumentException("Fixture name must be a simple directory name.", nameof(fixtureName));
+            }
+
+            return safeFixtureName;
         }
 
         private static void CopyDirectory(string sourceDirectory, string destinationDirectory)

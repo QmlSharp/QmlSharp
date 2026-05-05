@@ -418,6 +418,10 @@ namespace QmlSharp.Integration.Tests
                     environment["CC"] = compilerPath;
                     environment["CXX"] = compilerPath;
                 }
+                else
+                {
+                    SetNonWindowsCompilerEnvironment(environment);
+                }
             }
 
             string nativeDirectory = Path.Join(context.OutputDir, "native");
@@ -509,6 +513,19 @@ namespace QmlSharp.Integration.Tests
                 ?? "cl";
         }
 
+        private static void SetNonWindowsCompilerEnvironment(ImmutableDictionary<string, string>.Builder environment)
+        {
+            string? cLanguageCompiler = Environment.GetEnvironmentVariable("CC") ?? FindExecutableOnPath("clang");
+            string? cxxCompiler = Environment.GetEnvironmentVariable("CXX") ?? FindExecutableOnPath("clang++");
+            if (cLanguageCompiler is null || cxxCompiler is null)
+            {
+                return;
+            }
+
+            environment["CC"] = cLanguageCompiler;
+            environment["CXX"] = cxxCompiler;
+        }
+
         private static string? FindVisualStudioClCompilerPath()
         {
             string? vcToolsInstallDir = Environment.GetEnvironmentVariable("VCToolsInstallDir");
@@ -598,18 +615,10 @@ namespace QmlSharp.Integration.Tests
                 return null;
             }
 
-            foreach (string directory in pathValue.Split(
-                         Path.PathSeparator,
-                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                string candidatePath = Path.Join(directory, fileName);
-                if (File.Exists(candidatePath))
-                {
-                    return candidatePath;
-                }
-            }
-
-            return null;
+            return pathValue
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(directory => Path.Join(directory, fileName))
+                .FirstOrDefault(File.Exists);
         }
 
         private static string ComputeSha256(string filePath)
