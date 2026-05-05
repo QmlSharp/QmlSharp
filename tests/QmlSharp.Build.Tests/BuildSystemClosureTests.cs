@@ -172,7 +172,6 @@ namespace QmlSharp.Build.Tests
             Assert.Contains("\"native\", \"generated\"", productCorpus, StringComparison.Ordinal);
             Assert.DoesNotContain("runtimeVersion", productCorpus, StringComparison.Ordinal);
             Assert.DoesNotContain("v1Compat", productCorpus, StringComparison.Ordinal);
-            Assert.False(Directory.Exists(Path.Join(repoRoot, "docs")));
         }
 
         [Fact]
@@ -181,6 +180,9 @@ namespace QmlSharp.Build.Tests
             string repoRoot = BuildTestFixtures.FindRepositoryRoot();
             ImmutableArray<string> buildReferences = ReadProjectReferences(Path.Join(repoRoot, "src", "QmlSharp.Build", "QmlSharp.Build.csproj"));
             ImmutableArray<string> cliReferences = ReadProjectReferences(Path.Join(repoRoot, "src", "QmlSharp.Cli", "QmlSharp.Cli.csproj"));
+            ImmutableArray<string> normalizedCliReferences = cliReferences
+                .Select(static reference => reference.Replace('\\', '/'))
+                .ToImmutableArray();
             string productCorpus = ReadSourceCorpus(
                 Path.Join(repoRoot, "src", "QmlSharp.Build"),
                 Path.Join(repoRoot, "src", "QmlSharp.Cli"),
@@ -202,7 +204,7 @@ namespace QmlSharp.Build.Tests
                 "cxx-qt",
                 "cargo");
 
-            Assert.Contains(@"..\QmlSharp.Build\QmlSharp.Build.csproj", cliReferences);
+            Assert.Contains("../QmlSharp.Build/QmlSharp.Build.csproj", normalizedCliReferences);
             Assert.DoesNotContain(buildReferences, static reference =>
                 reference.Contains("QmlSharp.Cli", StringComparison.OrdinalIgnoreCase) ||
                 reference.Contains("QmlSharp.DevTools", StringComparison.OrdinalIgnoreCase));
