@@ -39,6 +39,7 @@ namespace QmlSharp.Build.Tests
                 "MyApp",
                 "1.0.0",
                 "development",
+                DateTimeOffset.UnixEpoch,
                 "6.11.0",
                 Environment.Version.ToString(),
                 ImmutableArray.Create("QmlSharp.MyApp"),
@@ -55,11 +56,12 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
-        public void ProductManifest_DoesNotExposeWallClockTimestamp()
+        public void ProductManifest_ExposesApprovedBuildTimestamp()
         {
-            Assert.DoesNotContain(
+            Assert.Contains(
                 typeof(ProductManifest).GetProperties(),
-                static property => property.PropertyType == typeof(DateTimeOffset));
+                static property => property.Name == nameof(ProductManifest.BuildTimestamp) &&
+                    property.PropertyType == typeof(DateTimeOffset));
         }
 
         [Fact]
