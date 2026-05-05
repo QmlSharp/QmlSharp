@@ -179,6 +179,116 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
+        public async Task InitialBuildFailure_NextSuccessfulChangeStartsHostInsteadOfReloading()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("dev-host-start-after-error");
+            string sourceFile = Path.Join(project.Path, "src", "CounterViewModel.cs");
+            File.WriteAllText(sourceFile, "public sealed class CounterViewModel {}\n");
+            BuildDiagnostic diagnostic = new(
+                BuildDiagnosticCode.CompilationFailed,
+                BuildDiagnosticSeverity.Error,
+                "Compilation failed.",
+                BuildPhase.CSharpCompilation,
+                sourceFile);
+            RecordingBuildPipeline pipeline = new(
+                CreateFailedBuildResult(diagnostic),
+                CreateSuccessfulBuildResult());
+            ManualWatcherFactory watcherFactory = new();
+            ManualDebouncerFactory debouncerFactory = new();
+            RecordingDevHostHook hostHook = new();
+            await using DevSession session = CreateSession(
+                CreateConfig(project.Path),
+                pipeline,
+                watcherFactory,
+                debouncerFactory,
+                hostHook);
+            Task startTask = session.StartAsync(new DevCommandOptions { ProjectDir = project.Path });
+
+            Assert.Equal(DevSessionState.Error, session.State);
+            Assert.Equal(0, hostHook.StartCallCount);
+            Assert.Equal(0, hostHook.ReloadCallCount);
+
+            watcherFactory.Watchers[0].RaiseChanged(sourceFile);
+            await debouncerFactory.LastDebouncer.FlushAsync();
+
+            Assert.Equal(2, pipeline.BuildCallCount);
+            Assert.Equal(DevSessionState.Running, session.State);
+            Assert.Equal(1, hostHook.StartCallCount);
+            Assert.Equal(0, hostHook.ReloadCallCount);
+
+            await StopSessionAsync(session, startTask);
+        }
+
+        [Fact]
+        public async Task WatcherError_SchedulesFullRebuildWithoutChangedFiles()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("dev-watcher-error");
+            RecordingBuildPipeline pipeline = new(
+                CreateSuccessfulBuildResult(),
+                CreateSuccessfulBuildResult());
+            ManualWatcherFactory watcherFactory = new();
+            ManualDebouncerFactory debouncerFactory = new();
+            RecordingDevHostHook hostHook = new();
+            await using DevSession session = CreateSession(
+                CreateConfig(project.Path),
+                pipeline,
+                watcherFactory,
+                debouncerFactory,
+                hostHook);
+            Task startTask = session.StartAsync(new DevCommandOptions { ProjectDir = project.Path });
+
+            watcherFactory.Watchers[0].RaiseError(new InternalBufferOverflowException("Watcher overflow."));
+            await debouncerFactory.LastDebouncer.FlushAsync();
+
+            Assert.Equal(2, pipeline.BuildCallCount);
+            Assert.Equal(1, debouncerFactory.LastDebouncer.RunCount);
+            Assert.Equal(DevSessionState.Running, session.State);
+            Assert.Equal(1, hostHook.ReloadCallCount);
+            Assert.Empty(hostHook.LastReloadRequest?.ChangedFiles ?? ImmutableArray<string>.Empty);
+
+            await StopSessionAsync(session, startTask);
+        }
+
+        [Fact]
+        public async Task HostHookIOException_KeepsSessionRecoverable()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("dev-host-io-recovery");
+            string sourceFile = Path.Join(project.Path, "src", "CounterViewModel.cs");
+            File.WriteAllText(sourceFile, "public sealed class CounterViewModel {}\n");
+            RecordingBuildPipeline pipeline = new(
+                CreateSuccessfulBuildResult(),
+                CreateSuccessfulBuildResult());
+            ManualWatcherFactory watcherFactory = new();
+            ManualDebouncerFactory debouncerFactory = new();
+            RecordingDevHostHook hostHook = new()
+            {
+                StartException = new IOException("Host start failed."),
+            };
+            await using DevSession session = CreateSession(
+                CreateConfig(project.Path),
+                pipeline,
+                watcherFactory,
+                debouncerFactory,
+                hostHook);
+            Task startTask = session.StartAsync(new DevCommandOptions { ProjectDir = project.Path });
+
+            Assert.Equal(DevSessionState.Error, session.State);
+            Assert.Equal(1, hostHook.StartCallCount);
+            Assert.Equal(0, hostHook.ReloadCallCount);
+
+            hostHook.StartException = null;
+            watcherFactory.Watchers[0].RaiseChanged(sourceFile);
+            await debouncerFactory.LastDebouncer.FlushAsync();
+
+            Assert.Equal(2, pipeline.BuildCallCount);
+            Assert.Equal(DevSessionState.Running, session.State);
+            Assert.Equal(2, hostHook.StartCallCount);
+            Assert.Equal(0, hostHook.ReloadCallCount);
+
+            await StopSessionAsync(session, startTask);
+        }
+
+        [Fact]
         public async Task DC06_Cancellation_DisposesWatchersAndStopsSession()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject("dc06-cancellation");
@@ -297,7 +407,7 @@ namespace QmlSharp.Build.Tests
                 return config;
             }
 
-            public ImmutableArray<ConfigDiagnostic> Validate(QmlSharpConfig config)
+            public ImmutableArray<ConfigDiagnostic> Validate(QmlSharpConfig inputConfig)
             {
                 return ImmutableArray<ConfigDiagnostic>.Empty;
             }
@@ -371,6 +481,8 @@ namespace QmlSharp.Build.Tests
 
             public event EventHandler<DevFileChangedEventArgs>? Changed;
 
+            public event EventHandler<DevFileWatcherErrorEventArgs>? Error;
+
             public string Path { get; }
 
             public bool Started { get; private set; }
@@ -385,6 +497,11 @@ namespace QmlSharp.Build.Tests
             public void RaiseChanged(string filePath)
             {
                 Changed?.Invoke(this, new DevFileChangedEventArgs(filePath));
+            }
+
+            public void RaiseError(Exception exception)
+            {
+                Error?.Invoke(this, new DevFileWatcherErrorEventArgs(exception));
             }
 
             public ValueTask DisposeAsync()
@@ -456,10 +573,17 @@ namespace QmlSharp.Build.Tests
 
             public DevHostReloadRequest? LastReloadRequest { get; private set; }
 
+            public IOException? StartException { get; set; }
+
             public Task StartAsync(DevHostStartRequest request, CancellationToken cancellationToken = default)
             {
                 StartCallCount++;
                 LastStartRequest = request;
+                if (StartException is not null)
+                {
+                    throw StartException;
+                }
+
                 return Task.CompletedTask;
             }
 

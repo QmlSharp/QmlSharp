@@ -25,6 +25,7 @@ namespace QmlSharp.Build
             ImmutableArray<Action<DevSessionState>>.Empty;
         private ImmutableHashSet<string> pendingChangedFiles =
             ImmutableHashSet.Create<string>(StringComparer.Ordinal);
+        private bool pendingFullRebuild;
         private ImmutableArray<IDevFileWatcher> watchers = ImmutableArray<IDevFileWatcher>.Empty;
         private DevSessionState state = DevSessionState.Stopped;
         private CancellationTokenSource? sessionCancellation;
@@ -35,6 +36,7 @@ namespace QmlSharp.Build
         private bool disposed;
         private bool started;
         private bool hostDisposed;
+        private bool hostStarted;
 
         /// <summary>Create a dev session with default filesystem watchers and no-op host hook.</summary>
         public DevSession(IConfigLoader configLoader, IBuildPipeline buildPipeline)
@@ -98,6 +100,8 @@ namespace QmlSharp.Build
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
+                // Session-owned cancellation is the normal stop path; caller cancellation is handled below.
+                _ = linkedCancellation;
             }
             catch (OperationCanceledException)
             {
@@ -197,6 +201,8 @@ namespace QmlSharp.Build
             }
             catch (ObjectDisposedException)
             {
+                // A concurrent stop can dispose the linked source before DisposeAsync observes it.
+                _ = cancellationToCancel;
             }
 
             await DisposeResourcesAsync().ConfigureAwait(false);
@@ -286,6 +292,7 @@ namespace QmlSharp.Build
             foreach (IDevFileWatcher watcher in createdWatchers)
             {
                 watcher.Changed += OnWatcherChanged;
+                watcher.Error += OnWatcherError;
                 watcher.Start();
             }
 
@@ -317,10 +324,28 @@ namespace QmlSharp.Build
             currentDebouncer.Schedule(ProcessDebouncedChangesAsync);
         }
 
+        private void OnWatcherError(object? sender, DevFileWatcherErrorEventArgs args)
+        {
+            ArgumentNullException.ThrowIfNull(args);
+            IDevDebouncer? currentDebouncer = debouncer;
+            CancellationTokenSource? currentCancellation = sessionCancellation;
+            if (currentDebouncer is null || currentCancellation is null)
+            {
+                return;
+            }
+
+            lock (pendingFileLock)
+            {
+                pendingFullRebuild = true;
+            }
+
+            currentDebouncer.Schedule(ProcessDebouncedChangesAsync);
+        }
+
         private async Task ProcessDebouncedChangesAsync(CancellationToken cancellationToken)
         {
-            ImmutableArray<string> changedFiles = TakePendingChangedFiles();
-            if (changedFiles.IsDefaultOrEmpty)
+            (bool rebuildRequested, ImmutableArray<string> changedFiles) = TakePendingChanges();
+            if (!rebuildRequested)
             {
                 return;
             }
@@ -331,15 +356,17 @@ namespace QmlSharp.Build
             _ = await RebuildAsync(changedFiles, linkedCancellation.Token).ConfigureAwait(false);
         }
 
-        private ImmutableArray<string> TakePendingChangedFiles()
+        private (bool RebuildRequested, ImmutableArray<string> ChangedFiles) TakePendingChanges()
         {
             lock (pendingFileLock)
             {
                 ImmutableArray<string> changedFiles = pendingChangedFiles
                     .OrderBy(static path => path, StringComparer.Ordinal)
                     .ToImmutableArray();
+                bool rebuildRequested = pendingFullRebuild || !changedFiles.IsDefaultOrEmpty;
                 pendingChangedFiles = pendingChangedFiles.Clear();
-                return changedFiles;
+                pendingFullRebuild = false;
+                return (rebuildRequested, changedFiles);
             }
         }
 
@@ -389,7 +416,6 @@ namespace QmlSharp.Build
                 if (result.Success)
                 {
                     bool hostSucceeded = await ApplyHostHookAsync(
-                        isInitialBuild,
                         result,
                         changedFiles,
                         options,
@@ -421,7 +447,7 @@ namespace QmlSharp.Build
             {
                 throw;
             }
-            catch (Exception exception)
+            catch (Exception exception) when (!IsFatalException(exception))
             {
                 BuildDiagnostic diagnostic = new(
                     BuildDiagnosticCode.InternalError,
@@ -442,8 +468,16 @@ namespace QmlSharp.Build
             }
         }
 
+        private static bool IsFatalException(Exception exception)
+        {
+            return exception is OutOfMemoryException or
+                StackOverflowException or
+                AccessViolationException or
+                AppDomainUnloadedException or
+                BadImageFormatException;
+        }
+
         private async Task<bool> ApplyHostHookAsync(
-            bool isInitialBuild,
             BuildResult result,
             ImmutableArray<string> changedFiles,
             DevCommandOptions options,
@@ -458,11 +492,12 @@ namespace QmlSharp.Build
 
             try
             {
-                if (isInitialBuild)
+                if (!hostStarted)
                 {
                     await hostHook.StartAsync(
                         new DevHostStartRequest(options, context.ProjectDir, context.OutputDir, effectiveEntry, result),
                         cancellationToken).ConfigureAwait(false);
+                    hostStarted = true;
                     return true;
                 }
 
@@ -486,7 +521,7 @@ namespace QmlSharp.Build
             {
                 throw;
             }
-            catch (Exception)
+            catch (IOException)
             {
                 return false;
             }
@@ -545,10 +580,12 @@ namespace QmlSharp.Build
             watchers = ImmutableArray<IDevFileWatcher>.Empty;
             debouncer = null;
             hostDisposed = true;
+            hostStarted = false;
 
             foreach (IDevFileWatcher watcher in watchersToDispose)
             {
                 watcher.Changed -= OnWatcherChanged;
+                watcher.Error -= OnWatcherError;
                 await watcher.DisposeAsync().ConfigureAwait(false);
             }
 
@@ -617,6 +654,8 @@ namespace QmlSharp.Build
     {
         event EventHandler<DevFileChangedEventArgs>? Changed;
 
+        event EventHandler<DevFileWatcherErrorEventArgs>? Error;
+
         void Start();
     }
 
@@ -634,6 +673,17 @@ namespace QmlSharp.Build
         }
 
         public string FullPath { get; }
+    }
+
+    internal sealed class DevFileWatcherErrorEventArgs : EventArgs
+    {
+        public DevFileWatcherErrorEventArgs(Exception exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            Exception = exception;
+        }
+
+        public Exception Exception { get; }
     }
 
     internal interface IDevDebouncer : IAsyncDisposable
@@ -679,9 +729,12 @@ namespace QmlSharp.Build
             watcher.Created += OnChanged;
             watcher.Deleted += OnChanged;
             watcher.Renamed += OnRenamed;
+            watcher.Error += OnError;
         }
 
         public event EventHandler<DevFileChangedEventArgs>? Changed;
+
+        public event EventHandler<DevFileWatcherErrorEventArgs>? Error;
 
         public void Start()
         {
@@ -695,6 +748,7 @@ namespace QmlSharp.Build
             watcher.Created -= OnChanged;
             watcher.Deleted -= OnChanged;
             watcher.Renamed -= OnRenamed;
+            watcher.Error -= OnError;
             watcher.Dispose();
             return ValueTask.CompletedTask;
         }
@@ -707,6 +761,11 @@ namespace QmlSharp.Build
         private void OnRenamed(object? _, RenamedEventArgs args)
         {
             Changed?.Invoke(this, new DevFileChangedEventArgs(args.FullPath));
+        }
+
+        private void OnError(object? _, ErrorEventArgs args)
+        {
+            Error?.Invoke(this, new DevFileWatcherErrorEventArgs(args.GetException()));
         }
     }
 
@@ -788,6 +847,8 @@ namespace QmlSharp.Build
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                // Superseded debounce work is expected whenever a newer file event arrives.
+                _ = cancellationToken;
             }
         }
     }
