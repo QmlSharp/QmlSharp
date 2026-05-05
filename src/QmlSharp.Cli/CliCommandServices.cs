@@ -17,6 +17,9 @@ namespace QmlSharp.Cli
         /// <summary>Doctor service used by the doctor command.</summary>
         public required IDoctor Doctor { get; init; }
 
+        /// <summary>Optional factory for project-directory-aware doctor services.</summary>
+        public Func<string, IDoctor>? DoctorFactory { get; init; }
+
         /// <summary>Init service used by the init command.</summary>
         public required IInitService InitService { get; init; }
 
@@ -31,10 +34,18 @@ namespace QmlSharp.Cli
                 ConfigLoader = new ConfigLoader(),
                 BuildPipeline = new BuildPipeline(),
                 DevSession = new CommandShellDevSession(),
-                Doctor = new CommandShellDoctor(),
+                Doctor = new Doctor(),
+                DoctorFactory = static projectDir => new Doctor(projectDir),
                 InitService = new InitService(),
                 CleanService = new CleanService(),
             };
+        }
+
+        /// <summary>Creates a doctor for a parsed project directory.</summary>
+        public IDoctor CreateDoctor(string projectDir)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(projectDir);
+            return DoctorFactory is null ? Doctor : DoctorFactory(projectDir);
         }
     }
 }

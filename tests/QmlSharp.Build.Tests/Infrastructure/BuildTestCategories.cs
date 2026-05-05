@@ -7,6 +7,7 @@ namespace QmlSharp.Build.Tests.Infrastructure
         public const string Performance = "Performance";
         public const string RequiresQt = "RequiresQt";
         public const string RequiresCMake = "RequiresCMake";
+        public const string RequiresDotNet = "RequiresDotNet";
         public const string RequiresNative = "RequiresNative";
     }
 }

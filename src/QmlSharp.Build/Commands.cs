@@ -227,7 +227,9 @@ namespace QmlSharp.Build
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                ImmutableArray<DoctorCheckResult> checks = await _doctor.RunAllChecksAsync().ConfigureAwait(false);
+                ImmutableArray<DoctorCheckResult> checks = string.IsNullOrWhiteSpace(options.CheckId)
+                    ? await _doctor.RunAllChecksAsync().ConfigureAwait(false)
+                    : ImmutableArray.Create(await _doctor.RunCheckAsync(options.CheckId).ConfigureAwait(false));
                 ImmutableArray<DoctorCheckResult> failedChecks = checks
                     .Where(static check => check.Status == DoctorCheckStatus.Fail)
                     .ToImmutableArray();
@@ -242,6 +244,14 @@ namespace QmlSharp.Build
                         .Where(check => !fixedCheckIds.Contains(check.CheckId))
                         .ToImmutableArray();
                 }
+
+                HashSet<string> remainingFailedCheckIds = failedChecks
+                    .Select(static check => check.CheckId)
+                    .ToHashSet(StringComparer.Ordinal);
+                ImmutableArray<DoctorCheckResult> visibleChecks = checks
+                    .Where(check => check.Status != DoctorCheckStatus.Fail || remainingFailedCheckIds.Contains(check.CheckId))
+                    .ToImmutableArray();
+                WriteDoctorCheckLines(visibleChecks);
 
                 CommandServiceResult result = failedChecks.IsDefaultOrEmpty
                     ? CommandServiceResult.Succeeded("Doctor checks passed.")
@@ -259,6 +269,38 @@ namespace QmlSharp.Build
                     ImmutableArray<BuildDiagnostic>.Empty);
                 return CommandResultFormatter.WriteResult("doctor", result, _output, json: false);
             }
+        }
+
+        private void WriteDoctorCheckLines(ImmutableArray<DoctorCheckResult> checks)
+        {
+            foreach (DoctorCheckResult check in checks)
+            {
+                string line = $"{FormatStatus(check.Status)} {check.CheckId}: {check.Detail ?? check.Description}";
+                if (check.Status is DoctorCheckStatus.Fail or DoctorCheckStatus.Warning)
+                {
+                    _output.WriteErrorLine(line);
+                    if (!string.IsNullOrWhiteSpace(check.FixHint))
+                    {
+                        _output.WriteErrorLine($"hint {check.CheckId}: {check.FixHint}");
+                    }
+                }
+                else
+                {
+                    _output.WriteLine(line);
+                }
+            }
+        }
+
+        private static string FormatStatus(DoctorCheckStatus status)
+        {
+            return status switch
+            {
+                DoctorCheckStatus.Pass => "pass",
+                DoctorCheckStatus.Warning => "warning",
+                DoctorCheckStatus.Fail => "fail",
+                DoctorCheckStatus.Skipped => "skipped",
+                _ => "unknown",
+            };
         }
 
         private static ImmutableArray<BuildDiagnostic> CreateDoctorDiagnostics(

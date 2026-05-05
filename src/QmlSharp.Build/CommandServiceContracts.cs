@@ -71,52 +71,39 @@ namespace QmlSharp.Build
         }
     }
 
-    /// <summary>Mock shell doctor used until Step 08.12 implements real checks.</summary>
+    /// <summary>Compatibility wrapper for the default filesystem-backed doctor service.</summary>
     public sealed class CommandShellDoctor : IDoctor
     {
+        private readonly Doctor _inner;
+
+        /// <summary>Create a doctor for the current directory.</summary>
+        public CommandShellDoctor()
+            : this(null)
+        {
+        }
+
+        /// <summary>Create a doctor for a project directory.</summary>
+        public CommandShellDoctor(string? projectDir)
+        {
+            _inner = new Doctor(projectDir);
+        }
+
         /// <inheritdoc />
         public Task<ImmutableArray<DoctorCheckResult>> RunAllChecksAsync(QmlSharpConfig? config = null)
         {
-            ImmutableArray<DoctorCheckResult> checks = ImmutableArray.Create(
-                new DoctorCheckResult(
-                    DoctorCheckId.QtInstalled,
-                    "Qt SDK",
-                    DoctorCheckStatus.Pass,
-                    config?.Qt.Dir,
-                    null,
-                    false),
-                new DoctorCheckResult(
-                    DoctorCheckId.DotNetVersion,
-                    ".NET SDK",
-                    DoctorCheckStatus.Pass,
-                    Environment.Version.ToString(),
-                    null,
-                    false));
-            return Task.FromResult(checks);
+            return _inner.RunAllChecksAsync(config);
         }
 
         /// <inheritdoc />
         public Task<DoctorCheckResult> RunCheckAsync(string checkId)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(checkId);
-
-            DoctorCheckResult result = new(
-                checkId,
-                checkId,
-                DoctorCheckStatus.Pass,
-                null,
-                null,
-                false);
-            return Task.FromResult(result);
+            return _inner.RunCheckAsync(checkId);
         }
 
         /// <inheritdoc />
         public Task<ImmutableArray<DoctorFixResult>> AutoFixAsync(ImmutableArray<DoctorCheckResult> failedChecks)
         {
-            ImmutableArray<DoctorFixResult> fixes = failedChecks
-                .Select(static check => new DoctorFixResult(check.CheckId, false, "No command-shell fix is available."))
-                .ToImmutableArray();
-            return Task.FromResult(fixes);
+            return _inner.AutoFixAsync(failedChecks);
         }
     }
 
