@@ -14,9 +14,45 @@ namespace QmlSharp.Build
         /// <summary>Current session state.</summary>
         DevSessionState State { get; }
 
+        /// <summary>Most recent build result observed by the session.</summary>
+        BuildResult? LastBuild { get; }
+
         /// <summary>Registers a callback for build result notifications.</summary>
         void OnBuildComplete(Action<BuildResult> callback);
+
+        /// <summary>Registers a callback for state-change notifications.</summary>
+        void OnStateChanged(Action<DevSessionState> callback);
     }
+
+    /// <summary>Minimal host hook used by build-system dev sessions.</summary>
+    public interface IDevHostHook : IAsyncDisposable
+    {
+        /// <summary>Starts the host after a successful initial build.</summary>
+        Task StartAsync(DevHostStartRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Requests host hot reload after a successful rebuild.</summary>
+        Task ReloadAsync(DevHostReloadRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Stops the host hook.</summary>
+        Task StopAsync(CancellationToken cancellationToken = default);
+    }
+
+    /// <summary>Host start request created by the minimal dev session.</summary>
+    public sealed record DevHostStartRequest(
+        DevCommandOptions Options,
+        string ProjectDir,
+        string OutputDir,
+        string Entry,
+        BuildResult BuildResult);
+
+    /// <summary>Host hot reload request created by the minimal dev session.</summary>
+    public sealed record DevHostReloadRequest(
+        DevCommandOptions Options,
+        string ProjectDir,
+        string OutputDir,
+        string Entry,
+        ImmutableArray<string> ChangedFiles,
+        BuildResult BuildResult);
 
     /// <summary>Dev session state.</summary>
     public enum DevSessionState
