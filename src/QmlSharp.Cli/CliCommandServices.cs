@@ -29,11 +29,14 @@ namespace QmlSharp.Cli
         /// <summary>Creates default command services for the current build-system implementation wave.</summary>
         public static CliCommandServices CreateDefault()
         {
+            ConfigLoader configLoader = new();
+            BuildPipeline buildPipeline = new();
+
             return new CliCommandServices
             {
-                ConfigLoader = new ConfigLoader(),
-                BuildPipeline = new BuildPipeline(),
-                DevSession = new CommandShellDevSession(),
+                ConfigLoader = configLoader,
+                BuildPipeline = buildPipeline,
+                DevSession = new DevSession(configLoader, buildPipeline),
                 Doctor = new Doctor(),
                 DoctorFactory = static projectDir => new Doctor(projectDir),
                 InitService = new InitService(),

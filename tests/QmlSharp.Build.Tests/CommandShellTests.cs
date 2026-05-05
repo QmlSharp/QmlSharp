@@ -545,20 +545,28 @@ namespace QmlSharp.Build.Tests
 
             public DevSessionState State { get; private set; } = DevSessionState.Stopped;
 
+            public BuildResult? LastBuild { get; private set; }
+
             public Task StartAsync(DevCommandOptions options, CancellationToken cancellationToken = default)
             {
                 StartCallCount++;
                 LastOptions = options;
                 State = DevSessionState.Running;
+                LastBuild = CreateSuccessfulBuildResult();
                 return Task.CompletedTask;
             }
 
             public Task<BuildResult> RebuildAsync()
             {
-                return Task.FromResult(CreateSuccessfulBuildResult());
+                LastBuild = CreateSuccessfulBuildResult();
+                return Task.FromResult(LastBuild);
             }
 
             public void OnBuildComplete(Action<BuildResult> callback)
+            {
+            }
+
+            public void OnStateChanged(Action<DevSessionState> callback)
             {
             }
 
