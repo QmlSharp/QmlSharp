@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace QmlSharp.Build
 {
-    /// <summary>Deterministic fake-stage implementation of the build pipeline orchestrator.</summary>
+    /// <summary>Deterministic implementation of the build pipeline orchestrator.</summary>
     public sealed class BuildPipeline : IBuildPipeline
     {
         private static readonly ImmutableArray<BuildPhase> CanonicalPhases =
@@ -21,7 +21,7 @@ namespace QmlSharp.Build
         private ImmutableArray<Action<BuildProgress>> _progressCallbacks =
             ImmutableArray<Action<BuildProgress>>.Empty;
 
-        /// <summary>Create a pipeline with deterministic fake stages.</summary>
+        /// <summary>Create a pipeline with the current default stage implementations.</summary>
         public BuildPipeline()
             : this(FakeBuildStage.CreateDefaultStages())
         {
@@ -169,7 +169,7 @@ namespace QmlSharp.Build
                 BuildDiagnostic diagnostic = new(
                     BuildDiagnosticCode.InternalError,
                     BuildDiagnosticSeverity.Error,
-                    $"Build Stage {(int)phase} ({phase}) has no registered fake stage implementation.",
+                    $"Build Stage {(int)phase} ({phase}) has no registered stage implementation.",
                     phase,
                     null);
                 return new PhaseResult(phase, false, TimeSpan.Zero, ImmutableArray.Create(diagnostic));
