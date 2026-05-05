@@ -33,15 +33,9 @@ namespace QmlSharp.Build.Tests.Infrastructure
                 return false;
             }
 
-            foreach (string directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (GetCandidateNames(name).Any(candidateName => File.Exists(Path.Join(directory, candidateName))))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(directory => GetCandidateNames(name).Any(candidateName => File.Exists(Path.Join(directory, candidateName))))
+                .Any();
         }
 
         private static IEnumerable<string> GetCandidateNames(string name)

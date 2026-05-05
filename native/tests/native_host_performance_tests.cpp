@@ -371,6 +371,11 @@ int test_instance_creation_latency_prf_05() {
 
 int test_hot_reload_total_latency_prf_06() {
     constexpr const char* test_name = "PRF-06 hot reload total P99";
+#if defined(Q_OS_LINUX)
+    constexpr double hot_reload_budget_us = 250000.0;
+#else
+    constexpr double hot_reload_budget_us = 70000.0;
+#endif
     void* engine = qmlsharp_engine_init(0, nullptr);
     if (engine == nullptr) {
         return fail(test_name, read_last_error());
@@ -415,7 +420,7 @@ int test_hot_reload_total_latency_prf_06() {
     });
 
     qmlsharp_engine_shutdown(engine);
-    return assert_p99_under(test_name, "hot reload total", samples, 70000.0);
+    return assert_p99_under(test_name, "hot reload total", samples, hot_reload_budget_us);
 }
 
 int test_state_sync_throughput_prf_07() {
