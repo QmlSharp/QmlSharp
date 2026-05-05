@@ -117,7 +117,8 @@ namespace QmlSharp.Build.Tests
             DoctorCheckResult windowsClang = await windowsDoctor.RunCheckAsync(DoctorCheckId.ClangAvailable);
 
             Assert.Equal(DoctorCheckStatus.Pass, windowsMsvc.Status);
-            Assert.Equal(DoctorCheckStatus.Skipped, windowsClang.Status);
+            Assert.Equal(DoctorCheckStatus.Pass, windowsClang.Status);
+            Assert.Contains("clang", windowsClang.Detail, StringComparison.OrdinalIgnoreCase);
 
             using DoctorFixture linuxFixture = DoctorFixture.CreateHealthy(platform: PlatformTarget.LinuxX64);
             Doctor linuxDoctor = linuxFixture.CreateDoctor();
@@ -126,6 +127,32 @@ namespace QmlSharp.Build.Tests
 
             Assert.Equal(DoctorCheckStatus.Skipped, linuxMsvc.Status);
             Assert.Equal(DoctorCheckStatus.Pass, linuxClang.Status);
+        }
+
+        [Fact]
+        public async Task Doctor_WindowsClangCheckFailsWhenClangClIsMissing()
+        {
+            using DoctorFixture fixture = DoctorFixture.CreateHealthy(platform: PlatformTarget.WindowsX64);
+            fixture.Environment.RemoveExecutable("clang-cl");
+            Doctor doctor = fixture.CreateDoctor();
+
+            DoctorCheckResult result = await doctor.RunCheckAsync(DoctorCheckId.ClangAvailable);
+
+            Assert.Equal(DoctorCheckStatus.Fail, result.Status);
+            Assert.Contains("clang-cl", result.Detail, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task Doctor_CMakeAvailableFailsWhenVersionCommandExitsWithError()
+        {
+            using DoctorFixture fixture = DoctorFixture.CreateHealthy();
+            fixture.Environment.SetProcessResult("cmake", new DoctorProcessResult(true, 2, string.Empty, "cmake failed\n"));
+            Doctor doctor = fixture.CreateDoctor();
+
+            DoctorCheckResult result = await doctor.RunCheckAsync(DoctorCheckId.CMakeAvailable);
+
+            Assert.Equal(DoctorCheckStatus.Fail, result.Status);
+            Assert.Contains("cmake --version failed", result.Detail, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -276,6 +303,7 @@ namespace QmlSharp.Build.Tests
                 CreateExecutable(fakeBin, "cmake", target);
                 CreateExecutable(fakeBin, "ninja", target);
                 CreateExecutable(fakeBin, "cl", target);
+                CreateExecutable(fakeBin, "clang-cl", target);
                 CreateExecutable(fakeBin, "clang++", target);
                 WriteProject(project.Path, includeNuGetAssets);
 
@@ -300,6 +328,7 @@ namespace QmlSharp.Build.Tests
                 environment.SetProcessResult("cmake", new DoctorProcessResult(true, 0, "cmake version 3.31.0\n", string.Empty));
                 environment.SetProcessResult("ninja", new DoctorProcessResult(true, 0, "1.11.1\n", string.Empty));
                 environment.SetProcessResult("cl", new DoctorProcessResult(true, 0, "Microsoft (R) C/C++ Optimizing Compiler Version 19.40\n", string.Empty));
+                environment.SetProcessResult("clang-cl", new DoctorProcessResult(true, 0, "clang version 18.0.0\n", string.Empty));
                 environment.SetProcessResult("clang++", new DoctorProcessResult(true, 0, "clang version 18.0.0\n", string.Empty));
                 environment.RestoreHandler = projectFile =>
                 {

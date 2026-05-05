@@ -320,17 +320,20 @@ namespace QmlSharp.Build
                 ImmutableArray.Create("--version"),
                 _projectDir,
                 CancellationToken.None).ConfigureAwait(false);
+            if (result.Started && result.Success)
+            {
+                return Pass(DoctorCheckId.CMakeAvailable, "CMake available", FirstLine(result.CombinedOutput));
+            }
+
             string detail = result.Started
-                ? FirstLine(result.CombinedOutput)
+                ? "cmake --version failed: " + result.CombinedOutput
                 : "cmake executable could not be started.";
-            return result.Started
-                ? Pass(DoctorCheckId.CMakeAvailable, "CMake available", detail)
-                : Fail(
-                    DoctorCheckId.CMakeAvailable,
-                    "CMake available",
-                    detail,
-                    "Install CMake 3.21 or newer and ensure cmake is on PATH.",
-                    autoFixable: false);
+            return Fail(
+                DoctorCheckId.CMakeAvailable,
+                "CMake available",
+                detail,
+                "Install CMake 3.21 or newer and ensure cmake is on PATH.",
+                autoFixable: false);
         }
 
         private async Task<DoctorCheckResult> CheckCMakeVersionAsync()
@@ -418,21 +421,18 @@ namespace QmlSharp.Build
 
         private async Task<DoctorCheckResult> CheckClangAvailableAsync()
         {
-            if (_environment.CurrentPlatform is PlatformTarget.WindowsX64)
-            {
-                return Skipped(
-                    DoctorCheckId.ClangAvailable,
-                    "Clang compiler available",
-                    "clang is checked on Linux and macOS builds.");
-            }
-
-            string? clang = FindExecutable("clang++") ?? FindExecutable("clang");
+            string? clang = _environment.CurrentPlatform is PlatformTarget.WindowsX64
+                ? FindExecutable("clang-cl")
+                : FindExecutable("clang++") ?? FindExecutable("clang");
             if (clang is null)
             {
+                string detail = _environment.CurrentPlatform is PlatformTarget.WindowsX64
+                    ? "clang-cl was not found on PATH."
+                    : "clang++ or clang was not found on PATH.";
                 return Fail(
                     DoctorCheckId.ClangAvailable,
                     "Clang compiler available",
-                    "clang++ or clang was not found on PATH.",
+                    detail,
                     "Install clang and ensure it is on PATH.",
                     autoFixable: false);
             }
@@ -629,15 +629,8 @@ namespace QmlSharp.Build
 
         private string? FindExecutable(string executableName, ImmutableArray<string> additionalDirectories)
         {
-            foreach (string candidatePath in EnumerateExecutableCandidates(executableName, additionalDirectories))
-            {
-                if (_environment.FileExists(candidatePath))
-                {
-                    return candidatePath;
-                }
-            }
-
-            return null;
+            return EnumerateExecutableCandidates(executableName, additionalDirectories)
+                .FirstOrDefault(candidatePath => _environment.FileExists(candidatePath));
         }
 
         private IEnumerable<string> EnumerateExecutableCandidates(
