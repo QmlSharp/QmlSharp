@@ -19,7 +19,7 @@ namespace QmlSharp.Build
             builder.Add(new ResourceBundlingBuildStage());
             builder.Add(new FakeBuildStage(BuildPhase.QmlValidation));
             builder.Add(new NativeBuildStage());
-            builder.Add(new FakeBuildStage(BuildPhase.OutputAssembly));
+            builder.Add(new OutputAssemblyBuildStage());
             return builder.ToImmutable();
         }
 

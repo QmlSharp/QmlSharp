@@ -67,12 +67,21 @@ namespace QmlSharp.Build
         bool Success,
         int FilesCopied,
         long TotalBytes,
-        ImmutableArray<string> OutputFiles);
+        ImmutableArray<string> OutputFiles)
+    {
+        /// <summary>Diagnostics produced while assembling or validating the output.</summary>
+        public ImmutableArray<BuildDiagnostic> Diagnostics { get; init; } =
+            ImmutableArray<BuildDiagnostic>.Empty;
+
+        /// <summary>Manifest produced for application builds.</summary>
+        public ProductManifest? Manifest { get; init; }
+    }
 
     /// <summary>Product manifest written to manifest.json.</summary>
     /// <param name="ProjectName">Project name.</param>
     /// <param name="Version">Project version.</param>
     /// <param name="BuildMode">Build mode.</param>
+    /// <param name="BuildTimestamp">UTC timestamp for the build that produced the manifest.</param>
     /// <param name="QtVersion">Qt version.</param>
     /// <param name="DotNetVersion">.NET version.</param>
     /// <param name="QmlModules">QML modules in the product.</param>
@@ -84,6 +93,7 @@ namespace QmlSharp.Build
         string ProjectName,
         string Version,
         string BuildMode,
+        DateTimeOffset BuildTimestamp,
         string QtVersion,
         string DotNetVersion,
         ImmutableArray<string> QmlModules,

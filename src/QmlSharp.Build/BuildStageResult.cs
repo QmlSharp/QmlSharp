@@ -11,13 +11,19 @@ namespace QmlSharp.Build
 
         public BuildArtifacts Artifacts { get; init; } = new();
 
-        public static BuildStageResult Succeeded(BuildStatsDelta? stats = null, BuildArtifacts? artifacts = null)
+        public ProductManifest? Manifest { get; init; }
+
+        public static BuildStageResult Succeeded(
+            BuildStatsDelta? stats = null,
+            BuildArtifacts? artifacts = null,
+            ProductManifest? manifest = null)
         {
             return new BuildStageResult
             {
                 Success = true,
                 Stats = stats ?? BuildStatsDelta.Empty,
                 Artifacts = artifacts ?? new BuildArtifacts(),
+                Manifest = manifest,
             };
         }
 

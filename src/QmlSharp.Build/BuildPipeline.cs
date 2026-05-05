@@ -130,6 +130,7 @@ namespace QmlSharp.Build
                 Diagnostics = finalDiagnostics,
                 Stats = stats,
                 Artifacts = statsBuilder.ToBuildArtifacts(),
+                Manifest = statsBuilder.Manifest,
             };
         }
 
@@ -187,6 +188,7 @@ namespace QmlSharp.Build
                 {
                     statsBuilder.Add(stageResult.Stats);
                     statsBuilder.AddArtifacts(stageResult.Artifacts);
+                    statsBuilder.SetManifest(stageResult.Manifest);
                 }
 
                 return new PhaseResult(phase, success, phaseStopwatch.Elapsed, diagnostics);
@@ -327,6 +329,8 @@ namespace QmlSharp.Build
             private string? _nativeLibraryPath;
             private string? _assemblyPath;
 
+            public ProductManifest? Manifest { get; private set; }
+
             public void Add(BuildStatsDelta delta)
             {
                 ArgumentNullException.ThrowIfNull(delta);
@@ -354,6 +358,11 @@ namespace QmlSharp.Build
                 _qrcFile ??= artifacts.QrcFile;
                 _nativeLibraryPath ??= artifacts.NativeLibraryPath;
                 _assemblyPath ??= artifacts.AssemblyPath;
+            }
+
+            public void SetManifest(ProductManifest? manifest)
+            {
+                Manifest ??= manifest;
             }
 
             public BuildStats ToBuildStats(TimeSpan totalDuration)
