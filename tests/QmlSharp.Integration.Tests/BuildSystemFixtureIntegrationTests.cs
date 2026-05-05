@@ -35,7 +35,12 @@ namespace QmlSharp.Integration.Tests
             Assert.True(File.Exists(Path.Join(fixture.OutputDirectory, "event-bindings.json")));
             Assert.True(File.Exists(Path.Join(fixture.OutputDirectory, "qml", "QmlSharp", "CounterApp", "CounterView.qml")));
             Assert.True(File.Exists(Path.Join(fixture.OutputDirectory, "qml", "QmlSharp", "CounterApp", "qmldir")));
-            Assert.True(File.Exists(Path.Join(fixture.OutputDirectory, "qml", "QmlSharp", "CounterApp", "QmlSharp_CounterApp.qmltypes")));
+            Assert.True(File.Exists(Path.Join(
+                fixture.OutputDirectory,
+                "qml",
+                "QmlSharp",
+                "CounterApp",
+                ModuleMetadataPaths.GetQmltypesFileName("QmlSharp.CounterApp"))));
             Assert.True(File.Exists(Path.Join(fixture.OutputDirectory, "schemas", "CounterViewModel.schema.json")));
             Assert.True(File.Exists(Path.Join(fixture.OutputDirectory, "source-maps", "CounterView.qml.map")));
             Assert.True(File.Exists(Path.Join(fixture.OutputDirectory, "native", NativeLibraryNames.GetFileName("qmlsharp_native"))));
