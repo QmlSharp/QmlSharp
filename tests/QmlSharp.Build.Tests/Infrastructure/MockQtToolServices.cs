@@ -71,6 +71,8 @@ namespace QmlSharp.Build.Tests.Infrastructure
     {
         public ImmutableArray<QmlFormatResult>? BatchResults { get; set; }
 
+        public Exception? BatchException { get; set; }
+
         public int FormatBatchCallCount { get; private set; }
 
         public ImmutableArray<string> LastFilePaths { get; private set; } = ImmutableArray<string>.Empty;
@@ -101,6 +103,11 @@ namespace QmlSharp.Build.Tests.Infrastructure
             FormatBatchCallCount++;
             LastFilePaths = filePaths.IsDefault ? ImmutableArray<string>.Empty : filePaths;
             LastOptions = options;
+
+            if (BatchException is not null)
+            {
+                return Task.FromException<ImmutableArray<QmlFormatResult>>(BatchException);
+            }
 
             if (BatchResults is not null)
             {
@@ -133,6 +140,8 @@ namespace QmlSharp.Build.Tests.Infrastructure
     {
         public ImmutableArray<QmlLintResult>? BatchResults { get; set; }
 
+        public Exception? BatchException { get; set; }
+
         public int LintBatchCallCount { get; private set; }
 
         public ImmutableArray<string> LastFilePaths { get; private set; } = ImmutableArray<string>.Empty;
@@ -163,6 +172,11 @@ namespace QmlSharp.Build.Tests.Infrastructure
             LintBatchCallCount++;
             LastFilePaths = filePaths.IsDefault ? ImmutableArray<string>.Empty : filePaths;
             LastOptions = options;
+
+            if (BatchException is not null)
+            {
+                return Task.FromException<ImmutableArray<QmlLintResult>>(BatchException);
+            }
 
             if (BatchResults is not null)
             {

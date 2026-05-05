@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using QmlSharp.Qt.Tools;
 using QtDiagnosticSeverity = QmlSharp.Qt.Tools.DiagnosticSeverity;
 
@@ -49,31 +50,104 @@ namespace QmlSharp.Build
             }
 
             ImmutableArray<BuildDiagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<BuildDiagnostic>();
-            QtToolServices services = await ResolveQtToolServicesAsync(context, cancellationToken)
+            BuildStageResult? toolSetupFailure = await RunConfiguredToolsAsync(
+                    context,
+                    qmlFiles,
+                    diagnostics,
+                    cancellationToken)
                 .ConfigureAwait(false);
-            if (context.Config.Build.Format)
+            if (toolSetupFailure is not null)
             {
-                await RunFormatterAsync(services.Formatter, qmlFiles, diagnostics, cancellationToken)
-                    .ConfigureAwait(false);
+                return toolSetupFailure;
             }
 
-            if (context.Config.Build.Lint)
-            {
-                await RunLinterAsync(services.Linter, context, qmlFiles, diagnostics, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            ImmutableArray<BuildDiagnostic> finalDiagnostics = diagnostics
-                .OrderBy(static diagnostic => diagnostic.FilePath ?? string.Empty, StringComparer.Ordinal)
-                .ThenBy(static diagnostic => diagnostic.Code, StringComparer.Ordinal)
-                .ThenBy(static diagnostic => diagnostic.Message, StringComparer.Ordinal)
-                .ToImmutableArray();
+            ImmutableArray<BuildDiagnostic> finalDiagnostics = SortDiagnostics(diagnostics);
 
             return new BuildStageResult
             {
                 Success = !finalDiagnostics.Any(IsBlockingDiagnostic),
                 Diagnostics = finalDiagnostics,
             };
+        }
+
+        private async Task<BuildStageResult?> RunConfiguredToolsAsync(
+            BuildContext context,
+            ImmutableArray<string> qmlFiles,
+            ImmutableArray<BuildDiagnostic>.Builder diagnostics,
+            CancellationToken cancellationToken)
+        {
+            QtToolServices services;
+            try
+            {
+                services = await ResolveQtToolServicesAsync(context, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception exception) when (IsQtToolException(exception))
+            {
+                return CreateToolExceptionResult(context, exception);
+            }
+
+            await RunConfiguredFormatterAsync(context, services, qmlFiles, diagnostics, cancellationToken)
+                .ConfigureAwait(false);
+            await RunConfiguredLinterAsync(context, services, qmlFiles, diagnostics, cancellationToken)
+                .ConfigureAwait(false);
+            return null;
+        }
+
+        private async Task RunConfiguredFormatterAsync(
+            BuildContext context,
+            QtToolServices services,
+            ImmutableArray<string> qmlFiles,
+            ImmutableArray<BuildDiagnostic>.Builder diagnostics,
+            CancellationToken cancellationToken)
+        {
+            if (!context.Config.Build.Format)
+            {
+                return;
+            }
+
+            try
+            {
+                await RunFormatterAsync(services.Formatter, qmlFiles, diagnostics, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception exception) when (IsQtToolException(exception))
+            {
+                AddToolExceptionDiagnostic(
+                    diagnostics,
+                    BuildDiagnosticCode.QmlFormatError,
+                    "qmlformat failed",
+                    exception,
+                    context.OutputDir);
+            }
+        }
+
+        private async Task RunConfiguredLinterAsync(
+            BuildContext context,
+            QtToolServices services,
+            ImmutableArray<string> qmlFiles,
+            ImmutableArray<BuildDiagnostic>.Builder diagnostics,
+            CancellationToken cancellationToken)
+        {
+            if (!context.Config.Build.Lint)
+            {
+                return;
+            }
+
+            try
+            {
+                await RunLinterAsync(services.Linter, context, qmlFiles, diagnostics, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception exception) when (IsQtToolException(exception))
+            {
+                AddToolExceptionDiagnostic(
+                    diagnostics,
+                    BuildDiagnosticCode.QmlLintError,
+                    "qmllint failed",
+                    exception,
+                    context.OutputDir);
+            }
         }
 
         private async Task<QtToolServices> ResolveQtToolServicesAsync(
@@ -100,12 +174,12 @@ namespace QmlSharp.Build
         }
 
         private async Task RunFormatterAsync(
-            IQmlFormat formatter,
+            IQmlFormat qmlFormatter,
             ImmutableArray<string> qmlFiles,
             ImmutableArray<BuildDiagnostic>.Builder diagnostics,
             CancellationToken cancellationToken)
         {
-            ImmutableArray<QmlFormatResult> results = await formatter.FormatBatchAsync(
+            ImmutableArray<QmlFormatResult> results = await qmlFormatter.FormatBatchAsync(
                     qmlFiles,
                     new QmlFormatOptions
                     {
@@ -134,13 +208,13 @@ namespace QmlSharp.Build
         }
 
         private async Task RunLinterAsync(
-            IQmlLint linter,
+            IQmlLint qmlLinter,
             BuildContext context,
             ImmutableArray<string> qmlFiles,
             ImmutableArray<BuildDiagnostic>.Builder diagnostics,
             CancellationToken cancellationToken)
         {
-            ImmutableArray<QmlLintResult> results = await linter.LintBatchAsync(
+            ImmutableArray<QmlLintResult> results = await qmlLinter.LintBatchAsync(
                     qmlFiles,
                     new QmlLintOptions
                     {
@@ -158,7 +232,7 @@ namespace QmlSharp.Build
                     result.Diagnostics,
                     diagnostics);
 
-                if ((!result.ToolResult.Success || result.ErrorCount > 0) && !HasErrorDiagnostic(result.Diagnostics))
+                if (ShouldAddLintToolFailure(result))
                 {
                     diagnostics.Add(CreateToolFailureDiagnostic(
                         BuildDiagnosticCode.QmlLintError,
@@ -185,6 +259,10 @@ namespace QmlSharp.Build
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
             {
+                Trace.TraceWarning(
+                    "QmlSharp package import path resolution failed for '{0}': {1}",
+                    context.ProjectDir,
+                    exception.Message);
             }
 
             return importPaths
@@ -251,6 +329,34 @@ namespace QmlSharp.Build
                 .Any(static diagnostic => diagnostic.Severity == QtDiagnosticSeverity.Error);
         }
 
+        private static ImmutableArray<BuildDiagnostic> SortDiagnostics(
+            ImmutableArray<BuildDiagnostic>.Builder diagnostics)
+        {
+            return diagnostics
+                .OrderBy(static diagnostic => diagnostic.FilePath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(static diagnostic => diagnostic.Code, StringComparer.Ordinal)
+                .ThenBy(static diagnostic => diagnostic.Message, StringComparer.Ordinal)
+                .ToImmutableArray();
+        }
+
+        private static bool ShouldAddLintToolFailure(QmlLintResult result)
+        {
+            ImmutableArray<QtDiagnostic> diagnostics = result.Diagnostics.IsDefault
+                ? ImmutableArray<QtDiagnostic>.Empty
+                : result.Diagnostics;
+            if (HasErrorDiagnostic(diagnostics))
+            {
+                return false;
+            }
+
+            if (result.ErrorCount > 0)
+            {
+                return true;
+            }
+
+            return !result.ToolResult.Success && diagnostics.IsEmpty;
+        }
+
         private static BuildDiagnosticSeverity MapSeverity(QtDiagnosticSeverity severity)
         {
             return severity switch
@@ -267,6 +373,61 @@ namespace QmlSharp.Build
         private static bool IsBlockingDiagnostic(BuildDiagnostic diagnostic)
         {
             return diagnostic.Severity is BuildDiagnosticSeverity.Error or BuildDiagnosticSeverity.Fatal;
+        }
+
+        private static BuildStageResult CreateToolExceptionResult(BuildContext context, Exception exception)
+        {
+            ImmutableArray<BuildDiagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<BuildDiagnostic>();
+            if (context.Config.Build.Format)
+            {
+                AddToolExceptionDiagnostic(
+                    diagnostics,
+                    BuildDiagnosticCode.QmlFormatError,
+                    "qmlformat setup failed",
+                    exception,
+                    context.ProjectDir);
+            }
+
+            if (context.Config.Build.Lint)
+            {
+                AddToolExceptionDiagnostic(
+                    diagnostics,
+                    BuildDiagnosticCode.QmlLintError,
+                    "qmllint setup failed",
+                    exception,
+                    context.ProjectDir);
+            }
+
+            return new BuildStageResult
+            {
+                Success = false,
+                Diagnostics = diagnostics.ToImmutable(),
+            };
+        }
+
+        private static void AddToolExceptionDiagnostic(
+            ImmutableArray<BuildDiagnostic>.Builder diagnostics,
+            string code,
+            string prefix,
+            Exception exception,
+            string? filePath)
+        {
+            diagnostics.Add(new BuildDiagnostic(
+                code,
+                BuildDiagnosticSeverity.Error,
+                $"{prefix}: {exception.Message}",
+                BuildPhase.QmlValidation,
+                filePath));
+        }
+
+        private static bool IsQtToolException(Exception exception)
+        {
+            return exception is QtInstallationNotFoundError or
+                QtToolNotFoundError or
+                QtToolTimeoutError or
+                IOException or
+                UnauthorizedAccessException or
+                InvalidOperationException;
         }
 
         private static void AddIfDirectory(ImmutableArray<string>.Builder importPaths, string path)

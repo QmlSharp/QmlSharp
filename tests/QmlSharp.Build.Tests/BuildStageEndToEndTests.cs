@@ -109,6 +109,40 @@ namespace QmlSharp.Build.Tests
             Assert.Contains(DiagnosticCodes.SchemaSerializationFailed, diagnostic.Message, StringComparison.Ordinal);
         }
 
+        [Theory]
+        [InlineData(DiagnosticCodes.OutputWriteFailed)]
+        [InlineData(DiagnosticCodes.SourceMapWriteFailed)]
+        public async Task CSharpCompilationStage_MapsOutputWriteDiagnosticsToSchemaGenerationFailure(string diagnosticCode)
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("output-write-diagnostic");
+            WriteProjectFile(project.Path);
+            string schemaPath = Path.Join(project.Path, "dist", "schemas", "CounterViewModel.schema.json");
+            CompilerDiagnostic outputDiagnostic = new(
+                diagnosticCode,
+                CompilerDiagnosticSeverity.Error,
+                "Output write failed.",
+                SourceLocation.FileOnly(schemaPath),
+                "output");
+            MockCompiler compiler = CreateSuccessfulCompiler(project.Path);
+            compiler.OutputResult = new OutputResult(
+                ImmutableArray<string>.Empty,
+                ImmutableArray.Create(schemaPath),
+                null,
+                ImmutableArray<string>.Empty,
+                0)
+            {
+                Diagnostics = ImmutableArray.Create(outputDiagnostic),
+            };
+            CSharpCompilationBuildStage stage = new(compiler);
+
+            BuildStageResult result = await stage.ExecuteAsync(CreateContext(project.Path), CancellationToken.None);
+
+            Assert.False(result.Success);
+            BuildDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(BuildDiagnosticCode.SchemaGenerationFailed, diagnostic.Code);
+            Assert.Contains(diagnosticCode, diagnostic.Message, StringComparison.Ordinal);
+        }
+
         [Fact]
         public async Task CSharpCompilationStage_NoSchemasProducesB011()
         {
@@ -225,6 +259,113 @@ namespace QmlSharp.Build.Tests
             BuildDiagnostic diagnostic = Assert.Single(result.Diagnostics);
             Assert.Equal(BuildDiagnosticCode.QmlLintError, diagnostic.Code);
             Assert.Equal(BuildDiagnosticSeverity.Warning, diagnostic.Severity);
+        }
+
+        [Fact]
+        public async Task QmlValidationStage_QmllintWarningOnlyNonzeroExitDoesNotFailBuild()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("qmllint-warning-nonzero");
+            string qmlPath = WriteQmlFile(project.Path);
+            MockQmlLint linter = new()
+            {
+                BatchResults = ImmutableArray.Create(new QmlLintResult
+                {
+                    ToolResult = MockQtToolServices.CreateSuccessfulToolResult("qmllint " + qmlPath) with
+                    {
+                        ExitCode = 1,
+                        Stderr = "warning summary",
+                    },
+                    Diagnostics = ImmutableArray.Create(new QtDiagnostic
+                    {
+                        File = qmlPath,
+                        Severity = QtDiagnosticSeverity.Warning,
+                        Message = "Unused import.",
+                    }),
+                    ErrorCount = 0,
+                    WarningCount = 1,
+                    InfoCount = 0,
+                }),
+            };
+            QmlValidationBuildStage stage = new(new MockQmlFormat(), linter, new EmptyPackageResolver());
+
+            BuildStageResult result = await stage.ExecuteAsync(CreateContext(project.Path), CancellationToken.None);
+
+            Assert.True(result.Success);
+            BuildDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(BuildDiagnosticCode.QmlLintError, diagnostic.Code);
+            Assert.Equal(BuildDiagnosticSeverity.Warning, diagnostic.Severity);
+        }
+
+        [Fact]
+        public async Task QmlValidationStage_QmllintToolFailureWithoutDiagnosticsReturnsB060()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("qmllint-tool-failure");
+            string qmlPath = WriteQmlFile(project.Path);
+            MockQmlLint linter = new()
+            {
+                BatchResults = ImmutableArray.Create(new QmlLintResult
+                {
+                    ToolResult = MockQtToolServices.CreateSuccessfulToolResult("qmllint " + qmlPath) with
+                    {
+                        ExitCode = 2,
+                        Stderr = "qmllint failed",
+                    },
+                    ErrorCount = 0,
+                    WarningCount = 0,
+                    InfoCount = 0,
+                }),
+            };
+            QmlValidationBuildStage stage = new(new MockQmlFormat(), linter, new EmptyPackageResolver());
+
+            BuildStageResult result = await stage.ExecuteAsync(CreateContext(project.Path), CancellationToken.None);
+
+            Assert.False(result.Success);
+            BuildDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(BuildDiagnosticCode.QmlLintError, diagnostic.Code);
+            Assert.Equal(BuildDiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Contains("qmllint failed", diagnostic.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public async Task QmlValidationStage_QmlformatToolExceptionReturnsB061()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("qmlformat-tool-exception");
+            string qmlPath = WriteQmlFile(project.Path);
+            MockQmlFormat formatter = new()
+            {
+                BatchException = new QtToolNotFoundError("qmlformat", Path.Join(project.Path, "bin", "qmlformat")),
+            };
+            QmlValidationBuildStage stage = new(formatter, new MockQmlLint(), new EmptyPackageResolver());
+
+            BuildStageResult result = await stage.ExecuteAsync(CreateContext(project.Path), CancellationToken.None);
+
+            Assert.False(result.Success);
+            BuildDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(BuildDiagnosticCode.QmlFormatError, diagnostic.Code);
+            Assert.Equal(BuildDiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Contains("qmlformat", diagnostic.Message, StringComparison.Ordinal);
+            Assert.Equal(qmlPath, Assert.Single(formatter.LastFilePaths));
+        }
+
+        [Fact]
+        public async Task QmlValidationStage_QmllintToolExceptionReturnsB060()
+        {
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject("qmllint-tool-exception");
+            string qmlPath = WriteQmlFile(project.Path);
+            MockQmlLint linter = new()
+            {
+                BatchException = new QtToolTimeoutError("qmllint", TimeSpan.FromSeconds(1), string.Empty, "timeout"),
+            };
+            QmlValidationBuildStage stage = new(new MockQmlFormat(), linter, new EmptyPackageResolver());
+
+            BuildStageResult result = await stage.ExecuteAsync(CreateContext(project.Path), CancellationToken.None);
+
+            Assert.False(result.Success);
+            BuildDiagnostic diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal(BuildDiagnosticCode.QmlLintError, diagnostic.Code);
+            Assert.Equal(BuildDiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Contains("qmllint", diagnostic.Message, StringComparison.Ordinal);
+            Assert.Equal(qmlPath, Assert.Single(linter.LastFilePaths));
         }
 
         private static BuildContext CreateContext(string projectDir)

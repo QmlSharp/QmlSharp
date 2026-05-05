@@ -299,7 +299,7 @@ namespace QmlSharp.Build.Tests
                 return config;
             }
 
-            public ImmutableArray<ConfigDiagnostic> Validate(QmlSharpConfig config)
+            public ImmutableArray<ConfigDiagnostic> Validate(QmlSharpConfig loadedConfig)
             {
                 return ImmutableArray<ConfigDiagnostic>.Empty;
             }

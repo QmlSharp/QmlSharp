@@ -211,7 +211,7 @@ namespace QmlSharp.Build
 
         private static BuildDiagnostic MapCompilerDiagnostic(CompilerDiagnostic diagnostic)
         {
-            string code = string.Equals(diagnostic.Code, DiagnosticCodes.SchemaSerializationFailed, StringComparison.Ordinal)
+            string code = IsOutputGenerationDiagnostic(diagnostic.Code)
                 ? BuildDiagnosticCode.SchemaGenerationFailed
                 : BuildDiagnosticCode.CompilationFailed;
             string phase = string.IsNullOrWhiteSpace(diagnostic.Phase)
@@ -230,6 +230,13 @@ namespace QmlSharp.Build
                 message,
                 BuildPhase.CSharpCompilation,
                 diagnostic.Location?.FilePath);
+        }
+
+        private static bool IsOutputGenerationDiagnostic(string code)
+        {
+            return string.Equals(code, DiagnosticCodes.OutputWriteFailed, StringComparison.Ordinal) ||
+                string.Equals(code, DiagnosticCodes.SchemaSerializationFailed, StringComparison.Ordinal) ||
+                string.Equals(code, DiagnosticCodes.SourceMapWriteFailed, StringComparison.Ordinal);
         }
 
         private static BuildDiagnosticSeverity MapSeverity(CompilerDiagnosticSeverity severity)
