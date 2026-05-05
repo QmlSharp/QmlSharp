@@ -59,6 +59,23 @@ namespace QmlSharp.Build
 
         /// <summary>NuGet resolution check.</summary>
         public const string NuGetResolved = "nuget-resolved";
+
+        /// <summary>All stable doctor check identifiers in execution order.</summary>
+        public static ImmutableArray<string> All { get; } = ImmutableArray.Create(
+            QtInstalled,
+            QtVersion,
+            QmlFormatAvailable,
+            QmlLintAvailable,
+            QmlCachegenAvailable,
+            DotNetVersion,
+            CMakeAvailable,
+            CMakeVersion,
+            MsvcAvailable,
+            ClangAvailable,
+            NinjaAvailable,
+            ConfigValid,
+            NativeLibExists,
+            NuGetResolved);
     }
 
     /// <summary>Result of a single doctor check.</summary>

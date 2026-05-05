@@ -148,18 +148,22 @@ namespace QmlSharp.Cli
         private static Command CreateDoctorCommand(CliCommandServices services, ICommandOutput output)
         {
             Option<bool> fixOption = new("--fix");
+            Option<string> checkOption = new("--check");
             Option<string> projectDirOption = CreateProjectDirOption();
             Command command = new("doctor", "Run QmlSharp environment diagnostics.");
             command.Add(fixOption);
+            command.Add(checkOption);
             command.Add(projectDirOption);
             command.SetAction((parseResult, cancellationToken) =>
             {
+                string projectDir = parseResult.GetValue(projectDirOption) ?? ".";
                 DoctorCommandOptions options = new()
                 {
                     Fix = parseResult.GetValue(fixOption),
-                    ProjectDir = parseResult.GetValue(projectDirOption) ?? ".",
+                    CheckId = parseResult.GetValue(checkOption),
+                    ProjectDir = projectDir,
                 };
-                DoctorShellCommand shell = new(services.Doctor, output);
+                DoctorShellCommand shell = new(services.CreateDoctor(projectDir), output);
                 return shell.ExecuteAsync(options, cancellationToken);
             });
             return command;

@@ -59,6 +59,9 @@ namespace QmlSharp.Build
         /// <summary>Attempt to fix issues automatically.</summary>
         public bool Fix { get; init; }
 
+        /// <summary>Optional stable check identifier to run instead of all checks.</summary>
+        public string? CheckId { get; init; }
+
         /// <summary>Path to the project directory.</summary>
         public string ProjectDir { get; init; } = ".";
     }
