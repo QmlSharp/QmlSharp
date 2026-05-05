@@ -401,16 +401,11 @@ namespace QmlSharp.Build
                 return false;
             }
 
-            foreach (string className in schemaFiles.Select(static schemaFile => schemaFile.Schema.ClassName))
-            {
-                if (!File.Exists(Path.Join(paths.GeneratedDir, className + ".h")) ||
-                    !File.Exists(Path.Join(paths.GeneratedDir, className + ".cpp")))
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return !schemaFiles
+                .Select(static schemaFile => schemaFile.Schema.ClassName)
+                .Any(className =>
+                    !File.Exists(Path.Join(paths.GeneratedDir, className + ".h")) ||
+                    !File.Exists(Path.Join(paths.GeneratedDir, className + ".cpp")));
         }
 
         private static string ComputeFingerprint(
