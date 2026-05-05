@@ -331,6 +331,10 @@ namespace QmlSharp.Build
             diagnostics.AddRange(ValidateOutputInternal(outputRoot));
             ImmutableArray<BuildDiagnostic> finalDiagnostics = diagnostics
                 .Distinct()
+                .OrderBy(static diagnostic => diagnostic.Phase)
+                .ThenBy(static diagnostic => diagnostic.FilePath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(static diagnostic => diagnostic.Code, StringComparer.Ordinal)
+                .ThenBy(static diagnostic => diagnostic.Message, StringComparer.Ordinal)
                 .ToImmutableArray();
             bool success = !finalDiagnostics.Any(IsBlockingDiagnostic);
             return new ProductAssemblyResult(

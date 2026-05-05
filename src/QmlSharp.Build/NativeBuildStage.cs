@@ -69,7 +69,7 @@ namespace QmlSharp.Build
 
             string abiSourceDir = ResolveAbiSourceDir(context.ProjectDir);
             string fingerprint = ComputeFingerprint(context, paths, schemaFiles, abiSourceDir);
-            if (CanSkipIncrementalBuild(context, paths, fingerprint))
+            if (CanSkipIncrementalBuild(context, paths, schemaFiles, fingerprint))
             {
                 return BuildStageResult.Succeeded(
                     artifacts: new BuildArtifacts
@@ -372,6 +372,7 @@ namespace QmlSharp.Build
         private static bool CanSkipIncrementalBuild(
             BuildContext context,
             NativeStagePaths paths,
+            ImmutableArray<SchemaFile> schemaFiles,
             string fingerprint)
         {
             if (context.ForceRebuild || !context.Config.Build.Incremental)
@@ -385,7 +386,32 @@ namespace QmlSharp.Build
             }
 
             string existingFingerprint = File.ReadAllText(paths.FingerprintPath, Utf8NoBom).Trim();
-            return string.Equals(existingFingerprint, fingerprint, StringComparison.Ordinal);
+            return string.Equals(existingFingerprint, fingerprint, StringComparison.Ordinal) &&
+                ExpectedGeneratedFilesExist(paths, schemaFiles);
+        }
+
+        private static bool ExpectedGeneratedFilesExist(
+            NativeStagePaths paths,
+            ImmutableArray<SchemaFile> schemaFiles)
+        {
+            if (!File.Exists(Path.Join(paths.GeneratedDir, "CMakeLists.txt")) ||
+                !File.Exists(Path.Join(paths.GeneratedDir, "type_registration.cpp")) ||
+                !File.Exists(paths.NativeLibraryPath))
+            {
+                return false;
+            }
+
+            foreach (SchemaFile schemaFile in schemaFiles)
+            {
+                string className = schemaFile.Schema.ClassName;
+                if (!File.Exists(Path.Join(paths.GeneratedDir, className + ".h")) ||
+                    !File.Exists(Path.Join(paths.GeneratedDir, className + ".cpp")))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static string ComputeFingerprint(

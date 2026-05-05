@@ -206,7 +206,7 @@ namespace QmlSharp.Build.Tests
         }
 
         [Fact]
-        public async Task UnexpectedStageException_BubblesToCaller()
+        public async Task InternalStageException_BecomesB090Diagnostic()
         {
             RecordingBuildStage cppStage = CreateThrowingStage(
                 BuildPhase.CppCodeGenAndBuild,
@@ -214,10 +214,52 @@ namespace QmlSharp.Build.Tests
             ImmutableArray<RecordingBuildStage> stages = CreateRecordingStages(cppStage);
             BuildPipeline pipeline = CreatePipeline(stages);
 
-            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-                await pipeline.BuildAsync(BuildTestFixtures.CreateDefaultContext()));
+            BuildResult result = await pipeline.BuildAsync(BuildTestFixtures.CreateDefaultContext());
 
-            Assert.Contains("unexpected implementation bug", exception.Message, StringComparison.Ordinal);
+            Assert.False(result.Success);
+            BuildDiagnostic diagnostic = result.Diagnostics.Single(diagnostic =>
+                diagnostic.Code == BuildDiagnosticCode.InternalError &&
+                diagnostic.Phase == BuildPhase.CppCodeGenAndBuild);
+            Assert.Contains("unexpected implementation bug", diagnostic.Message, StringComparison.Ordinal);
+            Assert.Equal(8, result.PhaseResults.Length);
+        }
+
+        [Fact]
+        public async Task Diagnostics_AreSortedDeterministicallyWithinEachPhase()
+        {
+            RecordingBuildStage compilationStage = new(
+                BuildPhase.CSharpCompilation,
+                new BuildStageResult
+                {
+                    Success = false,
+                    Diagnostics = ImmutableArray.Create(
+                        new BuildDiagnostic(
+                            BuildDiagnosticCode.SchemaGenerationFailed,
+                            BuildDiagnosticSeverity.Error,
+                            "zeta",
+                            BuildPhase.CSharpCompilation,
+                            "b.cs"),
+                        new BuildDiagnostic(
+                            BuildDiagnosticCode.CompilationFailed,
+                            BuildDiagnosticSeverity.Error,
+                            "alpha",
+                            BuildPhase.CSharpCompilation,
+                            "a.cs")),
+                });
+            ImmutableArray<RecordingBuildStage> stages = CreateRecordingStages(compilationStage);
+            BuildPipeline pipeline = CreatePipeline(stages);
+
+            BuildResult result = await pipeline.BuildAsync(BuildTestFixtures.CreateDefaultContext());
+
+            ImmutableArray<BuildDiagnostic> compilationDiagnostics = result.Diagnostics
+                .Where(static diagnostic => diagnostic.Phase == BuildPhase.CSharpCompilation)
+                .ToImmutableArray();
+            Assert.Equal(
+                new[] { BuildDiagnosticCode.CompilationFailed, BuildDiagnosticCode.SchemaGenerationFailed },
+                compilationDiagnostics.Select(static diagnostic => diagnostic.Code).ToArray());
+            Assert.Equal(
+                new[] { "a.cs", "b.cs" },
+                compilationDiagnostics.Select(static diagnostic => diagnostic.FilePath ?? string.Empty).ToArray());
         }
 
         [Fact]
