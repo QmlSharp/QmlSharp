@@ -10,6 +10,8 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
 
         public IReadOnlyList<Action<BuildProgress>> ProgressCallbacks => callbacks;
 
+        public Action<CancellationToken>? OnBuild { get; set; }
+
         public void QueueResult(BuildResult result)
         {
             results.Enqueue(result);
@@ -20,6 +22,8 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
             CancellationToken cancellationToken = default)
         {
             requests.Add(new FakeBuildRequest(context, ImmutableArray<BuildPhase>.Empty));
+            OnBuild?.Invoke(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(DequeueResult());
         }
 
@@ -29,6 +33,8 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
             CancellationToken cancellationToken = default)
         {
             requests.Add(new FakeBuildRequest(context, phases));
+            OnBuild?.Invoke(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(DequeueResult());
         }
 
