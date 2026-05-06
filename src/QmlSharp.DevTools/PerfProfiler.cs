@@ -59,6 +59,11 @@ namespace QmlSharp.DevTools
             return new ActivePerfSpan(this, name, category, clock.UtcNow, clock.GetTimestamp());
         }
 
+        IDisposable IPerfProfiler.StartSpan(string name, PerfCategory category)
+        {
+            return StartSpan(name, category);
+        }
+
         /// <inheritdoc />
         public IReadOnlyList<PerfRecord> GetRecords()
         {
@@ -186,72 +191,20 @@ namespace QmlSharp.DevTools
 
         private static void WriteMetadataObject(
             Utf8JsonWriter writer,
-            IReadOnlyDictionary<string, object?>? metadata)
+            IReadOnlyDictionary<string, string>? metadata)
         {
             writer.WriteStartObject();
 
             if (metadata is not null)
             {
-                foreach (KeyValuePair<string, object?> entry in metadata.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+                foreach (KeyValuePair<string, string> entry in metadata.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
                 {
                     writer.WritePropertyName(entry.Key);
-                    WriteMetadataValue(writer, entry.Value);
+                    writer.WriteStringValue(entry.Value);
                 }
             }
 
             writer.WriteEndObject();
-        }
-
-        private static void WriteMetadataValue(Utf8JsonWriter writer, object? value)
-        {
-            switch (value)
-            {
-                case null:
-                    writer.WriteNullValue();
-                    break;
-                case string text:
-                    writer.WriteStringValue(text);
-                    break;
-                case bool boolean:
-                    writer.WriteBooleanValue(boolean);
-                    break;
-                case byte number:
-                    writer.WriteNumberValue(number);
-                    break;
-                case sbyte number:
-                    writer.WriteNumberValue(number);
-                    break;
-                case short number:
-                    writer.WriteNumberValue(number);
-                    break;
-                case ushort number:
-                    writer.WriteNumberValue(number);
-                    break;
-                case int number:
-                    writer.WriteNumberValue(number);
-                    break;
-                case uint number:
-                    writer.WriteNumberValue(number);
-                    break;
-                case long number:
-                    writer.WriteNumberValue(number);
-                    break;
-                case ulong number:
-                    writer.WriteNumberValue(number);
-                    break;
-                case float number when float.IsFinite(number):
-                    writer.WriteNumberValue(number);
-                    break;
-                case double number when double.IsFinite(number):
-                    writer.WriteNumberValue(number);
-                    break;
-                case decimal number:
-                    writer.WriteNumberValue(number);
-                    break;
-                default:
-                    writer.WriteStringValue(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty);
-                    break;
-            }
         }
 
         private void Record(PerfRecord record)
@@ -270,7 +223,7 @@ namespace QmlSharp.DevTools
             private readonly PerfCategory category;
             private readonly DateTimeOffset startTime;
             private readonly long startTimestamp;
-            private SortedDictionary<string, object?>? metadata;
+            private SortedDictionary<string, string>? metadata;
             private bool ended;
 
             public ActivePerfSpan(
@@ -298,14 +251,14 @@ namespace QmlSharp.DevTools
                         return;
                     }
 
-                    metadata ??= new SortedDictionary<string, object?>(StringComparer.Ordinal);
+                    metadata ??= new SortedDictionary<string, string>(StringComparer.Ordinal);
                     metadata[key] = NormalizeMetadataValue(value);
                 }
             }
 
             public void Dispose()
             {
-                IReadOnlyDictionary<string, object?>? metadataSnapshot;
+                IReadOnlyDictionary<string, string>? metadataSnapshot;
 
                 lock (spanGate)
                 {
@@ -337,27 +290,15 @@ namespace QmlSharp.DevTools
                     metadataSnapshot));
             }
 
-            private static object? NormalizeMetadataValue(object? value)
+            private static string NormalizeMetadataValue(object? value)
             {
                 return value switch
                 {
-                    null => null,
-                    string => value,
-                    bool => value,
-                    byte => value,
-                    sbyte => value,
-                    short => value,
-                    ushort => value,
-                    int => value,
-                    uint => value,
-                    long => value,
-                    ulong => value,
-                    float => value,
-                    double => value,
-                    decimal => value,
+                    null => string.Empty,
+                    string text => text,
                     DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
                     DateTime dateTime => dateTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
-                    TimeSpan timeSpan => timeSpan.TotalMilliseconds,
+                    TimeSpan timeSpan => timeSpan.TotalMilliseconds.ToString(CultureInfo.InvariantCulture),
                     _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
                 };
             }

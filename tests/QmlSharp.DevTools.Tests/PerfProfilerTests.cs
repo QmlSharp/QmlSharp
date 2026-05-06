@@ -10,7 +10,7 @@ namespace QmlSharp.DevTools.Tests
         {
             PerfProfiler profiler = CreateProfiler(out ManualDevToolsClock clock);
 
-            using (IPerfSpan span = profiler.StartSpan("compile-view", PerfCategory.Compile))
+            using (profiler.StartSpan("compile-view", PerfCategory.Compile))
             {
                 clock.Advance(TimeSpan.FromMilliseconds(5));
             }
@@ -153,15 +153,15 @@ namespace QmlSharp.DevTools.Tests
 
             PerfRecord record = Assert.Single(profiler.GetRecords());
             Assert.NotNull(record.Metadata);
-            Assert.Equal(2, record.Metadata["changedFiles"]);
+            Assert.Equal("2", record.Metadata["changedFiles"]);
             Assert.Equal("CounterView.qml", record.Metadata["output"]);
-            Assert.Equal(true, record.Metadata["success"]);
+            Assert.Equal("True", record.Metadata["success"]);
 
             using JsonDocument document = JsonDocument.Parse(ExportTrace(profiler));
             JsonElement args = document.RootElement.GetProperty("traceEvents")[0].GetProperty("args");
-            Assert.Equal(2, args.GetProperty("changedFiles").GetInt32());
+            Assert.Equal("2", args.GetProperty("changedFiles").GetString());
             Assert.Equal("CounterView.qml", args.GetProperty("output").GetString());
-            Assert.True(args.GetProperty("success").GetBoolean());
+            Assert.Equal("True", args.GetProperty("success").GetString());
         }
 
         [Fact]
@@ -217,8 +217,22 @@ namespace QmlSharp.DevTools.Tests
 
             PerfRecord record = Assert.Single(profiler.GetRecords());
             Assert.NotNull(record.Metadata);
-            Assert.True((bool)record.Metadata["success"]!);
+            Assert.Equal("True", record.Metadata["success"]);
             Assert.False(record.Metadata.ContainsKey("late"));
+        }
+
+        [Fact]
+        public void InterfaceStartSpan_ReturnsDisposableForSourceCompatibility()
+        {
+            PerfProfiler profiler = CreateProfiler(out ManualDevToolsClock clock);
+            IPerfProfiler contract = profiler;
+
+            using (contract.StartSpan("compile", PerfCategory.Compile))
+            {
+                clock.Advance(TimeSpan.FromMilliseconds(1));
+            }
+
+            _ = Assert.Single(profiler.GetRecords());
         }
 
         private static PerfProfiler CreateProfiler(out ManualDevToolsClock clock)
@@ -243,7 +257,8 @@ namespace QmlSharp.DevTools.Tests
 
         private static string ExportTrace(PerfProfiler profiler)
         {
-            string outputPath = Path.Combine(Path.GetTempPath(), "qmlsharp-perf-" + Path.GetRandomFileName() + ".json");
+            string fileName = "qmlsharp-perf-" + Path.GetRandomFileName() + ".json";
+            string outputPath = Path.GetFullPath(Path.Join(Path.GetTempPath(), fileName));
             try
             {
                 profiler.ExportChromeTrace(outputPath);

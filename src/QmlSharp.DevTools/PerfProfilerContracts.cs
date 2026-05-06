@@ -8,7 +8,7 @@ namespace QmlSharp.DevTools
     public interface IPerfProfiler
     {
         /// <summary>Starts a new timing span.</summary>
-        IPerfSpan StartSpan(string name, PerfCategory category);
+        IDisposable StartSpan(string name, PerfCategory category);
 
         /// <summary>Returns all recorded spans.</summary>
         IReadOnlyList<PerfRecord> GetRecords();
@@ -46,7 +46,7 @@ namespace QmlSharp.DevTools
         PerfCategory Category,
         DateTimeOffset StartTime,
         TimeSpan Duration,
-        IReadOnlyDictionary<string, object?>? Metadata);
+        IReadOnlyDictionary<string, string>? Metadata);
 
     /// <summary>Categories for performance spans.</summary>
     public enum PerfCategory
