@@ -159,6 +159,25 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        public void ExcludePatterns_LiteralFileName_DoesNotMatchSuffix()
+        {
+            FileWatcherHarness harness = FileWatcherHarness.Create(
+                includePatterns: ImmutableArray.Create("**/*.cs"),
+                excludePatterns: ImmutableArray.Create("Generated.cs"));
+            List<FileChangeBatch> batches = new();
+
+            using FileWatcher watcher = harness.CreateWatcher();
+            watcher.OnChange += batches.Add;
+            watcher.Start();
+            harness.Emit("src/Generated.cs", FileChangeKind.Modified);
+            harness.Emit("src/NotGenerated.cs", FileChangeKind.Modified);
+            harness.FireDebounceTimer();
+
+            FileChangeBatch batch = Assert.Single(batches);
+            Assert.Equal(harness.GetPath("src/NotGenerated.cs"), Assert.Single(batch.Changes).FilePath);
+        }
+
+        [Fact]
         [Trait("TestId", "FWA-11")]
         public void UsePolling_True_DetectsChanges()
         {
@@ -191,6 +210,37 @@ namespace QmlSharp.DevTools.Tests
             FileChange change = Assert.Single(batch.Changes);
             Assert.Equal(Path.GetFullPath(changedFile), change.FilePath);
             Assert.Equal(FileChangeKind.Created, change.Kind);
+        }
+
+        [Fact]
+        public void UsePolling_WatchRootRemovedBeforePoll_DoesNotThrowOrEmit()
+        {
+            using TemporaryDirectory temporaryDirectory = new();
+            ManualDevToolsClock clock = new()
+            {
+                UtcNow = DateTimeOffset.Parse(
+                    "2026-05-06T00:00:00Z",
+                    null,
+                    System.Globalization.DateTimeStyles.AssumeUniversal),
+            };
+            FakeDevToolsTimerFactory timerFactory = new();
+            FileWatcherOptions options = new(
+                ImmutableArray.Create(temporaryDirectory.Path),
+                DebounceMs: 25,
+                UsePolling: true,
+                PollIntervalMs: 10);
+            List<FileChangeBatch> batches = new();
+
+            using FileWatcher watcher = new(options, null, timerFactory, clock);
+            watcher.OnChange += batches.Add;
+            watcher.Start();
+            Directory.Delete(temporaryDirectory.Path, recursive: true);
+
+            Exception? exception = Record.Exception(() => timerFactory.Timers[0].Fire());
+
+            Assert.Null(exception);
+            Assert.Empty(batches);
+            Assert.Equal(FileWatcherStatus.Running, watcher.Status);
         }
 
         [Fact]
@@ -339,7 +389,7 @@ namespace QmlSharp.DevTools.Tests
                 ImmutableArray<string> includePatterns = default,
                 ImmutableArray<string> excludePatterns = default)
             {
-                string root = Path.Combine(Path.GetTempPath(), "qmlsharp-fw-tests");
+                string root = Path.GetFullPath(Path.Join(Path.GetTempPath(), "qmlsharp-fw-tests"));
                 FileWatcherOptions options = new(
                     ImmutableArray.Create(root),
                     debounceMs,
@@ -440,9 +490,9 @@ namespace QmlSharp.DevTools.Tests
         {
             public TemporaryDirectory(string prefix = "qmlsharp-fw")
             {
-                Path = System.IO.Path.Combine(
+                Path = System.IO.Path.GetFullPath(System.IO.Path.Join(
                     System.IO.Path.GetTempPath(),
-                    prefix + "-" + Guid.NewGuid().ToString("N"));
+                    prefix + "-" + Guid.NewGuid().ToString("N")));
                 _ = Directory.CreateDirectory(Path);
             }
 
@@ -450,10 +500,18 @@ namespace QmlSharp.DevTools.Tests
 
             public string GetPath(params string[] parts)
             {
+                foreach (string part in parts)
+                {
+                    if (System.IO.Path.IsPathRooted(part))
+                    {
+                        throw new ArgumentException("Temporary directory paths must be relative.", nameof(parts));
+                    }
+                }
+
                 string[] allParts = new string[parts.Length + 1];
                 allParts[0] = Path;
                 Array.Copy(parts, 0, allParts, 1, parts.Length);
-                return System.IO.Path.Combine(allParts);
+                return System.IO.Path.GetFullPath(System.IO.Path.Join(allParts));
             }
 
             public void Dispose()

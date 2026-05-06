@@ -1,6 +1,7 @@
 #pragma warning disable CA1003, MA0048
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -18,6 +19,7 @@ namespace QmlSharp.DevTools
             ImmutableArray.Create("**/bin/**", "**/obj/**", "**/.git/**");
 
         private readonly Lock gate = new();
+        private readonly Lock deliveryGate = new();
         private readonly FileWatcherOptions options;
         private readonly IFileSystemWatcherFactory fileSystemWatcherFactory;
         private readonly IDevToolsTimerFactory timerFactory;
@@ -137,6 +139,7 @@ namespace QmlSharp.DevTools
             }
 
             timerToDispose?.Dispose();
+            WaitForBatchDeliveryToComplete();
         }
 
         /// <inheritdoc />
@@ -280,7 +283,26 @@ namespace QmlSharp.DevTools
                 debounceTimer?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             }
 
-            OnChange(batch);
+            lock (deliveryGate)
+            {
+                lock (gate)
+                {
+                    if (Status != FileWatcherStatus.Running)
+                    {
+                        return;
+                    }
+                }
+
+                OnChange(batch);
+            }
+        }
+
+        private void WaitForBatchDeliveryToComplete()
+        {
+            lock (deliveryGate)
+            {
+                // Stop must not return while a debounced batch is still being delivered.
+            }
         }
     }
 
@@ -603,36 +625,83 @@ namespace QmlSharp.DevTools
             Dictionary<string, FileSnapshot> result = CreateSnapshotDictionary();
             foreach (string watchPath in options.WatchPaths.OrderBy(static path => path, StringComparer.Ordinal))
             {
-                if (!Directory.Exists(watchPath))
+                ImmutableArray<string> files = EnumerateFiles(watchPath);
+                foreach (string file in files)
                 {
-                    continue;
-                }
-
-                IEnumerable<string> files;
-                try
-                {
-                    files = Directory.EnumerateFiles(watchPath, "*", SearchOption.AllDirectories);
-                }
-                catch (IOException)
-                {
-                    continue;
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    continue;
-                }
-
-                foreach (string file in files.OrderBy(static path => path, StringComparer.Ordinal))
-                {
-                    FileInfo info = new(file);
-                    result[info.FullName] = new FileSnapshot(
-                        info.FullName,
-                        info.LastWriteTimeUtc.Ticks,
-                        info.Length);
+                    if (TryCreateSnapshot(file, out FileSnapshot? snapshot))
+                    {
+                        result[snapshot.FilePath] = snapshot;
+                    }
                 }
             }
 
             return result;
+        }
+
+        private static ImmutableArray<string> EnumerateFiles(string watchPath)
+        {
+            if (!Directory.Exists(watchPath))
+            {
+                return ImmutableArray<string>.Empty;
+            }
+
+            try
+            {
+                EnumerationOptions enumerationOptions = new()
+                {
+                    IgnoreInaccessible = true,
+                    RecurseSubdirectories = true,
+                };
+                return Directory
+                    .EnumerateFiles(watchPath, "*", enumerationOptions)
+                    .OrderBy(static path => path, StringComparer.Ordinal)
+                    .ToImmutableArray();
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return ImmutableArray<string>.Empty;
+            }
+            catch (IOException)
+            {
+                return ImmutableArray<string>.Empty;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return ImmutableArray<string>.Empty;
+            }
+        }
+
+        private static bool TryCreateSnapshot(string filePath, [NotNullWhen(true)] out FileSnapshot? snapshot)
+        {
+            try
+            {
+                FileInfo info = new(filePath);
+                snapshot = new FileSnapshot(
+                    info.FullName,
+                    info.LastWriteTimeUtc.Ticks,
+                    info.Length);
+                return true;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                snapshot = null;
+                return false;
+            }
+            catch (FileNotFoundException)
+            {
+                snapshot = null;
+                return false;
+            }
+            catch (IOException)
+            {
+                snapshot = null;
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                snapshot = null;
+                return false;
+            }
         }
 
         private ImmutableArray<FileChange> CompareSnapshots(
@@ -748,18 +817,7 @@ namespace QmlSharp.DevTools
 
         private static bool MatchesAny(ImmutableArray<FilePattern> patterns, ImmutableArray<string> candidates)
         {
-            foreach (FilePattern pattern in patterns)
-            {
-                foreach (string candidate in candidates)
-                {
-                    if (pattern.IsMatch(candidate))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
+            return patterns.Any(pattern => candidates.Any(pattern.IsMatch));
         }
 
         private ImmutableArray<string> CreateCandidates(string filePath)
@@ -822,8 +880,7 @@ namespace QmlSharp.DevTools
             }
 
             return normalizedCandidate.Equals(pattern, PathComparisonComparer.PathStringComparison) ||
-                normalizedCandidate.EndsWith("/" + pattern, PathComparisonComparer.PathStringComparison) ||
-                normalizedCandidate.EndsWith(pattern, PathComparisonComparer.PathStringComparison);
+                normalizedCandidate.EndsWith("/" + pattern, PathComparisonComparer.PathStringComparison);
         }
 
         private static string BuildRegexPattern(string globPattern)
