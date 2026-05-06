@@ -6,6 +6,8 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
         private readonly List<OverlayError> shownErrors = new();
         private readonly List<string> evaluatedInputs = new();
         private readonly List<string> syncedInstanceIds = new();
+        private readonly List<IReadOnlyDictionary<string, object?>> syncedStates = new();
+        private readonly List<string> callOrder = new();
 
         public IReadOnlyList<string> ReloadedQmlPaths => reloadedQmlPaths;
 
@@ -14,6 +16,10 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
         public IReadOnlyList<string> EvaluatedInputs => evaluatedInputs;
 
         public IReadOnlyList<string> SyncedInstanceIds => syncedInstanceIds;
+
+        public IReadOnlyList<IReadOnlyDictionary<string, object?>> SyncedStates => syncedStates;
+
+        public IReadOnlyList<string> CallOrder => callOrder;
 
         public IReadOnlyList<InstanceSnapshot> Snapshots { get; set; } =
             ImmutableArray<InstanceSnapshot>.Empty;
@@ -29,13 +35,43 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
 
         public string QmlEvaluationResult { get; set; } = string.Empty;
 
+        public Exception? CaptureException { get; set; }
+
+        public Exception? ReloadException { get; set; }
+
+        public Exception? SyncException { get; set; }
+
+        public Exception? RestoreException { get; set; }
+
+        public Action? BeforeCapture { get; set; }
+
+        public Action? BeforeReload { get; set; }
+
+        public Action? BeforeSync { get; set; }
+
+        public Action? BeforeRestore { get; set; }
+
         public Task<IReadOnlyList<InstanceSnapshot>> CaptureSnapshotsAsync(CancellationToken cancellationToken = default)
         {
+            callOrder.Add("capture");
+            BeforeCapture?.Invoke();
+            if (CaptureException is not null)
+            {
+                throw CaptureException;
+            }
+
             return Task.FromResult(Snapshots);
         }
 
         public Task ReloadQmlAsync(string qmlSourcePath, CancellationToken cancellationToken = default)
         {
+            callOrder.Add("reload");
+            BeforeReload?.Invoke();
+            if (ReloadException is not null)
+            {
+                throw ReloadException;
+            }
+
             reloadedQmlPaths.Add(qmlSourcePath);
             return Task.CompletedTask;
         }
@@ -45,7 +81,15 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
             IReadOnlyDictionary<string, object?> state,
             CancellationToken cancellationToken = default)
         {
+            callOrder.Add("sync");
+            BeforeSync?.Invoke();
+            if (SyncException is not null)
+            {
+                throw SyncException;
+            }
+
             syncedInstanceIds.Add(instanceId);
+            syncedStates.Add(state);
             return Task.CompletedTask;
         }
 
@@ -53,12 +97,20 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
             IReadOnlyList<InstanceSnapshot> snapshots,
             CancellationToken cancellationToken = default)
         {
+            callOrder.Add("restore");
+            BeforeRestore?.Invoke();
+            if (RestoreException is not null)
+            {
+                throw RestoreException;
+            }
+
             RestoreSnapshotsCalled = true;
             return Task.CompletedTask;
         }
 
         public Task<IReadOnlyList<InstanceInfo>> GetInstancesAsync(CancellationToken cancellationToken = default)
         {
+            callOrder.Add("instances");
             return Task.FromResult(Instances);
         }
 
