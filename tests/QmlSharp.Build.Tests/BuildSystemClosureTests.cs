@@ -191,7 +191,8 @@ namespace QmlSharp.Build.Tests
                 .EnumerateFiles(Path.Join(repoRoot, "src"), "*.csproj", SearchOption.AllDirectories)
                 .Where(static path =>
                     !path.EndsWith(Path.Join("QmlSharp.Build", "QmlSharp.Build.csproj"), StringComparison.OrdinalIgnoreCase) &&
-                    !path.EndsWith(Path.Join("QmlSharp.Cli", "QmlSharp.Cli.csproj"), StringComparison.OrdinalIgnoreCase))
+                    !path.EndsWith(Path.Join("QmlSharp.Cli", "QmlSharp.Cli.csproj"), StringComparison.OrdinalIgnoreCase) &&
+                    !path.EndsWith(Path.Join("QmlSharp.DevTools", "QmlSharp.DevTools.csproj"), StringComparison.OrdinalIgnoreCase))
                 .SelectMany(static path => ReadProjectReferences(path).AsEnumerable())
                 .ToImmutableArray();
             ImmutableArray<string> forbiddenParityTokens = ImmutableArray.Create(

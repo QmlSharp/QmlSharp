@@ -97,7 +97,7 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
             DirectoryInfo? directory = new(AppContext.BaseDirectory);
             while (directory is not null)
             {
-                if (File.Exists(Path.Combine(directory.FullName, "QmlSharp.slnx")))
+                if (File.Exists(Path.Join(directory.FullName, "QmlSharp.slnx")))
                 {
                     return directory.FullName;
                 }
