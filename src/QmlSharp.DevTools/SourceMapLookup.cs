@@ -58,16 +58,20 @@ namespace QmlSharp.DevTools
                 return null;
             }
 
+            string generatedFilePath = generatedLocation.FilePath;
+            int generatedLine = generatedLocation.Line.Value;
+            int generatedColumn = generatedLocation.Column.Value;
+
             foreach (SourceMap sourceMap in sourceMaps)
             {
-                if (!OutputPathMatches(sourceMap.OutputFilePath, generatedLocation.FilePath))
+                if (!OutputPathMatches(sourceMap.OutputFilePath, generatedFilePath))
                 {
                     continue;
                 }
 
                 SourceMapMapping? mapping = sourceMap.Mappings
-                    .Where(candidate => candidate.OutputLine == generatedLocation.Line.Value)
-                    .OrderBy(candidate => Math.Abs(candidate.OutputColumn - generatedLocation.Column.Value))
+                    .Where(candidate => candidate.OutputLine == generatedLine)
+                    .OrderBy(candidate => Math.Abs(candidate.OutputColumn - generatedColumn))
                     .ThenBy(static candidate => candidate.OutputColumn)
                     .ThenBy(static candidate => candidate.SourceFilePath, StringComparer.Ordinal)
                     .ThenBy(static candidate => candidate.SourceLine)
@@ -97,7 +101,9 @@ namespace QmlSharp.DevTools
                 return true;
             }
 
-            return StringComparer.Ordinal.Equals(Path.GetFileName(sourceMapPath), Path.GetFileName(diagnosticPath));
+            return StringComparer.Ordinal.Equals(
+                Path.GetFileName(normalizedSourceMapPath),
+                Path.GetFileName(normalizedDiagnosticPath));
         }
 
         private static string NormalizePath(string path)

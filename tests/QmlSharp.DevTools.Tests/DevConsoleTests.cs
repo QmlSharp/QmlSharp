@@ -253,6 +253,32 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        public void BuildError_SourceMapWithWindowsStyleOutputPath_PrintsOriginalCSharpLocation()
+        {
+            SourceMap sourceMap = new(
+                "1.0",
+                "src/CounterView.cs",
+                "dist\\qml\\CounterView.qml",
+                ImmutableArray.Create(new SourceMapMapping(
+                    outputLine: 15,
+                    outputColumn: 10,
+                    sourceFilePath: "src/CounterView.cs",
+                    sourceLine: 42,
+                    sourceColumn: 8)));
+            ConsoleHarness harness = ConsoleHarness.Create(sourceMapLookup: new SourceMapLookup(new[] { sourceMap }));
+            CompilerDiagnostic diagnostic = CreateDiagnostic(
+                DiagnosticSeverity.Error,
+                "Binding target not found",
+                new SourceLocation("/tmp/app/dist/qml/CounterView.qml", 15, 12));
+
+            harness.Console.BuildError(new[] { diagnostic });
+
+            string output = harness.Output();
+            Assert.Contains("src/CounterView.cs:42:8", output, StringComparison.Ordinal);
+            Assert.Contains("generated /tmp/app/dist/qml/CounterView.qml:15:12", output, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void BuildError_SourceMapMissing_FallsBackToGeneratedQmlLocation()
         {
             ConsoleHarness harness = ConsoleHarness.Create();

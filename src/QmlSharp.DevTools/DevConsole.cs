@@ -72,14 +72,14 @@ namespace QmlSharp.DevTools
         }
 
         /// <inheritdoc />
-        public void Banner(string version, DevServerOptions options)
+        public void Banner(string version, DevServerOptions serverOptions)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(version);
-            ArgumentNullException.ThrowIfNull(options);
+            ArgumentNullException.ThrowIfNull(serverOptions);
 
             Write(LogLevel.Info, Colorize($"QmlSharp {version}", Bold + Cyan));
-            Write(LogLevel.Info, $"{Prefix("server")} Project: {options.ProjectRoot}");
-            Write(LogLevel.Info, $"{Prefix("watch")} {FormatPathList(options.WatcherOptions.WatchPaths, maxItems: 3)}");
+            Write(LogLevel.Info, $"{Prefix("server")} Project: {serverOptions.ProjectRoot}");
+            Write(LogLevel.Info, $"{Prefix("watch")} {FormatPathList(serverOptions.WatcherOptions.WatchPaths, maxItems: 3)}");
         }
 
         /// <inheritdoc />
@@ -245,9 +245,11 @@ namespace QmlSharp.DevTools
         {
             if (location.FilePath is not null && location.Line.HasValue && location.Column.HasValue)
             {
+                int line = location.Line.Value;
+                int column = location.Column.Value;
                 return string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{location.FilePath}:{location.Line.Value}:{location.Column.Value}");
+                    $"{location.FilePath}:{line}:{column}");
             }
 
             if (location.FilePath is not null)
@@ -257,9 +259,11 @@ namespace QmlSharp.DevTools
 
             if (location.Line.HasValue && location.Column.HasValue)
             {
+                int line = location.Line.Value;
+                int column = location.Column.Value;
                 return string.Create(
                     CultureInfo.InvariantCulture,
-                    $"line {location.Line.Value}:{location.Column.Value}");
+                    $"line {line}:{column}");
             }
 
             return "unknown location";
