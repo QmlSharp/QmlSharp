@@ -18,7 +18,7 @@ namespace QmlSharp.DevTools.Tests
             Assert.Equal(1, result.InstancesMatched);
             Assert.Equal(0, result.InstancesOrphaned);
             Assert.Equal(0, result.InstancesNew);
-            Assert.Equal("C:\\repo\\src\\CounterView.qml", nativeHost.ReloadedQmlPaths[0]);
+            Assert.Equal("dist/qml/QmlSharp/TestApp/CounterView.qml", nativeHost.ReloadedQmlPaths[0]);
             Assert.Equal("new-1", nativeHost.SyncedInstanceIds[0]);
             Assert.True(nativeHost.RestoreSnapshotsCalled);
             AssertSubsequence(nativeHost.CallOrder, "capture", "reload", "sync", "restore");
@@ -117,7 +117,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
-        public async Task ReloadAsync_RestoreFailure_SuccessTrue()
+        public async Task ReloadAsync_RestoreFailure_FailsWithStepRestore()
         {
             FakeNativeHost nativeHost = new()
             {
@@ -129,7 +129,7 @@ namespace QmlSharp.DevTools.Tests
 
             HotReloadResult result = await orchestrator.ReloadAsync(CompilationResult());
 
-            Assert.True(result.Success);
+            Assert.False(result.Success);
             Assert.Equal(HotReloadStep.Restore, result.FailedStep);
             Assert.Contains("restore failed", result.ErrorMessage, StringComparison.Ordinal);
             Assert.True(nativeHost.RestoreSnapshotsCalled is false);
@@ -222,6 +222,22 @@ namespace QmlSharp.DevTools.Tests
             Assert.Equal("new-1", nativeHost.SyncedInstanceIds[0]);
         }
 
+        [Fact]
+        public async Task ReloadAsync_WithoutSourceMap_FallsBackToSafeQmlFileName()
+        {
+            FakeNativeHost nativeHost = new()
+            {
+                Snapshots = ImmutableArray.Create(Snapshot("old-1", "CounterViewModel", "CounterView::__qmlsharp_vm0", ("count", 42))),
+                Instances = ImmutableArray.Create(Info("new-1", "CounterViewModel", "CounterView::__qmlsharp_vm0")),
+            };
+            HotReloadOrchestrator orchestrator = CreateOrchestrator(nativeHost);
+
+            HotReloadResult result = await orchestrator.ReloadAsync(CompilationResult(includeSourceMap: false, viewClassName: ""));
+
+            Assert.True(result.Success);
+            Assert.Equal("CounterView.qml", nativeHost.ReloadedQmlPaths[0]);
+        }
+
         private static HotReloadOrchestrator CreateOrchestrator(FakeNativeHost nativeHost)
         {
             return CreateOrchestrator(nativeHost, new ManualDevToolsClock(), new PerfProfiler());
@@ -235,14 +251,17 @@ namespace QmlSharp.DevTools.Tests
             return new HotReloadOrchestrator(nativeHost, profiler, new InstanceMatcher(), clock);
         }
 
-        private static CompilationResult CompilationResult()
+        private static CompilationResult CompilationResult(bool includeSourceMap = true, string viewClassName = "CounterView")
         {
             CompilationUnit unit = new()
             {
                 SourceFilePath = "C:\\repo\\src\\CounterView.cs",
-                ViewClassName = "CounterView",
+                ViewClassName = viewClassName,
                 ViewModelClassName = "CounterViewModel",
                 QmlText = "import QtQuick\nItem {}",
+                SourceMap = includeSourceMap
+                    ? SourceMap.Empty("C:\\repo\\src\\CounterView.cs", "dist/qml/QmlSharp/TestApp/CounterView.qml")
+                    : null,
             };
 
             return QmlSharp.Compiler.CompilationResult.FromUnits(ImmutableArray.Create(unit));

@@ -161,7 +161,8 @@ namespace QmlSharp.DevTools
                     hydrate.Elapsed,
                     restore.Elapsed,
                     totalStart)
-                : CreateRestoreWarningSuccess(
+                : CreateFailure(
+                    HotReloadStep.Restore,
                     hydrateResult,
                     capture.Elapsed,
                     nukeLoad.Elapsed,
@@ -314,26 +315,6 @@ namespace QmlSharp.DevTools
                 FailedStep: null);
         }
 
-        private HotReloadResult CreateRestoreWarningSuccess(
-            MatchResult matchResult,
-            TimeSpan captureTime,
-            TimeSpan nukeLoadTime,
-            TimeSpan hydrateTime,
-            TimeSpan restoreTime,
-            string errorMessage,
-            long totalStart)
-        {
-            return new HotReloadResult(
-                Success: true,
-                matchResult.Matched.Count,
-                matchResult.Orphaned.Count,
-                matchResult.Unmatched.Count,
-                new HotReloadPhases(captureTime, nukeLoadTime, hydrateTime, restoreTime),
-                ElapsedOrOneTick(totalStart),
-                errorMessage,
-                HotReloadStep.Restore);
-        }
-
         private HotReloadResult CreateCaptureFailure(
             HotReloadPhaseResult<IReadOnlyList<InstanceSnapshot>> capture,
             long totalStart)
@@ -446,24 +427,29 @@ namespace QmlSharp.DevTools
                 return string.Empty;
             }
 
+            if (!string.IsNullOrWhiteSpace(unit.SourceMap?.OutputFilePath))
+            {
+                return unit.SourceMap.OutputFilePath;
+            }
+
             if (Path.GetExtension(unit.SourceFilePath).Equals(".qml", StringComparison.OrdinalIgnoreCase))
             {
                 return unit.SourceFilePath;
             }
 
             string fileName = string.IsNullOrWhiteSpace(unit.ViewClassName)
-                ? Path.GetFileNameWithoutExtension(unit.SourceFilePath)
-                : unit.ViewClassName;
+                ? Path.GetFileNameWithoutExtension(NormalizeSeparators(unit.SourceFilePath))
+                : NormalizeSeparators(unit.ViewClassName);
+            string safeFileName = Path.GetFileName(fileName);
 
-            if (string.IsNullOrWhiteSpace(fileName))
+            if (string.IsNullOrWhiteSpace(safeFileName))
             {
                 return string.Empty;
             }
 
-            string? directory = Path.GetDirectoryName(unit.SourceFilePath);
-            return string.IsNullOrWhiteSpace(directory)
-                ? fileName + ".qml"
-                : Path.Combine(directory, fileName + ".qml");
+            return safeFileName.EndsWith(".qml", StringComparison.OrdinalIgnoreCase)
+                ? safeFileName
+                : safeFileName + ".qml";
         }
 
         private TimeSpan ElapsedOrOneTick(long startTimestamp)
@@ -497,6 +483,13 @@ namespace QmlSharp.DevTools
                 or CannotUnloadAppDomainException
                 or InvalidProgramException
                 or ThreadAbortException;
+        }
+
+        private static string NormalizeSeparators(string path)
+        {
+            return path
+                .Replace('\\', Path.DirectorySeparatorChar)
+                .Replace('/', Path.DirectorySeparatorChar);
         }
 
         private sealed record HotReloadPhaseResult<T>(
