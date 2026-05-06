@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>QmlSharp.DevTools.Tests</AssemblyName>
+    <RootNamespace>QmlSharp.DevTools.Tests</RootNamespace>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\QmlSharp.DevTools\QmlSharp.DevTools.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Compiler\QmlSharp.Compiler.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Host\QmlSharp.Host.csproj" />
+    <ProjectReference Include="..\..\src\QmlSharp.Build\QmlSharp.Build.csproj" />
+  </ItemGroup>
+</Project>
