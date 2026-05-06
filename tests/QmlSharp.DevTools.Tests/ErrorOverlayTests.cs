@@ -129,6 +129,75 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        public void Constructor_NullNativeHost_Throws()
+        {
+            _ = Assert.Throws<ArgumentNullException>(() => new ErrorOverlay(null!));
+        }
+
+        [Fact]
+        public void Show_NullError_Throws()
+        {
+            ErrorOverlay overlay = new(new RecordingOverlayNativeHost());
+
+            _ = Assert.Throws<ArgumentNullException>(() => overlay.Show((OverlayError)null!));
+        }
+
+        [Fact]
+        public void Show_EmptyErrorList_Throws()
+        {
+            ErrorOverlay overlay = new(new RecordingOverlayNativeHost());
+
+            _ = Assert.Throws<ArgumentException>(() => overlay.Show(Array.Empty<OverlayError>()));
+        }
+
+        [Fact]
+        public void Show_NullErrorList_Throws()
+        {
+            ErrorOverlay overlay = new(new RecordingOverlayNativeHost());
+
+            _ = Assert.Throws<ArgumentNullException>(() => overlay.Show((IReadOnlyList<OverlayError>)null!));
+        }
+
+        [Fact]
+        public void Show_BlankTitle_ThrowsWithoutNativeCall()
+        {
+            RecordingOverlayNativeHost nativeHost = new();
+            ErrorOverlay overlay = new(nativeHost);
+            OverlayError error = CreateError() with { Title = " " };
+
+            _ = Assert.Throws<ArgumentException>(() => overlay.Show(error));
+
+            Assert.Empty(nativeHost.Calls);
+            Assert.False(overlay.IsVisible);
+        }
+
+        [Fact]
+        public void Show_BlankMessage_ThrowsWithoutNativeCall()
+        {
+            RecordingOverlayNativeHost nativeHost = new();
+            ErrorOverlay overlay = new(nativeHost);
+            OverlayError error = CreateError(message: " ");
+
+            _ = Assert.Throws<ArgumentException>(() => overlay.Show(error));
+
+            Assert.Empty(nativeHost.Calls);
+            Assert.False(overlay.IsVisible);
+        }
+
+        [Fact]
+        public void Show_NonPositiveSourcePosition_MapsToUnknownNativePosition()
+        {
+            RecordingOverlayNativeHost nativeHost = new();
+            ErrorOverlay overlay = new(nativeHost);
+
+            overlay.Show(CreateError(line: 0, column: -3));
+
+            OverlayHostCall call = Assert.Single(nativeHost.Calls);
+            Assert.Equal(0, call.Line);
+            Assert.Equal(0, call.Column);
+        }
+
+        [Fact]
         public void MapDiagnostics_ErrorDiagnostic_MapsCompilerFieldsToOverlayError()
         {
             CompilerDiagnostic diagnostic = new(
@@ -198,6 +267,48 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        public void MapDiagnostics_NullDiagnostics_Throws()
+        {
+            _ = Assert.Throws<ArgumentNullException>(() => ErrorOverlayDiagnosticMapper.MapDiagnostics(null!));
+        }
+
+        [Fact]
+        public void ShowDiagnostics_EmptyDiagnostics_ThrowsWithoutNativeCall()
+        {
+            RecordingOverlayNativeHost nativeHost = new();
+            ErrorOverlay overlay = new(nativeHost);
+
+            _ = Assert.Throws<ArgumentException>(() => overlay.ShowDiagnostics(Array.Empty<CompilerDiagnostic>()));
+
+            Assert.Empty(nativeHost.Calls);
+            Assert.False(overlay.IsVisible);
+        }
+
+        [Fact]
+        public void ShowDiagnostics_AllInfoDiagnostics_ThrowsWithoutNativeCall()
+        {
+            RecordingOverlayNativeHost nativeHost = new();
+            ErrorOverlay overlay = new(nativeHost);
+            CompilerDiagnostic diagnostic = new(
+                DiagnosticCodes.ProjectLoadFailed,
+                DiagnosticSeverity.Info,
+                "Project loaded");
+
+            _ = Assert.Throws<ArgumentException>(() => overlay.ShowDiagnostics(new[] { diagnostic }));
+
+            Assert.Empty(nativeHost.Calls);
+            Assert.False(overlay.IsVisible);
+        }
+
+        [Fact]
+        public void ShowDiagnostics_NullDiagnostics_Throws()
+        {
+            ErrorOverlay overlay = new(new RecordingOverlayNativeHost());
+
+            _ = Assert.Throws<ArgumentNullException>(() => overlay.ShowDiagnostics(null!));
+        }
+
+        [Fact]
         public void ShowDiagnostics_PartialLocation_AllowsNullFilePath()
         {
             RecordingOverlayNativeHost nativeHost = new();
@@ -258,6 +369,39 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        public void ApplyCompilationResult_NullResult_Throws()
+        {
+            ErrorOverlay overlay = new(new RecordingOverlayNativeHost());
+
+            _ = Assert.Throws<ArgumentNullException>(() => overlay.ApplyCompilationResult(null!));
+        }
+
+        [Fact]
+        public void ApplyCompilationResult_FailureWithOnlyInfoDiagnostics_ShowsGenericFallback()
+        {
+            RecordingOverlayNativeHost nativeHost = new();
+            ErrorOverlay overlay = new(nativeHost);
+            CompilerDiagnostic diagnostic = new(
+                DiagnosticCodes.ProjectLoadFailed,
+                DiagnosticSeverity.Info,
+                "Project loaded");
+            CompilationResult result = new()
+            {
+                Units = ImmutableArray.Create(CreateFailedCompilationUnit()),
+                Diagnostics = ImmutableArray.Create(diagnostic),
+            };
+
+            overlay.ApplyCompilationResult(result);
+
+            OverlayHostCall call = Assert.Single(nativeHost.Calls);
+            Assert.Equal("Compilation Error", call.Title);
+            Assert.Equal("Compilation failed.", call.Message);
+            Assert.Null(call.FilePath);
+            Assert.Equal(0, call.Line);
+            Assert.Equal(0, call.Column);
+        }
+
+        [Fact]
         public void ApplyHotReloadResult_Success_HidesVisibleOverlay()
         {
             RecordingOverlayNativeHost nativeHost = new();
@@ -290,6 +434,28 @@ namespace QmlSharp.DevTools.Tests
             Assert.True(overlay.IsVisible);
         }
 
+        [Fact]
+        public void ApplyHotReloadResult_NullResult_Throws()
+        {
+            ErrorOverlay overlay = new(new RecordingOverlayNativeHost());
+
+            _ = Assert.Throws<ArgumentNullException>(() => overlay.ApplyHotReloadResult(null!));
+        }
+
+        [Fact]
+        public void ApplyHotReloadResult_FailureWithBlankMessage_ShowsGenericFallback()
+        {
+            RecordingOverlayNativeHost nativeHost = new();
+            ErrorOverlay overlay = new(nativeHost);
+
+            overlay.ApplyHotReloadResult(CreateHotReloadResult(success: false, errorMessage: " "));
+
+            OverlayHostCall call = Assert.Single(nativeHost.Calls);
+            Assert.Equal("Hot Reload Error", call.Title);
+            Assert.Equal("Hot reload failed.", call.Message);
+            Assert.True(overlay.IsVisible);
+        }
+
         private static OverlayError CreateError(
             string? filePath = "src/App.cs",
             int? line = 10,
@@ -310,6 +476,21 @@ namespace QmlSharp.DevTools.Tests
                 TimeSpan.Zero,
                 errorMessage,
                 success ? null : HotReloadStep.Hydrate);
+        }
+
+        private static CompilationUnit CreateFailedCompilationUnit()
+        {
+            CompilerDiagnostic diagnostic = new(
+                DiagnosticCodes.InvalidStateAttribute,
+                DiagnosticSeverity.Error,
+                "Type mismatch");
+            return new CompilationUnit
+            {
+                SourceFilePath = "src/Broken.cs",
+                ViewClassName = "BrokenView",
+                ViewModelClassName = "BrokenViewModel",
+                Diagnostics = ImmutableArray.Create(diagnostic),
+            };
         }
 
         private sealed class RecordingOverlayNativeHost : IErrorOverlayNativeHost
