@@ -144,11 +144,6 @@ namespace QmlSharp.DevTools
             try
             {
                 ThrowIfDisposed();
-                if (!isRunning)
-                {
-                    throw new InvalidOperationException("REPL is not started.");
-                }
-
                 return await EvalCoreAsync(input, cancellationToken).ConfigureAwait(false);
             }
             finally
@@ -218,15 +213,9 @@ namespace QmlSharp.DevTools
         {
             try
             {
-                scriptState = scriptState is null
-                    ? await CSharpScript.RunAsync(
-                        input,
-                        CreateScriptOptions(),
-                        cancellationToken: cancellationToken).ConfigureAwait(false)
-                    : await scriptState.ContinueWithAsync(
-                        input,
-                        CreateScriptOptions(),
-                        cancellationToken).ConfigureAwait(false);
+                ScriptState<object?> currentState =
+                    await RunCSharpScriptWithTimeoutAsync(input, cancellationToken).ConfigureAwait(false);
+                scriptState = currentState;
 
                 object? returnValue = scriptState.ReturnValue;
                 string output = FormatValue(returnValue);
@@ -257,6 +246,47 @@ namespace QmlSharp.DevTools
                     line: null,
                     column: null);
             }
+        }
+
+        private async Task<ScriptState<object?>> RunCSharpScriptWithTimeoutAsync(
+            string input,
+            CancellationToken cancellationToken)
+        {
+            ScriptState<object?>? previousState = scriptState;
+            ScriptOptions scriptOptions = CreateScriptOptions();
+            Task<ScriptState<object?>> evaluationTask = Task.Run(
+                async () =>
+                {
+                    return previousState is null
+                        ? await CSharpScript.RunAsync(
+                            input,
+                            scriptOptions,
+                            cancellationToken: cancellationToken).ConfigureAwait(false)
+                        : await previousState.ContinueWithAsync(
+                            input,
+                            scriptOptions,
+                            cancellationToken).ConfigureAwait(false);
+                },
+                CancellationToken.None);
+
+            Task timeoutTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            Task completedTask = await Task.WhenAny(evaluationTask, timeoutTask).ConfigureAwait(false);
+            if (ReferenceEquals(completedTask, evaluationTask))
+            {
+                return await evaluationTask.ConfigureAwait(false);
+            }
+
+            ObserveScriptFault(evaluationTask);
+            throw new OperationCanceledException("C# evaluation timed out.", cancellationToken);
+        }
+
+        private static void ObserveScriptFault(Task evaluationTask)
+        {
+            _ = evaluationTask.ContinueWith(
+                static task => _ = task.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
         }
 
         private async Task<ReplResult> EvaluateQmlAsync(
@@ -350,10 +380,19 @@ namespace QmlSharp.DevTools
             }
 
             HotReloadResult result = await devServer.RebuildAsync(cancellationToken).ConfigureAwait(false);
-            string output = result.Success
-                ? "Rebuild succeeded in " + FormatMilliseconds(result.TotalTime) + "."
-                : "Rebuild failed: " + (result.ErrorMessage ?? "unknown error");
-            return Success(output, returnType: null, startTimestamp);
+            if (result.Success)
+            {
+                string output = "Rebuild succeeded in " + FormatMilliseconds(result.TotalTime) + ".";
+                return Success(output, returnType: null, startTimestamp);
+            }
+
+            string errorMessage = "Rebuild failed: " + (result.ErrorMessage ?? "unknown error");
+            return Failure(
+                errorMessage,
+                ReplErrorKind.RuntimeError,
+                startTimestamp,
+                line: null,
+                column: null);
         }
 
         private async Task<ReplResult> EvaluateRestartCommandAsync(

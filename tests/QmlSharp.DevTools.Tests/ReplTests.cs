@@ -189,6 +189,27 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "RPL-10")]
+        public async Task EvalAsync_CSharpBlockingScript_ReturnsTimeoutAndReleasesGate()
+        {
+            ReplOptions options = new(EvaluationTimeout: TimeSpan.FromMilliseconds(25));
+            await using Repl repl = new(options);
+            await repl.StartAsync();
+
+            System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            ReplResult timeout = await repl.EvalAsync("Thread.Sleep(1000); 123");
+            stopwatch.Stop();
+            ReplResult help = await repl.EvalAsync(":help");
+
+            Assert.False(timeout.Success);
+            Assert.NotNull(timeout.Error);
+            Assert.Equal(ReplErrorKind.Timeout, timeout.Error.Kind);
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(2));
+            Assert.True(help.Success);
+            Assert.Contains(":rebuild", help.Output, StringComparison.Ordinal);
+        }
+
+        [Fact]
         [Trait("TestId", "RPL-11")]
         public async Task BuiltinCommand_Rebuild_TriggersDevServer()
         {
@@ -205,6 +226,38 @@ namespace QmlSharp.DevTools.Tests
             Assert.True(result.Success);
             Assert.Equal(1, devServer.RebuildCalls);
             Assert.Contains("Rebuild succeeded", result.Output, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        [Trait("TestId", "RPL-11")]
+        public async Task BuiltinCommand_RebuildFailure_ReturnsRuntimeError()
+        {
+            FakeDevServer devServer = new()
+            {
+                RebuildResult = new HotReloadResult(
+                    Success: false,
+                    InstancesMatched: 0,
+                    InstancesOrphaned: 0,
+                    InstancesNew: 0,
+                    new HotReloadPhases(TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero),
+                    TotalTime: TimeSpan.FromMilliseconds(1),
+                    ErrorMessage: "compiler failed",
+                    FailedStep: HotReloadStep.NukeLoad),
+            };
+            await using Repl repl = new(
+                new ReplOptions(),
+                nativeHost: null,
+                devServer,
+                profiler: null);
+            await repl.StartAsync();
+
+            ReplResult result = await repl.EvalAsync(":rebuild");
+
+            Assert.False(result.Success);
+            Assert.Equal(1, devServer.RebuildCalls);
+            Assert.NotNull(result.Error);
+            Assert.Equal(ReplErrorKind.RuntimeError, result.Error.Kind);
+            Assert.Contains("compiler failed", result.Output, StringComparison.Ordinal);
         }
 
         [Fact]
