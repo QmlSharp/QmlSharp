@@ -500,12 +500,9 @@ namespace QmlSharp.DevTools.Tests
 
             public string GetPath(params string[] parts)
             {
-                foreach (string part in parts)
+                if (parts.Where(System.IO.Path.IsPathRooted).Any())
                 {
-                    if (System.IO.Path.IsPathRooted(part))
-                    {
-                        throw new ArgumentException("Temporary directory paths must be relative.", nameof(parts));
-                    }
+                    throw new ArgumentException("Temporary directory paths must be relative.", nameof(parts));
                 }
 
                 string[] allParts = new string[parts.Length + 1];

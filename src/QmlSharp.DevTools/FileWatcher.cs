@@ -301,7 +301,7 @@ namespace QmlSharp.DevTools
         {
             lock (deliveryGate)
             {
-                // Stop must not return while a debounced batch is still being delivered.
+                Debug.Assert(Status == FileWatcherStatus.Disposed);
             }
         }
     }
@@ -622,20 +622,23 @@ namespace QmlSharp.DevTools
 
         private Dictionary<string, FileSnapshot> Scan()
         {
-            Dictionary<string, FileSnapshot> result = CreateSnapshotDictionary();
-            foreach (string watchPath in options.WatchPaths.OrderBy(static path => path, StringComparer.Ordinal))
-            {
-                ImmutableArray<string> files = EnumerateFiles(watchPath);
-                foreach (string file in files)
-                {
-                    if (TryCreateSnapshot(file, out FileSnapshot? snapshot))
+            return options.WatchPaths
+                .OrderBy(static path => path, StringComparer.Ordinal)
+                .SelectMany(static watchPath => EnumerateSnapshots(watchPath))
+                .Aggregate(
+                    CreateSnapshotDictionary(),
+                    static (result, snapshot) =>
                     {
                         result[snapshot.FilePath] = snapshot;
-                    }
-                }
-            }
+                        return result;
+                    });
+        }
 
-            return result;
+        private static IEnumerable<FileSnapshot> EnumerateSnapshots(string watchPath)
+        {
+            return EnumerateFiles(watchPath)
+                .Select(static file => TryCreateSnapshot(file, out FileSnapshot? snapshot) ? snapshot : null)
+                .OfType<FileSnapshot>();
         }
 
         private static ImmutableArray<string> EnumerateFiles(string watchPath)
