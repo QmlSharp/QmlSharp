@@ -9,5 +9,11 @@ namespace QmlSharp.DevTools
     public sealed record SchemaDiffResult(
         bool HasStructuralChanges,
         IReadOnlyList<string> AffectedViewModels,
-        IReadOnlyList<string> Reasons);
+        IReadOnlyList<string> Reasons)
+    {
+        /// <summary>Gets the console-ready restart reason.</summary>
+        public string RestartReason => Reasons.Count == 0
+            ? "No structural schema change detected."
+            : string.Join("; ", Reasons);
+    }
 }
