@@ -7,7 +7,7 @@ namespace QmlSharp.DevTools
     /// </summary>
     public sealed class DevServer : IDevServer
     {
-        private readonly SemaphoreSlim lifecycleGate = new(1, 1);
+        private readonly AsyncGate lifecycleGate = new();
         private readonly DevServerOptions options;
         private readonly BuildContext buildContext;
         private readonly IFileWatcher fileWatcher;
@@ -20,10 +20,8 @@ namespace QmlSharp.DevTools
         private DevServerStatus status = DevServerStatus.Idle;
         private int buildCount;
         private int rebuildCount;
-        private int hotReloadCount = 0;
         private int errorCount;
         private TimeSpan totalBuildTime;
-        private TimeSpan totalHotReloadTime = TimeSpan.Zero;
         private DateTimeOffset? runningSince;
         private bool runtimeResourcesStarted;
         private bool disposed;
@@ -101,10 +99,10 @@ namespace QmlSharp.DevTools
         public ServerStats Stats => new(
             buildCount,
             rebuildCount,
-            hotReloadCount,
+            HotReloadCount: 0,
             errorCount,
             totalBuildTime,
-            totalHotReloadTime,
+            TotalHotReloadTime: TimeSpan.Zero,
             GetUptime());
 
         /// <inheritdoc />
@@ -117,15 +115,8 @@ namespace QmlSharp.DevTools
         public async Task StartAsync(CancellationToken cancellationToken = default)
         {
             ThrowIfDisposed();
-            await lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                await StartCoreAsync(cancellationToken).ConfigureAwait(false);
-            }
-            finally
-            {
-                _ = lifecycleGate.Release();
-            }
+            using AsyncGate.Releaser gate = await lifecycleGate.AcquireAsync(cancellationToken).ConfigureAwait(false);
+            await StartCoreAsync(cancellationToken).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
@@ -136,76 +127,55 @@ namespace QmlSharp.DevTools
                 return;
             }
 
-            await lifecycleGate.WaitAsync().ConfigureAwait(false);
-            try
-            {
-                await StopCoreAsync().ConfigureAwait(false);
-            }
-            finally
-            {
-                _ = lifecycleGate.Release();
-            }
+            using AsyncGate.Releaser gate = await lifecycleGate.AcquireAsync().ConfigureAwait(false);
+            await StopCoreAsync().ConfigureAwait(false);
         }
 
         /// <inheritdoc />
         public async Task<HotReloadResult> RebuildAsync(CancellationToken cancellationToken = default)
         {
             ThrowIfDisposed();
-            await lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
+            using AsyncGate.Releaser gate = await lifecycleGate.AcquireAsync(cancellationToken).ConfigureAwait(false);
+            EnsureCanRebuild();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            long startTimestamp = clock.GetTimestamp();
+            BuildResult buildResult = await RunRebuildBuildAsync(cancellationToken).ConfigureAwait(false);
+            TimeSpan elapsed = ElapsedOrOneTick(startTimestamp);
+            if (!buildResult.Success)
             {
-                EnsureCanRebuild();
-                cancellationToken.ThrowIfCancellationRequested();
+                return HandleRebuildFailure(buildResult, elapsed);
+            }
 
-                long startTimestamp = clock.GetTimestamp();
-                BuildResult buildResult = await RunRebuildBuildAsync(cancellationToken).ConfigureAwait(false);
-                TimeSpan elapsed = ElapsedOrOneTick(startTimestamp);
-                if (!buildResult.Success)
+            if (status == DevServerStatus.Error)
+            {
+                if (!runtimeResourcesStarted)
                 {
-                    return HandleRebuildFailure(buildResult, elapsed);
-                }
-
-                if (status == DevServerStatus.Error)
-                {
-                    if (!runtimeResourcesStarted)
+                    try
                     {
-                        try
-                        {
-                            await StartRuntimeResourcesAsync(cancellationToken).ConfigureAwait(false);
-                        }
-                        catch (Exception exception) when (!IsCriticalException(exception))
-                        {
-                            return await HandleRebuildStartupFailureAsync(exception, elapsed).ConfigureAwait(false);
-                        }
+                        await StartRuntimeResourcesAsync(cancellationToken).ConfigureAwait(false);
                     }
-
-                    runningSince = clock.UtcNow;
-                    TransitionTo(DevServerStatus.Running, "Rebuild succeeded.");
+                    catch (Exception exception) when (!IsCriticalException(exception))
+                    {
+                        return await HandleRebuildStartupFailureAsync(exception, elapsed).ConfigureAwait(false);
+                    }
                 }
 
-                errorOverlay.Hide();
-                return CreateRebuildResult(success: true, elapsed, errorMessage: null);
+                runningSince = clock.UtcNow;
+                TransitionTo(DevServerStatus.Running, "Rebuild succeeded.");
             }
-            finally
-            {
-                _ = lifecycleGate.Release();
-            }
+
+            errorOverlay.Hide();
+            return CreateRebuildResult(success: true, elapsed, errorMessage: null);
         }
 
         /// <inheritdoc />
         public async Task RestartAsync(CancellationToken cancellationToken = default)
         {
             ThrowIfDisposed();
-            await lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                await StopCoreAsync().ConfigureAwait(false);
-                await StartCoreAsync(cancellationToken).ConfigureAwait(false);
-            }
-            finally
-            {
-                _ = lifecycleGate.Release();
-            }
+            using AsyncGate.Releaser gate = await lifecycleGate.AcquireAsync(cancellationToken).ConfigureAwait(false);
+            await StopCoreAsync().ConfigureAwait(false);
+            await StartCoreAsync(cancellationToken).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
@@ -216,19 +186,10 @@ namespace QmlSharp.DevTools
                 return;
             }
 
-            await lifecycleGate.WaitAsync().ConfigureAwait(false);
-            try
-            {
-                await StopCoreAsync().ConfigureAwait(false);
-                await DisposeOwnedResourcesAsync().ConfigureAwait(false);
-                disposed = true;
-            }
-            finally
-            {
-                _ = lifecycleGate.Release();
-            }
-
-            lifecycleGate.Dispose();
+            using AsyncGate.Releaser gate = await lifecycleGate.AcquireAsync().ConfigureAwait(false);
+            await StopCoreAsync().ConfigureAwait(false);
+            await DisposeOwnedResourcesAsync().ConfigureAwait(false);
+            disposed = true;
         }
 
         private async Task StartCoreAsync(CancellationToken cancellationToken)
@@ -624,6 +585,36 @@ namespace QmlSharp.DevTools
             public TimeSpan GetElapsedTime(long startTimestamp)
             {
                 return TimeProvider.System.GetElapsedTime(startTimestamp);
+            }
+        }
+
+        private sealed class AsyncGate
+        {
+            private readonly SemaphoreSlim semaphore = new(1, 1);
+
+            public async Task<Releaser> AcquireAsync(CancellationToken cancellationToken = default)
+            {
+                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                return new Releaser(semaphore);
+            }
+
+            public sealed class Releaser : IDisposable
+            {
+                private SemaphoreSlim? semaphore;
+
+                internal Releaser(SemaphoreSlim semaphore)
+                {
+                    this.semaphore = semaphore;
+                }
+
+                public void Dispose()
+                {
+                    SemaphoreSlim? current = Interlocked.Exchange(ref semaphore, null);
+                    if (current is not null)
+                    {
+                        _ = current.Release();
+                    }
+                }
             }
         }
     }
