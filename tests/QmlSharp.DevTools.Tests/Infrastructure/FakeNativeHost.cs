@@ -35,6 +35,10 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
 
         public string QmlEvaluationResult { get; set; } = string.Empty;
 
+        public Exception? QmlEvaluationException { get; set; }
+
+        public TimeSpan QmlEvaluationDelay { get; set; }
+
         public Exception? CaptureException { get; set; }
 
         public Exception? ReloadException { get; set; }
@@ -126,10 +130,20 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
             return Task.CompletedTask;
         }
 
-        public Task<string> EvaluateQmlAsync(string input, CancellationToken cancellationToken = default)
+        public async Task<string> EvaluateQmlAsync(string input, CancellationToken cancellationToken = default)
         {
             evaluatedInputs.Add(input);
-            return Task.FromResult(QmlEvaluationResult);
+            if (QmlEvaluationDelay > TimeSpan.Zero)
+            {
+                await Task.Delay(QmlEvaluationDelay, cancellationToken);
+            }
+
+            if (QmlEvaluationException is not null)
+            {
+                throw QmlEvaluationException;
+            }
+
+            return QmlEvaluationResult;
         }
 
         public Task<RuntimeMetrics> GetMetricsAsync(CancellationToken cancellationToken = default)

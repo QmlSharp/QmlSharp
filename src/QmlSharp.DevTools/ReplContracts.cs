@@ -74,7 +74,21 @@ namespace QmlSharp.DevTools
 
         /// <summary>Evaluation timed out.</summary>
         Timeout,
+
+        /// <summary>Built-in command is not supported by the current REPL context.</summary>
+        UnsupportedCommand,
     }
+
+    /// <summary>Configuration for a REPL session.</summary>
+    /// <param name="DefaultMode">Initial evaluation mode.</param>
+    /// <param name="MaxHistory">Maximum number of history entries retained.</param>
+    /// <param name="HistoryFilePath">Optional history persistence file.</param>
+    /// <param name="EvaluationTimeout">Maximum duration for one evaluation.</param>
+    public sealed record ReplOptions(
+        ReplMode DefaultMode = ReplMode.CSharp,
+        int MaxHistory = 100,
+        string? HistoryFilePath = null,
+        TimeSpan? EvaluationTimeout = null);
 
 #pragma warning restore MA0048
 }
