@@ -172,7 +172,8 @@ namespace QmlSharp.DevTools
             using IDisposable? span = profiler?.StartSpan("repl_eval", PerfCategory.Repl);
             using CancellationTokenSource linkedCancellation =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            linkedCancellation.CancelAfter(options.EvaluationTimeout ?? DefaultEvaluationTimeout);
+            TimeSpan evaluationTimeout = options.EvaluationTimeout ?? DefaultEvaluationTimeout;
+            linkedCancellation.CancelAfter(evaluationTimeout);
 
             try
             {
@@ -183,7 +184,7 @@ namespace QmlSharp.DevTools
                 }
 
                 return Mode == ReplMode.CSharp
-                    ? await EvaluateCSharpAsync(input, startTimestamp, linkedCancellation.Token).ConfigureAwait(false)
+                    ? await EvaluateCSharpAsync(input, startTimestamp, cancellationToken, evaluationTimeout).ConfigureAwait(false)
                     : await EvaluateQmlAsync(input, startTimestamp, linkedCancellation.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException exception)
@@ -209,12 +210,13 @@ namespace QmlSharp.DevTools
         private async Task<ReplResult> EvaluateCSharpAsync(
             string input,
             long startTimestamp,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            TimeSpan evaluationTimeout)
         {
             try
             {
                 ScriptState<object?> currentState =
-                    await RunCSharpScriptWithTimeoutAsync(input, cancellationToken).ConfigureAwait(false);
+                    await RunCSharpScriptWithTimeoutAsync(input, cancellationToken, evaluationTimeout).ConfigureAwait(false);
                 scriptState = currentState;
 
                 object? returnValue = scriptState.ReturnValue;
@@ -250,7 +252,8 @@ namespace QmlSharp.DevTools
 
         private async Task<ScriptState<object?>> RunCSharpScriptWithTimeoutAsync(
             string input,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            TimeSpan evaluationTimeout)
         {
             ScriptState<object?>? previousState = scriptState;
             ScriptOptions scriptOptions = CreateScriptOptions();
@@ -269,15 +272,21 @@ namespace QmlSharp.DevTools
                 },
                 CancellationToken.None);
 
-            Task timeoutTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-            Task completedTask = await Task.WhenAny(evaluationTask, timeoutTask).ConfigureAwait(false);
+            Task timeoutTask = Task.Delay(evaluationTimeout, CancellationToken.None);
+            Task cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            Task completedTask = await Task.WhenAny(evaluationTask, timeoutTask, cancellationTask).ConfigureAwait(false);
             if (ReferenceEquals(completedTask, evaluationTask))
             {
                 return await evaluationTask.ConfigureAwait(false);
             }
 
             ObserveScriptFault(evaluationTask);
-            throw new OperationCanceledException("C# evaluation timed out.", cancellationToken);
+            if (ReferenceEquals(completedTask, cancellationTask))
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            throw new OperationCanceledException("C# evaluation timed out.");
         }
 
         private static void ObserveScriptFault(Task evaluationTask)

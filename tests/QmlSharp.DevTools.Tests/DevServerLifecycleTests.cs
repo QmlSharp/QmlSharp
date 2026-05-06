@@ -144,8 +144,16 @@ namespace QmlSharp.DevTools.Tests
             ManualDevToolsClock clock = new();
             ServerHarness harness = CreateHarness(clock: clock);
             harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(17), filesCompiled: 3));
-            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(5), filesCompiled: 1));
-            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(7), filesCompiled: 2));
+            harness.Compiler.QueueResult(DevToolsTestFixtures.CompilationResultWithSchema(elapsedMilliseconds: 5));
+            harness.Compiler.QueueResult(DevToolsTestFixtures.CompilationResultWithSchema(elapsedMilliseconds: 7));
+            harness.HotReload.QueueResult(FakeHotReloadOrchestrator.SuccessfulResult() with
+            {
+                TotalTime = TimeSpan.FromMilliseconds(2),
+            });
+            harness.HotReload.QueueResult(FakeHotReloadOrchestrator.SuccessfulResult() with
+            {
+                TotalTime = TimeSpan.FromMilliseconds(3),
+            });
             await harness.Server.StartAsync();
             clock.Advance(TimeSpan.FromSeconds(3));
 
@@ -157,14 +165,16 @@ namespace QmlSharp.DevTools.Tests
             Assert.True(secondRebuild.Success);
             Assert.Equal(1, stats.BuildCount);
             Assert.Equal(2, stats.RebuildCount);
-            Assert.Equal(0, stats.HotReloadCount);
+            Assert.Equal(2, stats.HotReloadCount);
             Assert.Equal(0, stats.ErrorCount);
             Assert.Equal(TimeSpan.FromMilliseconds(29), stats.TotalBuildTime);
-            Assert.Equal(TimeSpan.Zero, stats.TotalHotReloadTime);
+            Assert.Equal(TimeSpan.FromMilliseconds(5), stats.TotalHotReloadTime);
             Assert.Equal(TimeSpan.FromSeconds(3), stats.Uptime);
             Assert.Equal(3, harness.Console.BuildSuccessCalls);
-            Assert.Equal(0, harness.Console.HotReloadSuccessCalls);
-            Assert.Equal(3, harness.BuildPipeline.Requests.Count);
+            Assert.Equal(2, harness.Console.HotReloadSuccessCalls);
+            _ = Assert.Single(harness.BuildPipeline.Requests);
+            Assert.Equal(2, harness.Compiler.Requests.Count);
+            Assert.Equal(2, harness.HotReload.Requests.Count);
             Assert.Equal(3, harness.Profiler.GetRecords().Count);
         }
 
@@ -173,41 +183,44 @@ namespace QmlSharp.DevTools.Tests
         {
             ServerHarness harness = CreateHarness();
             harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(11), filesCompiled: 2));
-            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(13), filesCompiled: 4));
+            harness.Compiler.QueueResult(DevToolsTestFixtures.CompilationResultWithSchema(elapsedMilliseconds: 13));
             await harness.Server.StartAsync();
 
             HotReloadResult result = await harness.Server.RebuildAsync();
 
             Assert.True(result.Success);
             Assert.Equal(DevServerStatus.Running, harness.Server.Status);
-            Assert.Equal(2, harness.BuildPipeline.Requests.Count);
+            _ = Assert.Single(harness.BuildPipeline.Requests);
+            _ = Assert.Single(harness.Compiler.Requests);
+            _ = Assert.Single(harness.HotReload.Requests);
             Assert.Equal(1, harness.Server.Stats.BuildCount);
             Assert.Equal(1, harness.Server.Stats.RebuildCount);
-            Assert.Equal(0, harness.Server.Stats.HotReloadCount);
+            Assert.Equal(1, harness.Server.Stats.HotReloadCount);
             Assert.Equal(TimeSpan.FromMilliseconds(24), harness.Server.Stats.TotalBuildTime);
             Assert.Equal(2, harness.Console.BuildSuccessCalls);
-            Assert.Equal(0, harness.Console.HotReloadSuccessCalls);
+            Assert.Equal(1, harness.Console.HotReloadSuccessCalls);
             Assert.False(harness.Overlay.IsVisible);
         }
 
         [Fact]
-        public async Task RebuildAsync_FailedBuild_ReturnsFailureAndTransitionsToError()
+        public async Task RebuildAsync_FailedCompilation_ReturnsFailureAndTransitionsToError()
         {
             ServerHarness harness = CreateHarness();
             harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(11), filesCompiled: 2));
-            harness.BuildPipeline.QueueResult(FailedBuildResult());
+            harness.Compiler.QueueResult(DevToolsTestFixtures.FailedCompilationResult());
             await harness.Server.StartAsync();
 
             HotReloadResult result = await harness.Server.RebuildAsync();
 
             Assert.False(result.Success);
             Assert.Equal(DevServerStatus.Error, harness.Server.Status);
-            Assert.Equal(2, harness.BuildPipeline.Requests.Count);
+            _ = Assert.Single(harness.BuildPipeline.Requests);
+            _ = Assert.Single(harness.Compiler.Requests);
             Assert.Equal(1, harness.Server.Stats.RebuildCount);
             Assert.Equal(1, harness.Server.Stats.ErrorCount);
             Assert.True(harness.Overlay.IsVisible);
             Assert.Contains("compile failed", result.ErrorMessage, StringComparison.Ordinal);
-            Assert.Contains("Rebuild failed", harness.Console.Errors[0], StringComparison.Ordinal);
+            Assert.Equal(1, harness.Console.BuildErrorCalls);
         }
 
         [Fact]
@@ -215,7 +228,7 @@ namespace QmlSharp.DevTools.Tests
         {
             ServerHarness harness = CreateHarness();
             harness.BuildPipeline.QueueResult(FailedBuildResult());
-            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(13), filesCompiled: 4));
+            harness.Compiler.QueueResult(DevToolsTestFixtures.CompilationResultWithSchema(elapsedMilliseconds: 13));
             await harness.Server.StartAsync();
 
             HotReloadResult result = await harness.Server.RebuildAsync();
@@ -228,6 +241,7 @@ namespace QmlSharp.DevTools.Tests
             Assert.Equal(1, harness.Server.Stats.BuildCount);
             Assert.Equal(1, harness.Server.Stats.RebuildCount);
             Assert.Equal(1, harness.Server.Stats.ErrorCount);
+            Assert.Empty(harness.HotReload.Requests);
         }
 
         [Fact]
@@ -336,6 +350,8 @@ namespace QmlSharp.DevTools.Tests
             DevServerOptions? options = null,
             RecordingFileWatcher? fileWatcher = null,
             FakeBuildPipeline? buildPipeline = null,
+            FakeDevToolsCompiler? compiler = null,
+            FakeHotReloadOrchestrator? hotReload = null,
             RecordingDevConsole? console = null,
             RecordingErrorOverlay? overlay = null,
             ManualDevToolsClock? clock = null,
@@ -344,6 +360,8 @@ namespace QmlSharp.DevTools.Tests
             DevServerOptions serverOptions = options ?? ServerOptions();
             RecordingFileWatcher serverFileWatcher = fileWatcher ?? new RecordingFileWatcher();
             FakeBuildPipeline serverBuildPipeline = buildPipeline ?? new FakeBuildPipeline();
+            FakeDevToolsCompiler serverCompiler = compiler ?? new FakeDevToolsCompiler();
+            FakeHotReloadOrchestrator serverHotReload = hotReload ?? new FakeHotReloadOrchestrator();
             RecordingDevConsole serverConsole = console ?? new RecordingDevConsole();
             RecordingErrorOverlay serverOverlay = overlay ?? new RecordingErrorOverlay();
             ManualDevToolsClock serverClock = clock ?? new ManualDevToolsClock();
@@ -353,16 +371,22 @@ namespace QmlSharp.DevTools.Tests
                 DevToolsTestFixtures.BuildContext(),
                 serverFileWatcher,
                 serverBuildPipeline,
+                serverCompiler,
+                DevToolsTestFixtures.CompilerOptions(),
+                serverHotReload,
                 serverConsole,
                 serverOverlay,
                 profiler,
                 repl,
-                serverClock);
+                serverClock,
+                new SchemaDiffer());
 
             return new ServerHarness(
                 server,
                 serverFileWatcher,
                 serverBuildPipeline,
+                serverCompiler,
+                serverHotReload,
                 serverConsole,
                 serverOverlay,
                 profiler,
@@ -440,6 +464,8 @@ namespace QmlSharp.DevTools.Tests
             DevServer Server,
             RecordingFileWatcher FileWatcher,
             FakeBuildPipeline BuildPipeline,
+            FakeDevToolsCompiler Compiler,
+            FakeHotReloadOrchestrator HotReload,
             RecordingDevConsole Console,
             RecordingErrorOverlay Overlay,
             PerfProfiler Profiler,
@@ -499,6 +525,8 @@ namespace QmlSharp.DevTools.Tests
 
             public int BuildSuccessCalls { get; private set; }
 
+            public int BuildErrorCalls { get; private set; }
+
             public int HotReloadSuccessCalls { get; private set; }
 
             public int ServerStoppedCalls { get; private set; }
@@ -533,6 +561,7 @@ namespace QmlSharp.DevTools.Tests
 
             public void BuildError(IReadOnlyList<CompilerDiagnostic> errors)
             {
+                BuildErrorCalls++;
             }
 
             public void HotReloadSuccess(HotReloadResult result)
