@@ -8,13 +8,24 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
 
         public long GetTimestamp()
         {
-            return timestamp++;
+            return timestamp;
         }
 
         public TimeSpan GetElapsedTime(long startTimestamp)
         {
             long elapsedTicks = Math.Max(0, timestamp - startTimestamp);
             return TimeSpan.FromTicks(elapsedTicks);
+        }
+
+        public void Advance(TimeSpan elapsed)
+        {
+            if (elapsed < TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(elapsed), elapsed, "Elapsed time must not be negative.");
+            }
+
+            timestamp += elapsed.Ticks;
+            UtcNow += elapsed;
         }
     }
 
