@@ -106,7 +106,7 @@ namespace QmlSharp.DevTools.Tests
                 },
                 events.Select(static statusChanged => statusChanged.Current).ToArray());
             Assert.Equal(DevServerStatus.Error, events[0].Previous);
-            Assert.Equal(1, harness.FileWatcher.StopCalls);
+            Assert.Equal(0, harness.FileWatcher.StopCalls);
             Assert.False(harness.Overlay.IsVisible);
             Assert.Equal(1, harness.Console.ServerStoppedCalls);
         }
@@ -144,6 +144,8 @@ namespace QmlSharp.DevTools.Tests
             ManualDevToolsClock clock = new();
             ServerHarness harness = CreateHarness(clock: clock);
             harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(17), filesCompiled: 3));
+            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(5), filesCompiled: 1));
+            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(7), filesCompiled: 2));
             await harness.Server.StartAsync();
             clock.Advance(TimeSpan.FromSeconds(3));
 
@@ -155,13 +157,77 @@ namespace QmlSharp.DevTools.Tests
             Assert.True(secondRebuild.Success);
             Assert.Equal(1, stats.BuildCount);
             Assert.Equal(2, stats.RebuildCount);
-            Assert.Equal(2, stats.HotReloadCount);
+            Assert.Equal(0, stats.HotReloadCount);
             Assert.Equal(0, stats.ErrorCount);
-            Assert.Equal(TimeSpan.FromMilliseconds(17), stats.TotalBuildTime);
-            Assert.True(stats.TotalHotReloadTime > TimeSpan.Zero);
+            Assert.Equal(TimeSpan.FromMilliseconds(29), stats.TotalBuildTime);
+            Assert.Equal(TimeSpan.Zero, stats.TotalHotReloadTime);
             Assert.Equal(TimeSpan.FromSeconds(3), stats.Uptime);
-            Assert.Equal(2, harness.Console.HotReloadSuccessCalls);
+            Assert.Equal(3, harness.Console.BuildSuccessCalls);
+            Assert.Equal(0, harness.Console.HotReloadSuccessCalls);
+            Assert.Equal(3, harness.BuildPipeline.Requests.Count);
             Assert.Equal(3, harness.Profiler.GetRecords().Count);
+        }
+
+        [Fact]
+        public async Task RebuildAsync_RunningServer_RunsBuildPipelineBeforeReportingSuccess()
+        {
+            ServerHarness harness = CreateHarness();
+            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(11), filesCompiled: 2));
+            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(13), filesCompiled: 4));
+            await harness.Server.StartAsync();
+
+            HotReloadResult result = await harness.Server.RebuildAsync();
+
+            Assert.True(result.Success);
+            Assert.Equal(DevServerStatus.Running, harness.Server.Status);
+            Assert.Equal(2, harness.BuildPipeline.Requests.Count);
+            Assert.Equal(1, harness.Server.Stats.BuildCount);
+            Assert.Equal(1, harness.Server.Stats.RebuildCount);
+            Assert.Equal(0, harness.Server.Stats.HotReloadCount);
+            Assert.Equal(TimeSpan.FromMilliseconds(24), harness.Server.Stats.TotalBuildTime);
+            Assert.Equal(2, harness.Console.BuildSuccessCalls);
+            Assert.Equal(0, harness.Console.HotReloadSuccessCalls);
+            Assert.False(harness.Overlay.IsVisible);
+        }
+
+        [Fact]
+        public async Task RebuildAsync_FailedBuild_ReturnsFailureAndTransitionsToError()
+        {
+            ServerHarness harness = CreateHarness();
+            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(11), filesCompiled: 2));
+            harness.BuildPipeline.QueueResult(FailedBuildResult());
+            await harness.Server.StartAsync();
+
+            HotReloadResult result = await harness.Server.RebuildAsync();
+
+            Assert.False(result.Success);
+            Assert.Equal(DevServerStatus.Error, harness.Server.Status);
+            Assert.Equal(2, harness.BuildPipeline.Requests.Count);
+            Assert.Equal(1, harness.Server.Stats.RebuildCount);
+            Assert.Equal(1, harness.Server.Stats.ErrorCount);
+            Assert.True(harness.Overlay.IsVisible);
+            Assert.Contains("compile failed", result.ErrorMessage, StringComparison.Ordinal);
+            Assert.Contains("Rebuild failed", harness.Console.Errors[0], StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public async Task RebuildAsync_AfterInitialBuildFailure_StartsRuntimeResourcesBeforeRunning()
+        {
+            ServerHarness harness = CreateHarness();
+            harness.BuildPipeline.QueueResult(FailedBuildResult());
+            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(13), filesCompiled: 4));
+            await harness.Server.StartAsync();
+
+            HotReloadResult result = await harness.Server.RebuildAsync();
+
+            Assert.True(result.Success);
+            Assert.Equal(DevServerStatus.Running, harness.Server.Status);
+            Assert.Equal(1, harness.FileWatcher.StartCalls);
+            Assert.Equal(FileWatcherStatus.Running, harness.FileWatcher.Status);
+            Assert.False(harness.Overlay.IsVisible);
+            Assert.Equal(1, harness.Server.Stats.BuildCount);
+            Assert.Equal(1, harness.Server.Stats.RebuildCount);
+            Assert.Equal(1, harness.Server.Stats.ErrorCount);
         }
 
         [Fact]
@@ -185,6 +251,39 @@ namespace QmlSharp.DevTools.Tests
             Assert.Equal(1, harness.Console.ErrorCalls);
             Assert.Equal(1, harness.Server.Stats.ErrorCount);
             Assert.Equal(DevServerStatus.Error, events[^1].Current);
+        }
+
+        [Fact]
+        public async Task StartAsync_WhenInitialBuildIsCanceled_ReturnsToIdleAndAllowsRetry()
+        {
+            using CancellationTokenSource cancellation = new();
+            FakeBuildPipeline buildPipeline = new()
+            {
+                OnBuild = _ => cancellation.Cancel(),
+            };
+            ServerHarness harness = CreateHarness(buildPipeline: buildPipeline);
+            List<DevServerStatusChangedEvent> events = CaptureEvents(harness.Server);
+
+            _ = await Assert.ThrowsAsync<OperationCanceledException>(
+                async () => await harness.Server.StartAsync(cancellation.Token));
+            buildPipeline.OnBuild = null;
+            await harness.Server.StartAsync();
+
+            Assert.Equal(DevServerStatus.Running, harness.Server.Status);
+            Assert.Equal(
+                new[]
+                {
+                    DevServerStatus.Starting,
+                    DevServerStatus.Building,
+                    DevServerStatus.Idle,
+                    DevServerStatus.Starting,
+                    DevServerStatus.Building,
+                    DevServerStatus.Running,
+                },
+                events.Select(static statusChanged => statusChanged.Current).ToArray());
+            Assert.Equal(2, buildPipeline.Requests.Count);
+            Assert.Equal(1, harness.FileWatcher.StartCalls);
+            Assert.Equal(0, harness.Server.Stats.ErrorCount);
         }
 
         [Fact]

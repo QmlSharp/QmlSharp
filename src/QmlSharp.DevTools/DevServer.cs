@@ -7,12 +7,6 @@ namespace QmlSharp.DevTools
     /// </summary>
     public sealed class DevServer : IDevServer
     {
-        private static readonly HotReloadPhases EmptyHotReloadPhases = new(
-            TimeSpan.Zero,
-            TimeSpan.Zero,
-            TimeSpan.Zero,
-            TimeSpan.Zero);
-
         private readonly SemaphoreSlim lifecycleGate = new(1, 1);
         private readonly DevServerOptions options;
         private readonly BuildContext buildContext;
@@ -26,11 +20,12 @@ namespace QmlSharp.DevTools
         private DevServerStatus status = DevServerStatus.Idle;
         private int buildCount;
         private int rebuildCount;
-        private int hotReloadCount;
+        private int hotReloadCount = 0;
         private int errorCount;
         private TimeSpan totalBuildTime;
-        private TimeSpan totalHotReloadTime;
+        private TimeSpan totalHotReloadTime = TimeSpan.Zero;
         private DateTimeOffset? runningSince;
+        private bool runtimeResourcesStarted;
         private bool disposed;
 
         /// <summary>
@@ -163,24 +158,33 @@ namespace QmlSharp.DevTools
                 cancellationToken.ThrowIfCancellationRequested();
 
                 long startTimestamp = clock.GetTimestamp();
-                using IDisposable span = profiler.StartSpan("devserver_rebuild_placeholder", PerfCategory.HotReload);
+                BuildResult buildResult = await RunRebuildBuildAsync(cancellationToken).ConfigureAwait(false);
                 TimeSpan elapsed = ElapsedOrOneTick(startTimestamp);
-                HotReloadResult result = new(
-                    Success: true,
-                    InstancesMatched: 0,
-                    InstancesOrphaned: 0,
-                    InstancesNew: 0,
-                    EmptyHotReloadPhases,
-                    elapsed,
-                    ErrorMessage: null,
-                    FailedStep: null);
+                if (!buildResult.Success)
+                {
+                    return HandleRebuildFailure(buildResult, elapsed);
+                }
 
-                rebuildCount++;
-                hotReloadCount++;
-                totalHotReloadTime += result.TotalTime;
+                if (status == DevServerStatus.Error)
+                {
+                    if (!runtimeResourcesStarted)
+                    {
+                        try
+                        {
+                            await StartRuntimeResourcesAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        catch (Exception exception) when (!IsCriticalException(exception))
+                        {
+                            return await HandleRebuildStartupFailureAsync(exception, elapsed).ConfigureAwait(false);
+                        }
+                    }
+
+                    runningSince = clock.UtcNow;
+                    TransitionTo(DevServerStatus.Running, "Rebuild succeeded.");
+                }
+
                 errorOverlay.Hide();
-                console.HotReloadSuccess(result);
-                return result;
+                return CreateRebuildResult(success: true, elapsed, errorMessage: null);
             }
             finally
             {
@@ -222,39 +226,44 @@ namespace QmlSharp.DevTools
             finally
             {
                 _ = lifecycleGate.Release();
-                lifecycleGate.Dispose();
             }
+
+            lifecycleGate.Dispose();
         }
 
         private async Task StartCoreAsync(CancellationToken cancellationToken)
         {
             EnsureCanStart();
-            cancellationToken.ThrowIfCancellationRequested();
-
-            TransitionTo(DevServerStatus.Starting, "Start requested.");
-            console.Banner("dev", options);
-
-            TransitionTo(DevServerStatus.Building, "Initial build starting.");
-            BuildResult buildResult = await RunInitialBuildAsync(cancellationToken).ConfigureAwait(false);
-            if (!buildResult.Success)
-            {
-                HandleInitialBuildFailure(buildResult);
-                return;
-            }
-
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                TransitionTo(DevServerStatus.Starting, "Start requested.");
+                console.Banner("dev", options);
+
+                TransitionTo(DevServerStatus.Building, "Initial build starting.");
+                BuildResult buildResult = await RunInitialBuildAsync(cancellationToken).ConfigureAwait(false);
+                if (!buildResult.Success)
+                {
+                    HandleInitialBuildFailure(buildResult);
+                    return;
+                }
+
                 await StartRuntimeResourcesAsync(cancellationToken).ConfigureAwait(false);
+
+                runningSince = clock.UtcNow;
+                errorOverlay.Hide();
+                TransitionTo(DevServerStatus.Running, "Initial build succeeded.");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                await HandleStartupCancellationAsync().ConfigureAwait(false);
+                throw;
             }
             catch (Exception exception) when (!IsCriticalException(exception))
             {
                 await HandleStartupFailureAsync(exception).ConfigureAwait(false);
-                return;
             }
-
-            runningSince = clock.UtcNow;
-            errorOverlay.Hide();
-            TransitionTo(DevServerStatus.Running, "Initial build succeeded.");
         }
 
         private async Task StopCoreAsync()
@@ -277,31 +286,43 @@ namespace QmlSharp.DevTools
 
         private async Task<BuildResult> RunInitialBuildAsync(CancellationToken cancellationToken)
         {
+            return await RunBuildAsync(
+                "devserver_initial_build",
+                isRebuild: false,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task<BuildResult> RunRebuildBuildAsync(CancellationToken cancellationToken)
+        {
+            return await RunBuildAsync(
+                "devserver_rebuild",
+                isRebuild: true,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task<BuildResult> RunBuildAsync(
+            string spanName,
+            bool isRebuild,
+            CancellationToken cancellationToken)
+        {
             long buildStart = clock.GetTimestamp();
             console.BuildStart(fileCount: 0);
-            using IDisposable span = profiler.StartSpan("devserver_initial_build", PerfCategory.Build);
+            using IDisposable span = profiler.StartSpan(spanName, PerfCategory.Build);
             BuildResult buildResult = await buildPipeline
                 .BuildAsync(buildContext, cancellationToken)
                 .ConfigureAwait(false);
 
-            TimeSpan measuredBuildTime = ElapsedOrOneTick(buildStart);
-            TimeSpan buildTime = buildResult.Stats.TotalDuration > TimeSpan.Zero
-                ? buildResult.Stats.TotalDuration
-                : measuredBuildTime;
-
-            buildCount++;
-            totalBuildTime += buildTime;
-
-            if (buildResult.Success)
-            {
-                console.BuildSuccess(buildTime, buildResult.Stats.FilesCompiled);
-            }
-
+            RecordBuildResult(buildResult, buildStart, isRebuild);
             return buildResult;
         }
 
         private async Task StartRuntimeResourcesAsync(CancellationToken cancellationToken)
         {
+            if (runtimeResourcesStarted)
+            {
+                return;
+            }
+
             fileWatcher.Start();
             console.WatchStarted(fileCount: 0, options.WatcherOptions.WatchPaths);
 
@@ -309,6 +330,8 @@ namespace QmlSharp.DevTools
             {
                 await repl.StartAsync(cancellationToken).ConfigureAwait(false);
             }
+
+            runtimeResourcesStarted = true;
         }
 
         private void HandleInitialBuildFailure(BuildResult buildResult)
@@ -318,8 +341,79 @@ namespace QmlSharp.DevTools
                 ? ImmutableArray<BuildDiagnostic>.Empty
                 : buildResult.Diagnostics;
             errorOverlay.Show(CreateOverlayErrors(diagnostics));
-            console.Error(CreateBuildFailureMessage(diagnostics));
+            console.Error(CreateBuildFailureMessage("Initial build failed", diagnostics));
             TransitionTo(DevServerStatus.Error, "Initial build failed.");
+        }
+
+        private HotReloadResult HandleRebuildFailure(BuildResult buildResult, TimeSpan elapsed)
+        {
+            errorCount++;
+            ImmutableArray<BuildDiagnostic> diagnostics = buildResult.Diagnostics.IsDefault
+                ? ImmutableArray<BuildDiagnostic>.Empty
+                : buildResult.Diagnostics;
+            string errorMessage = CreateBuildFailureMessage("Rebuild failed", diagnostics);
+            errorOverlay.Show(CreateOverlayErrors(diagnostics));
+            console.Error(errorMessage);
+            TransitionTo(DevServerStatus.Error, "Rebuild failed.");
+            return CreateRebuildResult(success: false, elapsed, errorMessage);
+        }
+
+        private async Task<HotReloadResult> HandleRebuildStartupFailureAsync(
+            Exception exception,
+            TimeSpan elapsed)
+        {
+            errorCount++;
+            await CleanupRuntimeResourcesForFailedStartupAsync().ConfigureAwait(false);
+            string errorMessage = "Rebuild startup failed: " + exception.Message;
+            errorOverlay.Show(new OverlayError(
+                "Dev Server Startup Error",
+                exception.Message,
+                FilePath: null,
+                Line: null,
+                Column: null));
+            console.Error(errorMessage);
+            TransitionTo(DevServerStatus.Error, "Rebuild resource initialization failed.");
+            return CreateRebuildResult(success: false, elapsed, errorMessage);
+        }
+
+        private void RecordBuildResult(BuildResult buildResult, long buildStart, bool isRebuild)
+        {
+            TimeSpan measuredBuildTime = ElapsedOrOneTick(buildStart);
+            TimeSpan buildTime = buildResult.Stats.TotalDuration > TimeSpan.Zero
+                ? buildResult.Stats.TotalDuration
+                : measuredBuildTime;
+
+            if (isRebuild)
+            {
+                rebuildCount++;
+            }
+            else
+            {
+                buildCount++;
+            }
+
+            totalBuildTime += buildTime;
+
+            if (buildResult.Success)
+            {
+                console.BuildSuccess(buildTime, buildResult.Stats.FilesCompiled);
+            }
+        }
+
+        private static HotReloadResult CreateRebuildResult(
+            bool success,
+            TimeSpan elapsed,
+            string? errorMessage)
+        {
+            return new HotReloadResult(
+                success,
+                InstancesMatched: 0,
+                InstancesOrphaned: 0,
+                InstancesNew: 0,
+                new HotReloadPhases(TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero),
+                elapsed,
+                errorMessage,
+                FailedStep: null);
         }
 
         private async Task HandleStartupFailureAsync(Exception exception)
@@ -336,8 +430,21 @@ namespace QmlSharp.DevTools
             TransitionTo(DevServerStatus.Error, "Startup resource initialization failed.");
         }
 
+        private async Task HandleStartupCancellationAsync()
+        {
+            await CleanupRuntimeResourcesForFailedStartupAsync().ConfigureAwait(false);
+            runningSince = null;
+            TransitionTo(DevServerStatus.Idle, "Start canceled.");
+        }
+
         private async Task CleanupRuntimeResourcesAsync()
         {
+            if (!runtimeResourcesStarted)
+            {
+                errorOverlay.Hide();
+                return;
+            }
+
             if (options.EnableRepl && repl is not null)
             {
                 await repl.StopAsync().ConfigureAwait(false);
@@ -345,6 +452,7 @@ namespace QmlSharp.DevTools
 
             fileWatcher.Stop();
             errorOverlay.Hide();
+            runtimeResourcesStarted = false;
         }
 
         private async Task CleanupRuntimeResourcesForFailedStartupAsync()
@@ -369,6 +477,8 @@ namespace QmlSharp.DevTools
                     console.Warn("REPL cleanup after failed startup failed: " + exception.Message);
                 }
             }
+
+            runtimeResourcesStarted = false;
         }
 
         private async Task DisposeOwnedResourcesAsync()
@@ -472,18 +582,20 @@ namespace QmlSharp.DevTools
             return builder.ToImmutable();
         }
 
-        private static string CreateBuildFailureMessage(ImmutableArray<BuildDiagnostic> diagnostics)
+        private static string CreateBuildFailureMessage(
+            string failurePrefix,
+            ImmutableArray<BuildDiagnostic> diagnostics)
         {
             if (diagnostics.IsDefaultOrEmpty)
             {
-                return "Initial build failed.";
+                return failurePrefix + ".";
             }
 
             BuildDiagnostic primary = diagnostics
                 .OrderByDescending(static diagnostic => diagnostic.Severity)
                 .ThenBy(static diagnostic => diagnostic.Code, StringComparer.Ordinal)
                 .First();
-            return "Initial build failed: " + primary.Code + ": " + primary.Message;
+            return failurePrefix + ": " + primary.Code + ": " + primary.Message;
         }
 
         private static bool IsCriticalException(Exception exception)
