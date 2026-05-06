@@ -189,16 +189,14 @@ namespace QmlSharp.DevTools
                 reasons);
 
             foreach (string name in previousByName.Keys.Intersect(currentByName.Keys, StringComparer.Ordinal)
-                .OrderBy(static value => value, StringComparer.Ordinal))
+                .OrderBy(static value => value, StringComparer.Ordinal)
+                .Where(name => !ParametersEqual(previousByName[name].Parameters, currentByName[name].Parameters)))
             {
-                if (!ParametersEqual(previousByName[name].Parameters, currentByName[name].Parameters))
-                {
-                    AddReason(
-                        affected,
-                        reasons,
-                        current.ClassName,
-                        current.ClassName + " command parameters changed: " + name);
-                }
+                AddReason(
+                    affected,
+                    reasons,
+                    current.ClassName,
+                    current.ClassName + " command parameters changed: " + name);
             }
         }
 

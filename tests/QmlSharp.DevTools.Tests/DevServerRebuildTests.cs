@@ -199,6 +199,50 @@ namespace QmlSharp.DevTools.Tests
 
         [Fact]
         [Trait("TestId", "DSV-12")]
+        public async Task ConfigFileChange_DSV_12_ReloadsBuildCompilerAndWatcherConfiguration()
+        {
+            TestFileWatcher initialWatcher = new();
+            List<TestFileWatcher> createdWatchers = new();
+            List<FileWatcherOptions> createdWatcherOptions = new();
+            FakeConfigLoader configLoader = new(ReloadedConfig());
+            ServerHarness harness = CreateHarness(
+                fileWatcher: initialWatcher,
+                configLoader: configLoader,
+                fileWatcherFactory: watcherOptions =>
+                {
+                    createdWatcherOptions.Add(watcherOptions);
+                    TestFileWatcher watcher = new();
+                    createdWatchers.Add(watcher);
+                    return watcher;
+                });
+            harness.BuildPipeline.QueueResult(DevToolsTestFixtures.SuccessfulBuildResult());
+            harness.BuildPipeline.QueueResult(DevToolsTestFixtures.SuccessfulBuildResult());
+            await harness.Server.StartAsync();
+
+            initialWatcher.Emit(FileChangeBatch("C:/repo/qmlsharp.json"));
+
+            await WaitUntilAsync(() => createdWatchers.Count == 1 && harness.Server.Status == DevServerStatus.Running);
+
+            Assert.Equal(1, configLoader.LoadCalls);
+            Assert.Equal("Reloaded.App", harness.BuildPipeline.Requests[1].Context.Config.Module.Prefix);
+            Assert.Equal("C:/repo/build/dev", harness.BuildPipeline.Requests[1].Context.OutputDir);
+            FileWatcherOptions watcherOptions = Assert.Single(createdWatcherOptions);
+            Assert.Equal(333, watcherOptions.DebounceMs);
+            Assert.Equal(new[] { "C:/repo/src", "C:/repo/ui" }, watcherOptions.WatchPaths);
+            Assert.Equal(1, initialWatcher.StopCalls);
+            Assert.Equal(1, initialWatcher.DisposeCalls);
+            Assert.Equal(1, createdWatchers[0].StartCalls);
+
+            createdWatchers[0].Emit(FileChangeBatch("C:/repo/src/App.cs"));
+            await WaitUntilAsync(() => harness.Compiler.Requests.Count == 1);
+
+            Assert.Equal("Reloaded.App", harness.Compiler.Requests[0].Options.ModuleUriPrefix);
+            Assert.Equal("C:/repo/build/dev", harness.Compiler.Requests[0].Options.OutputDir);
+            Assert.Equal(new QmlSharp.Compiler.QmlVersion(2, 1), harness.Compiler.Requests[0].Options.ModuleVersion);
+        }
+
+        [Fact]
+        [Trait("TestId", "DSV-12")]
         public async Task ConfigFileChange_DSV_12_FailedRestartLeavesServerInError()
         {
             ServerHarness harness = CreateHarness();
@@ -294,7 +338,9 @@ namespace QmlSharp.DevTools.Tests
             FakeHotReloadOrchestrator? hotReload = null,
             TestDevConsole? console = null,
             TestErrorOverlay? overlay = null,
-            ManualDevToolsClock? clock = null)
+            ManualDevToolsClock? clock = null,
+            IDevToolsConfigLoader? configLoader = null,
+            Func<FileWatcherOptions, IFileWatcher>? fileWatcherFactory = null)
         {
             DevServerOptions serverOptions = options ?? ServerOptions();
             TestFileWatcher serverFileWatcher = fileWatcher ?? new TestFileWatcher();
@@ -318,7 +364,9 @@ namespace QmlSharp.DevTools.Tests
                 profiler,
                 repl: null,
                 serverClock,
-                new SchemaDiffer());
+                new SchemaDiffer(),
+                configLoader,
+                fileWatcherFactory);
 
             return new ServerHarness(
                 server,
@@ -400,6 +448,33 @@ namespace QmlSharp.DevTools.Tests
             };
         }
 
+        private static QmlSharpConfig ReloadedConfig()
+        {
+            return new QmlSharpConfig
+            {
+                Entry = "src/App.cs",
+                OutDir = "./build/dev",
+                Qt = new QtConfig { Dir = "C:/Qt/6.11.0/msvc2022_64" },
+                Module = new ModuleConfig
+                {
+                    Prefix = "Reloaded.App",
+                    Version = new QmlSharp.Build.QmlVersion(2, 1),
+                },
+                Build = new BuildConfig
+                {
+                    Format = false,
+                    Lint = false,
+                    SourceMaps = false,
+                    Incremental = false,
+                },
+                Dev = new DevConfig
+                {
+                    WatchPaths = ImmutableArray.Create("./ui", "./src"),
+                    DebounceMs = 333,
+                },
+            };
+        }
+
         private static TaskCompletionSource NewSignal()
         {
             return new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -433,6 +508,8 @@ namespace QmlSharp.DevTools.Tests
 
             public int StopCalls { get; private set; }
 
+            public int DisposeCalls { get; private set; }
+
             public FileWatcherStatus Status { get; private set; } = FileWatcherStatus.Idle;
 
             public void Start()
@@ -449,6 +526,7 @@ namespace QmlSharp.DevTools.Tests
 
             public void Dispose()
             {
+                DisposeCalls++;
                 Status = FileWatcherStatus.Disposed;
             }
 
@@ -576,6 +654,34 @@ namespace QmlSharp.DevTools.Tests
             public void Dispose()
             {
                 Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        private sealed class FakeConfigLoader : IDevToolsConfigLoader
+        {
+            private readonly QmlSharpConfig config;
+
+            public FakeConfigLoader(QmlSharpConfig config)
+            {
+                this.config = config;
+            }
+
+            public int LoadCalls { get; private set; }
+
+            public QmlSharpConfig Load(string projectDir)
+            {
+                LoadCalls++;
+                return config;
+            }
+
+            public ImmutableArray<ConfigDiagnostic> Validate(QmlSharpConfig config)
+            {
+                return ImmutableArray<ConfigDiagnostic>.Empty;
+            }
+
+            public QmlSharpConfig GetDefaults()
+            {
+                return config;
             }
         }
     }

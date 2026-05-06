@@ -9,12 +9,9 @@ namespace QmlSharp.DevTools
     public sealed class DevServer : IDevServer
     {
         private readonly AsyncGate lifecycleGate = new();
-        private readonly DevServerOptions options;
-        private readonly BuildContext buildContext;
-        private readonly IFileWatcher fileWatcher;
+        private readonly IDevToolsConfigLoader? configLoader;
+        private readonly Func<FileWatcherOptions, IFileWatcher>? fileWatcherFactory;
         private readonly IDevToolsBuildPipeline buildPipeline;
-        private readonly IDevToolsCompiler compiler;
-        private readonly CompilerOptions compilerOptions;
         private readonly IHotReloadOrchestrator hotReloadOrchestrator;
         private readonly SchemaDiffer schemaDiffer;
         private readonly IDevConsole console;
@@ -22,7 +19,14 @@ namespace QmlSharp.DevTools
         private readonly IPerfProfiler profiler;
         private readonly IDevToolsClock clock;
         private readonly IRepl? repl;
+        private readonly bool refreshCompilerAdapterOnConfigReload;
         private readonly Lock rebuildSync = new();
+        private DevServerOptions options;
+        private BuildContext buildContext;
+        private IFileWatcher fileWatcher;
+        private IDevToolsCompiler compiler;
+        private CompilerOptions compilerOptions;
+        private CancellationTokenSource watcherRebuildCancellation = new();
         private DevServerStatus status = DevServerStatus.Idle;
         private int buildCount;
         private int rebuildCount;
@@ -70,7 +74,10 @@ namespace QmlSharp.DevTools
                 profiler,
                 repl: null,
                 SystemDevToolsClock.Instance,
-                new SchemaDiffer())
+                new SchemaDiffer(),
+                new DevToolsConfigLoaderAdapter(new ConfigLoader()),
+                static watcherOptions => new FileWatcher(watcherOptions),
+                refreshCompilerAdapterOnConfigReload: true)
         {
         }
 
@@ -111,7 +118,10 @@ namespace QmlSharp.DevTools
                 profiler,
                 repl: null,
                 SystemDevToolsClock.Instance,
-                new SchemaDiffer())
+                new SchemaDiffer(),
+                new DevToolsConfigLoaderAdapter(new ConfigLoader()),
+                static watcherOptions => new FileWatcher(watcherOptions),
+                refreshCompilerAdapterOnConfigReload: false)
         {
         }
 
@@ -128,7 +138,10 @@ namespace QmlSharp.DevTools
             IPerfProfiler profiler,
             IRepl? repl,
             IDevToolsClock clock,
-            SchemaDiffer schemaDiffer)
+            SchemaDiffer schemaDiffer,
+            IDevToolsConfigLoader? configLoader = null,
+            Func<FileWatcherOptions, IFileWatcher>? fileWatcherFactory = null,
+            bool refreshCompilerAdapterOnConfigReload = false)
         {
             ArgumentNullException.ThrowIfNull(options);
             ArgumentNullException.ThrowIfNull(buildContext);
@@ -160,6 +173,9 @@ namespace QmlSharp.DevTools
             this.repl = repl;
             this.clock = clock;
             this.schemaDiffer = schemaDiffer;
+            this.configLoader = configLoader;
+            this.fileWatcherFactory = fileWatcherFactory;
+            this.refreshCompilerAdapterOnConfigReload = refreshCompilerAdapterOnConfigReload;
         }
 
         /// <inheritdoc />
@@ -234,6 +250,7 @@ namespace QmlSharp.DevTools
         private async Task StartCoreAsync(CancellationToken cancellationToken)
         {
             EnsureCanStart();
+            ResetWatcherRebuildCancellation();
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -267,8 +284,17 @@ namespace QmlSharp.DevTools
             }
         }
 
-        private async Task StopCoreAsync()
+        private async Task StopCoreAsync(bool cancelQueuedWatcherRebuilds = true)
         {
+            if (cancelQueuedWatcherRebuilds)
+            {
+                CancelQueuedWatcherRebuilds();
+            }
+            else
+            {
+                ClearPendingRebuilds();
+            }
+
             if (status == DevServerStatus.Idle)
             {
                 return;
@@ -353,10 +379,18 @@ namespace QmlSharp.DevTools
         {
             ArgumentNullException.ThrowIfNull(batch);
 
+            CancellationToken cancellationToken = watcherRebuildCancellation.Token;
+            if (disposed ||
+                cancellationToken.IsCancellationRequested ||
+                status is DevServerStatus.Idle or DevServerStatus.Stopping)
+            {
+                return;
+            }
+
             console.FileChanged(batch);
             Task<HotReloadResult> rebuildTask = QueueRebuildAsync(
                 RebuildRequest.FromBatch(batch, IsConfigFileChange(batch)),
-                CancellationToken.None);
+                cancellationToken);
             _ = ObserveQueuedRebuildAsync(rebuildTask);
         }
 
@@ -408,12 +442,13 @@ namespace QmlSharp.DevTools
             CancellationToken cancellationToken)
         {
             RebuildRequest currentRequest = initialRequest;
-            HotReloadResult lastResult = CreateRebuildResult(success: true, TimeSpan.Zero, errorMessage: null);
+            HotReloadResult lastResult;
 
             try
             {
                 while (true)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     lastResult = await ExecuteRebuildRequestAsync(currentRequest, cancellationToken).ConfigureAwait(false);
 
                     lock (rebuildSync)
@@ -614,18 +649,35 @@ namespace QmlSharp.DevTools
             CancellationToken cancellationToken)
         {
             console.RestartRequired("Configuration file changed.");
+            DevServerRuntimeConfiguration? reloadedConfiguration;
+            try
+            {
+                reloadedConfiguration = ReloadConfigurationForRestart();
+            }
+            catch (ConfigParseException exception)
+            {
+                return HandleConfigReloadFailure(exception, startTimestamp);
+            }
+
             return await RestartCoreFromReloadingAsync(
                 "Configuration restart failed",
                 startTimestamp,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                reloadedConfiguration).ConfigureAwait(false);
         }
 
         private async Task<HotReloadResult> RestartCoreFromReloadingAsync(
             string failurePrefix,
             long startTimestamp,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            DevServerRuntimeConfiguration? reloadedConfiguration = null)
         {
-            await StopCoreAsync().ConfigureAwait(false);
+            await StopCoreAsync(cancelQueuedWatcherRebuilds: false).ConfigureAwait(false);
+            if (reloadedConfiguration is not null)
+            {
+                ApplyRuntimeConfiguration(reloadedConfiguration);
+            }
+
             await StartCoreAsync(cancellationToken).ConfigureAwait(false);
 
             TimeSpan elapsed = ElapsedOrOneTick(startTimestamp);
@@ -638,6 +690,80 @@ namespace QmlSharp.DevTools
 
             errorOverlay.Hide();
             return CreateRebuildResult(success: true, elapsed, errorMessage: null);
+        }
+
+        private DevServerRuntimeConfiguration? ReloadConfigurationForRestart()
+        {
+            if (configLoader is null)
+            {
+                return null;
+            }
+
+            string projectRoot = NormalizeProjectRoot(options.ProjectRoot);
+            QmlSharpConfig loadedConfig = configLoader.Load(projectRoot);
+            ImmutableArray<ConfigDiagnostic> diagnostics = configLoader.Validate(loadedConfig);
+            ImmutableArray<ConfigDiagnostic> errors = diagnostics
+                .Where(static diagnostic => diagnostic.Severity == ConfigDiagnosticSeverity.Error)
+                .ToImmutableArray();
+            if (!errors.IsEmpty)
+            {
+                throw new ConfigParseException(ConvertConfigDiagnostics(errors));
+            }
+
+            QmlSharpConfig normalizedConfig = NormalizeConfigForDevServer(loadedConfig, projectRoot);
+            DevServerOptions reloadedOptions = options with
+            {
+                ProjectRoot = projectRoot,
+                WatcherOptions = options.WatcherOptions with
+                {
+                    WatchPaths = normalizedConfig.Dev.WatchPaths,
+                    DebounceMs = normalizedConfig.Dev.DebounceMs,
+                },
+            };
+            BuildContext reloadedContext = buildContext with
+            {
+                Config = normalizedConfig,
+                ProjectDir = projectRoot,
+                OutputDir = normalizedConfig.OutDir,
+                QtDir = normalizedConfig.Qt.Dir ?? string.Empty,
+            };
+            return new DevServerRuntimeConfiguration(
+                reloadedOptions,
+                reloadedContext,
+                CreateDefaultCompilerOptions(reloadedContext));
+        }
+
+        private void ApplyRuntimeConfiguration(DevServerRuntimeConfiguration configuration)
+        {
+            bool watcherOptionsChanged = !FileWatcherOptionsEqual(options.WatcherOptions, configuration.Options.WatcherOptions);
+            options = configuration.Options;
+            buildContext = configuration.BuildContext;
+            compilerOptions = configuration.CompilerOptions;
+            if (refreshCompilerAdapterOnConfigReload)
+            {
+                compiler = new BuildPipelineCompilerAdapter(buildPipeline, buildContext);
+            }
+
+            if (watcherOptionsChanged && fileWatcherFactory is not null)
+            {
+                fileWatcher.Dispose();
+                fileWatcher = fileWatcherFactory(configuration.Options.WatcherOptions);
+                fileWatcherSubscribed = false;
+            }
+        }
+
+        private HotReloadResult HandleConfigReloadFailure(ConfigParseException exception, long startTimestamp)
+        {
+            errorCount++;
+            ImmutableArray<BuildDiagnostic> diagnostics = exception.Diagnostics.IsDefault
+                ? ImmutableArray<BuildDiagnostic>.Empty
+                : exception.Diagnostics;
+            TimeSpan elapsed = ElapsedOrOneTick(startTimestamp);
+            errorOverlay.Show(CreateOverlayErrors(diagnostics));
+            string errorMessage = CreateBuildFailureMessage("Configuration restart failed", diagnostics);
+            console.Error(errorMessage);
+            TransitionTo(DevServerStatus.Error, "Configuration reload failed.");
+            return CreateRebuildResult(success: false, elapsed, errorMessage);
         }
 
         private void RecordBuildResult(BuildResult buildResult, long buildStart, bool isRebuild)
@@ -777,6 +903,7 @@ namespace QmlSharp.DevTools
 
         private async Task DisposeOwnedResourcesAsync()
         {
+            watcherRebuildCancellation.Dispose();
             fileWatcher.Dispose();
 
             if (repl is not null)
@@ -923,16 +1050,10 @@ namespace QmlSharp.DevTools
         private bool IsConfigFileChange(FileChangeBatch batch)
         {
             string configPath = ResolveProjectPath(options.ConfigPath ?? "qmlsharp.json");
-            foreach (FileChange change in batch.Changes)
-            {
-                string changedPath = ResolveProjectPath(change.FilePath);
-                if (string.Equals(changedPath, configPath, PathComparison))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return batch.Changes
+                .Select(static change => change.FilePath)
+                .Select(ResolveProjectPath)
+                .Any(changedPath => string.Equals(changedPath, configPath, PathComparison));
         }
 
         private string ResolveProjectPath(string path)
@@ -968,6 +1089,134 @@ namespace QmlSharp.DevTools
                 LintQml = buildContext.Config.Build.Lint,
                 Incremental = buildContext.Config.Build.Incremental,
             };
+        }
+
+        private void CancelQueuedWatcherRebuilds()
+        {
+            try
+            {
+                watcherRebuildCancellation.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Disposal wins during shutdown; queued watcher work is already no longer valid.
+            }
+
+            ClearPendingRebuilds();
+        }
+
+        private void ClearPendingRebuilds()
+        {
+            lock (rebuildSync)
+            {
+                pendingRebuild = null;
+            }
+        }
+
+        private void ResetWatcherRebuildCancellation()
+        {
+            if (!watcherRebuildCancellation.IsCancellationRequested)
+            {
+                return;
+            }
+
+            watcherRebuildCancellation.Dispose();
+            watcherRebuildCancellation = new CancellationTokenSource();
+        }
+
+        private static QmlSharpConfig NormalizeConfigForDevServer(QmlSharpConfig config, string projectRoot)
+        {
+            return config with
+            {
+                OutDir = ResolveProjectRootedPath(projectRoot, config.OutDir),
+                Dev = config.Dev with
+                {
+                    WatchPaths = ResolveWatchPaths(projectRoot, config.Dev.WatchPaths),
+                },
+            };
+        }
+
+        private static ImmutableArray<string> ResolveWatchPaths(string projectRoot, ImmutableArray<string> watchPaths)
+        {
+            ImmutableArray<string> paths = watchPaths.IsDefaultOrEmpty
+                ? ImmutableArray.Create("./src")
+                : watchPaths;
+            return paths
+                .Select(path => ResolveProjectRootedPath(projectRoot, path))
+                .OrderBy(static path => path, StringComparer.Ordinal)
+                .ToImmutableArray();
+        }
+
+        private static string ResolveProjectRootedPath(string projectRoot, string path)
+        {
+            if (IsRootedPath(path))
+            {
+                return path;
+            }
+
+            return IsWindowsDriveRootedPath(projectRoot)
+                ? CombineWindowsDriveRootedPath(projectRoot, path)
+                : Path.GetFullPath(Path.Join(projectRoot, path));
+        }
+
+        private static string NormalizeProjectRoot(string projectRoot)
+        {
+            return IsRootedPath(projectRoot) ? projectRoot : Path.GetFullPath(projectRoot);
+        }
+
+        private static bool IsWindowsDriveRootedPath(string path)
+        {
+            return path.Length >= 3 &&
+                char.IsLetter(path[0]) &&
+                path[1] == ':' &&
+                (path[2] == '/' || path[2] == '\\');
+        }
+
+        private static string CombineWindowsDriveRootedPath(string projectRoot, string path)
+        {
+            string normalizedPath = path.Replace('\\', '/').TrimStart('/');
+            while (normalizedPath.StartsWith("./", StringComparison.Ordinal))
+            {
+                normalizedPath = normalizedPath[2..];
+            }
+
+            return projectRoot.Replace('\\', '/').TrimEnd('/') + "/" + normalizedPath;
+        }
+
+        private static ImmutableArray<BuildDiagnostic> ConvertConfigDiagnostics(ImmutableArray<ConfigDiagnostic> diagnostics)
+        {
+            return diagnostics
+                .Select(static diagnostic => new BuildDiagnostic(
+                    diagnostic.Code,
+                    ConvertConfigSeverity(diagnostic.Severity),
+                    diagnostic.Message,
+                    BuildPhase.ConfigLoading,
+                    diagnostic.Field))
+                .ToImmutableArray();
+        }
+
+        private static BuildDiagnosticSeverity ConvertConfigSeverity(ConfigDiagnosticSeverity severity)
+        {
+            return severity == ConfigDiagnosticSeverity.Warning
+                ? BuildDiagnosticSeverity.Warning
+                : BuildDiagnosticSeverity.Error;
+        }
+
+        private static bool FileWatcherOptionsEqual(FileWatcherOptions left, FileWatcherOptions right)
+        {
+            return left.DebounceMs == right.DebounceMs &&
+                left.UsePolling == right.UsePolling &&
+                left.PollIntervalMs == right.PollIntervalMs &&
+                SequenceEqual(left.WatchPaths, right.WatchPaths) &&
+                SequenceEqual(left.IncludePatterns, right.IncludePatterns) &&
+                SequenceEqual(left.ExcludePatterns, right.ExcludePatterns);
+        }
+
+        private static bool SequenceEqual(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
+        {
+            IReadOnlyList<string> leftValues = left ?? ImmutableArray<string>.Empty;
+            IReadOnlyList<string> rightValues = right ?? ImmutableArray<string>.Empty;
+            return leftValues.SequenceEqual(rightValues, StringComparer.Ordinal);
         }
 
         private static CompilationResult CreateCompilationResultFromBuildResult(BuildResult buildResult)
@@ -1066,6 +1315,38 @@ namespace QmlSharp.DevTools
             public static RebuildRequest FromBatch(FileChangeBatch batch, bool configChanged)
             {
                 return new RebuildRequest(batch, configChanged, Manual: false);
+            }
+        }
+
+        private sealed record DevServerRuntimeConfiguration(
+            DevServerOptions Options,
+            BuildContext BuildContext,
+            CompilerOptions CompilerOptions);
+
+        private sealed class DevToolsConfigLoaderAdapter : IDevToolsConfigLoader
+        {
+            private readonly IConfigLoader configLoader;
+
+            public DevToolsConfigLoaderAdapter(IConfigLoader configLoader)
+            {
+                ArgumentNullException.ThrowIfNull(configLoader);
+
+                this.configLoader = configLoader;
+            }
+
+            public QmlSharpConfig Load(string projectDir)
+            {
+                return configLoader.Load(projectDir);
+            }
+
+            public ImmutableArray<ConfigDiagnostic> Validate(QmlSharpConfig config)
+            {
+                return configLoader.Validate(config);
+            }
+
+            public QmlSharpConfig GetDefaults()
+            {
+                return configLoader.GetDefaults();
             }
         }
 
