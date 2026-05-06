@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" />
     <ProjectReference Include="..\QmlSharp.Compiler\QmlSharp.Compiler.csproj" />
     <ProjectReference Include="..\QmlSharp.Host\QmlSharp.Host.csproj" />
     <ProjectReference Include="..\QmlSharp.Build\QmlSharp.Build.csproj" />
