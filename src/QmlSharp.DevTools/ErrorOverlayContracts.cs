@@ -22,6 +22,23 @@ namespace QmlSharp.DevTools
         bool IsVisible { get; }
     }
 
+    /// <summary>
+    /// Mockable native-host overlay surface used by <see cref="IErrorOverlay"/>.
+    /// </summary>
+    public interface IErrorOverlayNativeHost
+    {
+        /// <summary>Shows a native overlay error.</summary>
+        /// <param name="title">Overlay title.</param>
+        /// <param name="message">Overlay message.</param>
+        /// <param name="filePath">Optional source file path.</param>
+        /// <param name="line">One-based source line, or 0 when unknown.</param>
+        /// <param name="column">One-based source column, or 0 when unknown.</param>
+        void ShowError(string title, string message, string? filePath, int line, int column);
+
+        /// <summary>Hides the native overlay error.</summary>
+        void HideError();
+    }
+
     /// <summary>An error to display in the overlay.</summary>
     /// <param name="Title">Error title.</param>
     /// <param name="Message">Error message body.</param>
