@@ -11,31 +11,6 @@ namespace QmlSharp.Build
         private static readonly ImmutableArray<string> DefaultQtModules =
             ImmutableArray.Create("Qt6::Quick", "Qt6::Qml");
 
-        private static readonly ImmutableArray<string> NativeCoreSources = ImmutableArray.Create(
-            "src/qmlsharp_abi.cpp",
-            "src/qmlsharp_diagnostics.cpp",
-            "src/qmlsharp_diagnostics.h",
-            "src/qmlsharp_effects.cpp",
-            "src/qmlsharp_effects.h",
-            "src/qmlsharp_engine.cpp",
-            "src/qmlsharp_engine.h",
-            "src/qmlsharp_error_overlay.cpp",
-            "src/qmlsharp_error_overlay.h",
-            "src/qmlsharp_errors.cpp",
-            "src/qmlsharp_errors.h",
-            "src/qmlsharp_hot_reload.cpp",
-            "src/qmlsharp_hot_reload.h",
-            "src/qmlsharp_instances.cpp",
-            "src/qmlsharp_instances.h",
-            "src/qmlsharp_metrics.cpp",
-            "src/qmlsharp_metrics.h",
-            "src/qmlsharp_state.cpp",
-            "src/qmlsharp_state.h",
-            "src/qmlsharp_type_registry.cpp",
-            "src/qmlsharp_type_registry.h",
-            "include/qmlsharp/qmlsharp_abi.h",
-            "include/qmlsharp/qmlsharp_export.h");
-
         /// <inheritdoc />
         public CppGenerationResult Generate(
             ImmutableArray<ViewModelSchema> schemas,
@@ -318,14 +293,10 @@ namespace QmlSharp.Build
             builder.Append("set(QMLSHARP_NATIVE_SOURCE_DIR \"");
             builder.Append(EscapeCMakeString(nativeSourceDir));
             builder.Append("\")\n\n");
-            builder.Append("set(QMLSHARP_NATIVE_CORE_SOURCES\n");
-            foreach (string source in NativeCoreSources)
-            {
-                builder.Append("  \"${QMLSHARP_NATIVE_SOURCE_DIR}/");
-                builder.Append(source.Replace('\\', '/'));
-                builder.Append("\"\n");
-            }
-
+            builder.Append("file(GLOB_RECURSE QMLSHARP_NATIVE_CORE_SOURCES CONFIGURE_DEPENDS\n");
+            builder.Append("  \"${QMLSHARP_NATIVE_SOURCE_DIR}/src/*.cpp\"\n");
+            builder.Append("  \"${QMLSHARP_NATIVE_SOURCE_DIR}/src/*.h\"\n");
+            builder.Append("  \"${QMLSHARP_NATIVE_SOURCE_DIR}/include/qmlsharp/*.h\"\n");
             builder.Append(")\n\n");
         }
 

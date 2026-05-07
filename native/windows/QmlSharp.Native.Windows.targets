@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <QtMocExe>$(QtBinDir)\moc.exe</QtMocExe>
+    <QtMocIncludeArguments>--no-notes -I&quot;$(QmlSharpNativeRoot)include&quot; -I&quot;$(QmlSharpNativeRoot)src&quot; -I&quot;$(QtIncludeRoot)&quot; -I&quot;$(QtIncludeRoot)\QtCore&quot; -I&quot;$(QtIncludeRoot)\QtGui&quot; -I&quot;$(QtIncludeRoot)\QtQml&quot; -I&quot;$(QtIncludeRoot)\QtQuick&quot; -I&quot;$(QtMkspecDir)&quot;</QtMocIncludeArguments>
+  </PropertyGroup>
+
+  <Target Name="ValidateQmlSharpQtDir" BeforeTargets="PrepareForBuild;GenerateQmlSharpQtMoc">
+    <Error Condition="'$(QtDir)' == ''" Text="QT_DIR must be set to the Qt SDK root before building QmlSharp native Windows projects." />
+    <Error Condition="'$(QtDir)' != '' and !Exists('$(QtMocExe)')" Text="moc.exe was not found at '$(QtMocExe)'. QT_DIR must point to the Qt SDK root." />
+    <Error Condition="'$(QtDir)' != '' and !Exists('$(QtLibDir)')" Text="Qt lib directory was not found at '$(QtLibDir)'." />
+  </Target>
+
+  <Target Name="PrepareQmlSharpQtMocItems" BeforeTargets="GenerateQmlSharpQtMoc">
+    <ItemGroup>
+      <QtMoc Include="$(QmlSharpNativeRoot)src\qmlsharp_engine.h" Condition="'$(QmlSharpBuildNativeCoreSources)' == 'true'">
+        <MocOutput>$(QtMocIntermediateDir)core\moc_qmlsharp_engine.cpp</MocOutput>
+        <MocOutputDirectory>$(QtMocIntermediateDir)core\</MocOutputDirectory>
+        <Visible>false</Visible>
+      </QtMoc>
+      <QtMoc Include="@(ClInclude)" Condition="'%(ClInclude.RunMoc)' == 'true'">
+        <MocOutput>$(QtMocIntermediateDir)%(ClInclude.MocGroup)\moc_%(Filename).cpp</MocOutput>
+        <MocOutputDirectory>$(QtMocIntermediateDir)%(ClInclude.MocGroup)\</MocOutputDirectory>
+      </QtMoc>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="GenerateQmlSharpQtMoc" BeforeTargets="ClCompile" DependsOnTargets="PrepareQmlSharpQtMocItems" Inputs="@(QtMoc)" Outputs="@(QtMoc->'%(MocOutput)')">
+    <MakeDir Directories="@(QtMoc->'%(MocOutputDirectory)')" />
+    <Exec Command="&quot;$(QtMocExe)&quot; $(QtMocIncludeArguments) &quot;%(QtMoc.FullPath)&quot; -o &quot;%(QtMoc.MocOutput)&quot; || exit /b 1&#xD;&#xA;if not exist &quot;%(QtMoc.MocOutput)&quot; type nul &gt; &quot;%(QtMoc.MocOutput)&quot;" />
+  </Target>
+
+  <Target Name="AddQmlSharpQtMocSources" BeforeTargets="ClCompile" DependsOnTargets="GenerateQmlSharpQtMoc">
+    <ItemGroup>
+      <ClCompile Include="@(QtMoc->'%(MocOutput)')" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="AddQmlSharpNativeCoreSources" BeforeTargets="ClCompile" Condition="'$(QmlSharpBuildNativeCoreSources)' == 'true'">
+    <ItemGroup>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_abi.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_diagnostics.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_effects.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_engine.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_error_overlay.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_errors.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_hot_reload.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_instances.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_metrics.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_state.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+      <ClCompile Include="$(QmlSharpNativeRoot)src\qmlsharp_type_registry.cpp">
+        <Visible>false</Visible>
+      </ClCompile>
+    </ItemGroup>
+  </Target>
+</Project>

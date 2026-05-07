@@ -2,38 +2,31 @@ qmlsharp_find_qt()
 
 set(CMAKE_AUTOMOC ON)
 
+file(GLOB_RECURSE QMLSHARP_NATIVE_SOURCES CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
+)
+
+file(GLOB_RECURSE QMLSHARP_NATIVE_PUBLIC_HEADERS CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/qmlsharp/*.h
+)
+
 add_library(qmlsharp_native SHARED)
 
 target_sources(qmlsharp_native
   PRIVATE
-    src/qmlsharp_abi.cpp
-    src/qmlsharp_diagnostics.cpp
-    src/qmlsharp_diagnostics.h
-    src/qmlsharp_effects.cpp
-    src/qmlsharp_effects.h
-    src/qmlsharp_engine.cpp
-    src/qmlsharp_engine.h
-    src/qmlsharp_error_overlay.cpp
-    src/qmlsharp_error_overlay.h
-    src/qmlsharp_errors.cpp
-    src/qmlsharp_errors.h
-    src/qmlsharp_hot_reload.cpp
-    src/qmlsharp_hot_reload.h
-    src/qmlsharp_instances.cpp
-    src/qmlsharp_instances.h
-    src/qmlsharp_metrics.cpp
-    src/qmlsharp_metrics.h
-    src/qmlsharp_state.cpp
-    src/qmlsharp_state.h
-    src/qmlsharp_type_registry.cpp
-    src/qmlsharp_type_registry.h
+    ${QMLSHARP_NATIVE_SOURCES}
   PUBLIC
     FILE_SET qmlsharp_native_headers
     TYPE HEADERS
     BASE_DIRS include
     FILES
-      include/qmlsharp/qmlsharp_abi.h
-      include/qmlsharp/qmlsharp_export.h
+      ${QMLSHARP_NATIVE_PUBLIC_HEADERS}
+)
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES
+  ${QMLSHARP_NATIVE_SOURCES}
+  ${QMLSHARP_NATIVE_PUBLIC_HEADERS}
 )
 
 target_compile_features(qmlsharp_native PUBLIC cxx_std_20)

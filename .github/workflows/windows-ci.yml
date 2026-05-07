@@ -19,8 +19,8 @@ defaults:
 
 jobs:
   build:
-    name: Windows x64 (FASTBuild)
-    runs-on: windows-2022
+    name: Windows x64 (MSBuild)
+    runs-on: windows-2025-vs2026
     timeout-minutes: 120
     env:
       MSBUILDDISABLENODEREUSE: "1"
@@ -105,48 +105,6 @@ jobs:
           Write-Host "QT_DIR=$qtRoot"
           Write-Host "Qt6_DIR=$qt6Dir"
 
-      - name: Install CMake (Scoop)
-        uses: MinoruSekine/setup-scoop@v4
-        with:
-          apps: cmake
-
-      - name: Verify CMake version
-        run: |
-          $requiredVersion = [version]'4.2.0'
-          $versionOutput = cmake --version | Select-Object -First 1
-          if ($versionOutput -notmatch '^cmake version (\d+\.\d+\.\d+)') {
-            throw "Unable to determine installed CMake version from output: $versionOutput"
-          }
-
-          $installedVersion = [version]$Matches[1]
-          if ($installedVersion -lt $requiredVersion) {
-            throw "CMake $requiredVersion or newer is required by CMakePresets.json, but Scoop installed $installedVersion."
-          }
-
-          Write-Host "Using CMake $installedVersion"
-
-      - name: Install FASTBuild
-        run: |
-          $url = 'https://www.fastbuild.org/downloads/v1.19/FASTBuild-Windows-x64-v1.19.zip'
-          $expectedSha256 = '30ba4bff1afea10a7d9cd02740cbca7a42a4539a16e8cd7e221223c238951ff6'
-          $zip = Join-Path $env:RUNNER_TEMP 'fastbuild.zip'
-          $dest = Join-Path $env:RUNNER_TEMP 'fastbuild'
-          Invoke-WebRequest -Uri $url -OutFile $zip
-          $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
-          if ($actualSha256 -ne $expectedSha256) {
-            throw "FASTBuild archive SHA256 mismatch. Expected $expectedSha256, got $actualSha256."
-          }
-
-          Expand-Archive -Path $zip -DestinationPath $dest -Force
-
-          $exe = Get-ChildItem $dest -Recurse -Filter FBuild.exe | Select-Object -First 1
-          if (-not $exe) {
-            throw 'FBuild.exe not found after FASTBuild installation'
-          }
-
-          $exe.DirectoryName >> $env:GITHUB_PATH
-          Write-Host "FASTBuild installed to $($exe.DirectoryName)"
-
       - name: Setup MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -166,52 +124,25 @@ jobs:
           "WindowsKitRC=$($rc.DirectoryName)" >> $env:GITHUB_ENV
           $rc.DirectoryName >> $env:GITHUB_PATH
 
-      - name: Resolve FASTBuild cache path
-        id: fbcache
-        run: |
-          $fbCache = Join-Path $env:LOCALAPPDATA 'FASTBuild' 'Cache'
-          New-Item $fbCache -ItemType Directory -Force | Out-Null
-          "path=$fbCache" >> $env:GITHUB_OUTPUT
-          Write-Host "FASTBuild cache: $fbCache"
-
-      - name: Restore FASTBuild compilation cache
-        uses: actions/cache@v5
-        with:
-          path: ${{ steps.fbcache.outputs.path }}
-          key: fbcache-windows-${{ github.sha }}
-          restore-keys: fbcache-windows-
-
       - name: Verify tool versions
         run: |
           Write-Host "dotnet: $(& dotnet --version)"
-          Write-Host "CMake:  $(cmake --version | Select-Object -First 1)"
+          Write-Host "MSBuild: $(& msbuild -version -nologo | Select-Object -First 1)"
           Write-Host "MSVC:   $(cl 2>&1 | Select-Object -First 1)"
-          Write-Host "Clang:  $(clang-cl --version | Select-Object -First 1)"
-          Write-Host "FBuild: $(FBuild.exe -version 2>&1 | Select-Object -First 1)"
           Write-Host "Windows SDK RC: $env:WindowsKitRC"
           Write-Host "QT_DIR: $env:QT_DIR"
           Write-Host "Qt6_DIR: $env:Qt6_DIR"
 
-      - name: Restore .NET solution
-        run: dotnet restore QmlSharp.slnx
+      - name: Restore Windows solution
+        run: msbuild QmlSharp.Win.slnx /t:Restore /p:Configuration=Debug /p:Platform=x64
 
-      - name: Build .NET solution
-        run: dotnet build QmlSharp.slnx --configuration Debug --no-restore
+      - name: Build Windows solution
+        run: msbuild QmlSharp.Win.slnx /m /p:Configuration=Debug /p:Platform=x64 /p:TreatWarningsAsErrors=true
 
-      - name: Configure (CMake)
-        env:
-          CC: clang-cl
-          CXX: clang-cl
-        run: cmake --preset windows-ci
-
-      - name: Build (FASTBuild)
-        env:
-          CC: clang-cl
-          CXX: clang-cl
-        run: cmake --build --preset ci
-
-      - name: Test native target
-        run: ctest --preset windows-ci
+      - name: Test native targets
+        run: |
+          & .\build\debug\bin\qmlsharp_native_tests.exe
+          & .\build\debug\bin\qmlsharp_native_performance_tests.exe
 
       - name: Test .NET solution
         run: dotnet test QmlSharp.slnx --configuration Debug --no-build --verbosity normal -m:1
@@ -220,13 +151,3 @@ jobs:
         run: |
           $env:MSBUILDDISABLENODEREUSE = "1"
           dotnet format QmlSharp.slnx --verify-no-changes --no-restore --verbosity minimal
-
-      - name: Trim FASTBuild cache
-        if: always()
-        run: |
-          $buildDir = "${{ github.workspace }}\build\windows-ci"
-          if (Test-Path $buildDir) {
-            Push-Location $buildDir
-            FBuild.exe -cachetrim 10240
-            Pop-Location
-          }

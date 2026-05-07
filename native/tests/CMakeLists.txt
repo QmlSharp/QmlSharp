@@ -1,32 +1,21 @@
 set(QMLSHARP_NATIVE_TEST_CORE_SOURCES
-  ../src/qmlsharp_abi.cpp
-  ../src/qmlsharp_diagnostics.cpp
-  ../src/qmlsharp_diagnostics.h
-  ../src/qmlsharp_effects.cpp
-  ../src/qmlsharp_effects.h
-  ../src/qmlsharp_engine.cpp
-  ../src/qmlsharp_engine.h
-  ../src/qmlsharp_error_overlay.cpp
-  ../src/qmlsharp_error_overlay.h
-  ../src/qmlsharp_errors.cpp
-  ../src/qmlsharp_errors.h
-  ../src/qmlsharp_hot_reload.cpp
-  ../src/qmlsharp_hot_reload.h
-  ../src/qmlsharp_instances.cpp
-  ../src/qmlsharp_instances.h
-  ../src/qmlsharp_metrics.cpp
-  ../src/qmlsharp_metrics.h
-  ../src/qmlsharp_state.cpp
-  ../src/qmlsharp_state.h
-  ../src/qmlsharp_type_registry.cpp
-  ../src/qmlsharp_type_registry.h
+  ${QMLSHARP_NATIVE_SOURCES}
+  ${QMLSHARP_NATIVE_PUBLIC_HEADERS}
 )
 
-set(QMLSHARP_NATIVE_TEST_FIXTURE_SOURCES
-  fixtures/RegistrationCounterViewModel.cpp
-  fixtures/RegistrationCounterViewModel.h
-  fixtures/RegistrationStatusViewModel.cpp
-  fixtures/RegistrationStatusViewModel.h
+file(GLOB_RECURSE QMLSHARP_NATIVE_TEST_FIXTURE_SOURCES CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/*.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/*.h
+)
+list(FILTER QMLSHARP_NATIVE_TEST_FIXTURE_SOURCES EXCLUDE REGEX ".*/qmlsharp_integration_fixture_exports\\.cpp$")
+
+set(QMLSHARP_NATIVE_TEST_INTEGRATION_EXPORT_SOURCE
+  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/qmlsharp_integration_fixture_exports.cpp
+)
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES
+  ${QMLSHARP_NATIVE_TEST_FIXTURE_SOURCES}
+  ${QMLSHARP_NATIVE_TEST_INTEGRATION_EXPORT_SOURCE}
 )
 
 function(qmlsharp_configure_native_test_target target_name)
@@ -100,7 +89,7 @@ endif()
 add_library(qmlsharp_native_integration_fixture SHARED
   ${QMLSHARP_NATIVE_TEST_CORE_SOURCES}
   ${QMLSHARP_NATIVE_TEST_FIXTURE_SOURCES}
-  fixtures/qmlsharp_integration_fixture_exports.cpp
+  ${QMLSHARP_NATIVE_TEST_INTEGRATION_EXPORT_SOURCE}
 )
 
 qmlsharp_configure_native_test_target(qmlsharp_native_integration_fixture)

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <QmlSharpNativeRoot>$(MSBuildProjectDirectory)\..\..\</QmlSharpNativeRoot>
+    <QmlSharpRepositoryRoot>$(QmlSharpNativeRoot)..\</QmlSharpRepositoryRoot>
+    <QmlSharpBuildFlavor Condition="'$(Configuration)' == 'Release'">release</QmlSharpBuildFlavor>
+    <QmlSharpBuildFlavor Condition="'$(QmlSharpBuildFlavor)' == ''">debug</QmlSharpBuildFlavor>
+    <OutDir>$(QmlSharpRepositoryRoot)build\$(QmlSharpBuildFlavor)\bin\$(QmlSharpNativeOutputSubdirectory)</OutDir>
+    <IntDir>$(QmlSharpRepositoryRoot)build\windows-msbuild\obj\$(MSBuildProjectName)\$(Configuration)\$(Platform)\</IntDir>
+    <TargetExt Condition="'$(ConfigurationType)' == 'DynamicLibrary'">.dll</TargetExt>
+    <TargetExt Condition="'$(ConfigurationType)' == 'Application'">.exe</TargetExt>
+    <QtDir Condition="'$(QtDir)' == ''">$(QT_DIR)</QtDir>
+    <QtBinDir>$(QtDir)\bin</QtBinDir>
+    <QtLibDir>$(QtDir)\lib</QtLibDir>
+    <QtIncludeRoot>$(QtDir)\include</QtIncludeRoot>
+    <QtMkspecDir>$(QtDir)\mkspecs\win32-msvc</QtMkspecDir>
+    <QtLibSuffix Condition="'$(Configuration)' == 'Debug'">d</QtLibSuffix>
+    <QtMocIntermediateDir>$(IntDir)qt-moc\</QtMocIntermediateDir>
+    <ImportLibrary>$(QmlSharpRepositoryRoot)build\$(QmlSharpBuildFlavor)\lib\$(QmlSharpNativeOutputSubdirectory)$(TargetName).lib</ImportLibrary>
+    <ProgramDatabaseFile>$(OutDir)$(TargetName).pdb</ProgramDatabaseFile>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>/Zc:__cplusplus /utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <PreprocessorDefinitions>QMLSHARP_NATIVE_BUILD;QT_CORE_LIB;QT_GUI_LIB;QT_QML_LIB;QT_QUICK_LIB;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(QmlSharpNativeRoot)include;$(QmlSharpNativeRoot)src;$(QtIncludeRoot);$(QtIncludeRoot)\QtCore;$(QtIncludeRoot)\QtGui;$(QtIncludeRoot)\QtQml;$(QtIncludeRoot)\QtQuick;$(QtMkspecDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary Condition="'$(Configuration)' == 'Debug'">MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary Condition="'$(Configuration)' != 'Debug'">MultiThreadedDLL</RuntimeLibrary>
+      <TreatWarningAsError Condition="'$(TreatWarningsAsErrors)' == 'true' or '$(UseWerror)' == 'true'">true</TreatWarningAsError>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(QtLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>Qt6Core$(QtLibSuffix).lib;Qt6Gui$(QtLibSuffix).lib;Qt6Qml$(QtLibSuffix).lib;Qt6Quick$(QtLibSuffix).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ImportLibrary>$(ImportLibrary)</ImportLibrary>
+      <ProgramDatabaseFile>$(ProgramDatabaseFile)</ProgramDatabaseFile>
+      <SubSystem Condition="'$(ConfigurationType)' == 'Application'">Console</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

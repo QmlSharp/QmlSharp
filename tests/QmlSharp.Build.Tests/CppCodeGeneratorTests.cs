@@ -160,7 +160,9 @@ namespace QmlSharp.Build.Tests
             Assert.True(
                 cmake.IndexOf("CounterViewModel.cpp", StringComparison.Ordinal) <
                 cmake.IndexOf("TodoViewModel.cpp", StringComparison.Ordinal));
-            Assert.Contains("qmlsharp_abi.h", cmake, StringComparison.Ordinal);
+            Assert.Contains("file(GLOB_RECURSE QMLSHARP_NATIVE_CORE_SOURCES CONFIGURE_DEPENDS", cmake, StringComparison.Ordinal);
+            Assert.Contains("\"${QMLSHARP_NATIVE_SOURCE_DIR}/src/*.cpp\"", cmake, StringComparison.Ordinal);
+            Assert.Contains("\"${QMLSHARP_NATIVE_SOURCE_DIR}/include/qmlsharp/*.h\"", cmake, StringComparison.Ordinal);
         }
 
         [Fact]
