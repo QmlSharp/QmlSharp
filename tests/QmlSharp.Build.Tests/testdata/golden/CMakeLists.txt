@@ -11,30 +11,10 @@ find_package(Qt6 REQUIRED COMPONENTS Quick Qml)
 
 set(QMLSHARP_NATIVE_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../native")
 
-set(QMLSHARP_NATIVE_CORE_SOURCES
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_abi.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_diagnostics.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_diagnostics.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_effects.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_effects.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_engine.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_engine.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_error_overlay.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_error_overlay.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_errors.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_errors.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_hot_reload.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_hot_reload.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_instances.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_instances.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_metrics.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_metrics.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_state.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_state.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_type_registry.cpp"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/qmlsharp_type_registry.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/include/qmlsharp/qmlsharp_abi.h"
-  "${QMLSHARP_NATIVE_SOURCE_DIR}/include/qmlsharp/qmlsharp_export.h"
+file(GLOB_RECURSE QMLSHARP_NATIVE_CORE_SOURCES CONFIGURE_DEPENDS
+  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/*.cpp"
+  "${QMLSHARP_NATIVE_SOURCE_DIR}/src/*.h"
+  "${QMLSHARP_NATIVE_SOURCE_DIR}/include/qmlsharp/*.h"
 )
 
 add_library(qmlsharp_native SHARED

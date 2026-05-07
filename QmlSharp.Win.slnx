@@ -1,0 +1,42 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/QmlSharp.Core/QmlSharp.Core.csproj" />
+    <Project Path="src/QmlSharp.Build/QmlSharp.Build.csproj" />
+    <Project Path="src/QmlSharp.Cli/QmlSharp.Cli.csproj" />
+    <Project Path="src/QmlSharp.DevTools/QmlSharp.DevTools.csproj" />
+    <Project Path="src/QmlSharp.Dsl.Generator/QmlSharp.Dsl.Generator.csproj" />
+    <Project Path="src/QmlSharp.Dsl/QmlSharp.Dsl.csproj" />
+    <Project Path="src/QmlSharp.Compiler/QmlSharp.Compiler.csproj" />
+    <Project Path="src/QmlSharp.Host/QmlSharp.Host.csproj" />
+    <Project Path="src/QmlSharp.Qml.Ast/QmlSharp.Qml.Ast.csproj" />
+    <Project Path="src/QmlSharp.Qml.Emitter/QmlSharp.Qml.Emitter.csproj" />
+    <Project Path="src/QmlSharp.Qt.Tools/QmlSharp.Qt.Tools.csproj" />
+    <Project Path="src/QmlSharp.Registry/QmlSharp.Registry.csproj" />
+  </Folder>
+  <Folder Name="/native/">
+    <Project Path="native/windows/QmlSharp.Native/QmlSharp.Native.vcxproj" />
+    <Project Path="native/windows/QmlSharp.Native.Tests/QmlSharp.Native.Tests.vcxproj" />
+    <Project Path="native/windows/QmlSharp.Native.PerformanceTests/QmlSharp.Native.PerformanceTests.vcxproj" />
+    <Project Path="native/windows/QmlSharp.Native.IntegrationFixture/QmlSharp.Native.IntegrationFixture.vcxproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/GenerateRegistrySnapshot/QmlSharp.GenerateRegistrySnapshot.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/QmlSharp.Qt.Tools.ProcessProbe/QmlSharp.Qt.Tools.ProcessProbe.csproj" />
+    <Project Path="tests/QmlSharp.Build.Tests/QmlSharp.Build.Tests.csproj" />
+    <Project Path="tests/QmlSharp.DevTools.Tests/QmlSharp.DevTools.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Dsl.Generator.Tests/QmlSharp.Dsl.Generator.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Dsl.Tests/QmlSharp.Dsl.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Compiler.Tests/QmlSharp.Compiler.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Host.Tests/QmlSharp.Host.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Integration.Tests/QmlSharp.Integration.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Qml.Ast.Tests/QmlSharp.Qml.Ast.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Qml.Emitter.Tests/QmlSharp.Qml.Emitter.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Qt.Tools.Tests/QmlSharp.Qt.Tools.Tests.csproj" />
+    <Project Path="tests/QmlSharp.Registry.Tests/QmlSharp.Registry.Tests.csproj" />
+  </Folder>
+</Solution>
