@@ -3,6 +3,7 @@ namespace QmlSharp.DevTools.Tests
     public sealed class InstanceMatcherTests
     {
         [Fact]
+        [Trait("TestId", "HRO-07")]
         public void InstanceMatch_SameClassAndSlotKey_Matched()
         {
             InstanceMatcher matcher = new();
@@ -21,6 +22,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "HRO-08")]
         public void InstanceMatch_DifferentSlotKey_NotMatched()
         {
             InstanceMatcher matcher = new();
@@ -39,6 +41,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "HRO-09")]
         public void InstanceMatch_MultipleInstancesSameClass_MatchedBySlotKey()
         {
             InstanceMatcher matcher = new();
@@ -62,6 +65,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "HRO-10")]
         public void InstanceMatch_NoOldInstances_AllNew()
         {
             InstanceMatcher matcher = new();

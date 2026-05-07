@@ -3,6 +3,7 @@ namespace QmlSharp.DevTools.Tests
     public sealed class HotReloadOrchestratorTests
     {
         [Fact]
+        [Trait("TestId", "HRO-01")]
         public async Task ReloadAsync_SuccessfulReload_AllFourStepsExecuted()
         {
             FakeNativeHost nativeHost = new()
@@ -25,6 +26,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "HRO-02")]
         public async Task ReloadAsync_SuccessfulReload_PhasesTimingPopulated()
         {
             ManualDevToolsClock clock = new();
@@ -55,6 +57,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "HRO-03")]
         public async Task ReloadAsync_CaptureFailure_AbortsWithFailedStepCapture()
         {
             FakeNativeHost nativeHost = new()
@@ -74,6 +77,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "HRO-04")]
         public async Task ReloadAsync_NukeLoadFailure_AbortsWithFailedStepNukeLoad()
         {
             FakeNativeHost nativeHost = new()
@@ -94,6 +98,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "HRO-05")]
         public async Task ReloadAsync_HydratePartialMatch_ReportsOrphanedAndNew()
         {
             FakeNativeHost nativeHost = new()
@@ -117,7 +122,8 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
-        public async Task ReloadAsync_RestoreFailure_FailsWithStepRestore()
+        [Trait("TestId", "HRO-06")]
+        public async Task ReloadAsync_RestoreFailure_SucceedsWithWarning()
         {
             FakeNativeHost nativeHost = new()
             {
@@ -129,13 +135,14 @@ namespace QmlSharp.DevTools.Tests
 
             HotReloadResult result = await orchestrator.ReloadAsync(CompilationResult());
 
-            Assert.False(result.Success);
+            Assert.True(result.Success);
             Assert.Equal(HotReloadStep.Restore, result.FailedStep);
             Assert.Contains("restore failed", result.ErrorMessage, StringComparison.Ordinal);
             Assert.True(nativeHost.RestoreSnapshotsCalled is false);
         }
 
         [Fact]
+        [Trait("TestId", "HRO-11")]
         public async Task OnBefore_FiresBeforeStep1()
         {
             List<string> order = new();
@@ -163,6 +170,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "HRO-12")]
         public async Task OnAfter_FiresAfterStep4()
         {
             List<string> order = new();
@@ -188,6 +196,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "HRO-13")]
         public async Task ReloadAsync_Cancellation_AbortsCleanly()
         {
             FakeNativeHost nativeHost = new()
@@ -205,6 +214,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "HRO-14")]
         public async Task ReloadAsync_StateHydration_OldStatePushedToNewInstance()
         {
             FakeNativeHost nativeHost = new()
@@ -220,6 +230,88 @@ namespace QmlSharp.DevTools.Tests
             _ = Assert.Single(nativeHost.SyncedStates);
             Assert.Equal(42, nativeHost.SyncedStates[0]["count"]);
             Assert.Equal("new-1", nativeHost.SyncedInstanceIds[0]);
+        }
+
+        [Fact]
+        public async Task ReloadAsync_GetInstancesBeforeCaptureFails_StillRunsAndReportsZeroOldInstances()
+        {
+            FakeNativeHost nativeHost = new()
+            {
+                GetInstancesException = new InvalidOperationException("metrics unavailable"),
+                ClearGetInstancesExceptionAfterThrow = true,
+                Snapshots = ImmutableArray.Create(Snapshot("old-1", "CounterViewModel", "CounterView::__qmlsharp_vm0")),
+                Instances = ImmutableArray.Create(Info("new-1", "CounterViewModel", "CounterView::__qmlsharp_vm0")),
+            };
+            HotReloadOrchestrator orchestrator = CreateOrchestrator(nativeHost);
+            HotReloadStartingEvent? startingEvent = null;
+            orchestrator.OnBefore += starting => startingEvent = starting;
+
+            HotReloadResult result = await orchestrator.ReloadAsync(CompilationResult());
+
+            Assert.True(result.Success);
+            Assert.Equal(0, startingEvent?.OldInstanceCount);
+            AssertSubsequence(nativeHost.CallOrder, "instances", "capture", "reload", "instances");
+        }
+
+        [Fact]
+        public async Task ReloadAsync_HydrationSyncFailure_ReportsHydrateStepAndPreservesCounts()
+        {
+            FakeNativeHost nativeHost = new()
+            {
+                Snapshots = ImmutableArray.Create(Snapshot("old-1", "CounterViewModel", "CounterView::__qmlsharp_vm0", ("count", 42))),
+                Instances = ImmutableArray.Create(Info("new-1", "CounterViewModel", "CounterView::__qmlsharp_vm0")),
+                SyncException = new InvalidOperationException("sync failed"),
+            };
+            HotReloadOrchestrator orchestrator = CreateOrchestrator(nativeHost);
+
+            HotReloadResult result = await orchestrator.ReloadAsync(CompilationResult());
+
+            Assert.False(result.Success);
+            Assert.Equal(HotReloadStep.Hydrate, result.FailedStep);
+            Assert.Equal(0, result.InstancesMatched);
+            Assert.Contains("sync failed", result.ErrorMessage, StringComparison.Ordinal);
+            Assert.DoesNotContain("restore", nativeHost.CallOrder);
+        }
+
+        [Fact]
+        public async Task ReloadAsync_EmptyCompilationResult_ReloadsEmptyPathWithoutThrowing()
+        {
+            FakeNativeHost nativeHost = new()
+            {
+                Snapshots = ImmutableArray<InstanceSnapshot>.Empty,
+                Instances = ImmutableArray<InstanceInfo>.Empty,
+            };
+            HotReloadOrchestrator orchestrator = CreateOrchestrator(nativeHost);
+
+            HotReloadResult result = await orchestrator.ReloadAsync(
+                QmlSharp.Compiler.CompilationResult.FromUnits(ImmutableArray<CompilationUnit>.Empty));
+
+            Assert.True(result.Success);
+            Assert.Equal(string.Empty, nativeHost.ReloadedQmlPaths[0]);
+        }
+
+        [Fact]
+        public async Task ReloadAsync_QmlSourceFileWithoutSourceMap_UsesSourceFilePath()
+        {
+            FakeNativeHost nativeHost = new()
+            {
+                Snapshots = ImmutableArray<InstanceSnapshot>.Empty,
+                Instances = ImmutableArray<InstanceInfo>.Empty,
+            };
+            CompilationUnit unit = new()
+            {
+                SourceFilePath = "C:/repo/src/Generated.qml",
+                ViewClassName = "Generated",
+                ViewModelClassName = "GeneratedViewModel",
+                QmlText = "Item {}",
+            };
+            HotReloadOrchestrator orchestrator = CreateOrchestrator(nativeHost);
+
+            HotReloadResult result = await orchestrator.ReloadAsync(
+                QmlSharp.Compiler.CompilationResult.FromUnits(ImmutableArray.Create(unit)));
+
+            Assert.True(result.Success);
+            Assert.Equal("C:/repo/src/Generated.qml", nativeHost.ReloadedQmlPaths[0]);
         }
 
         [Fact]

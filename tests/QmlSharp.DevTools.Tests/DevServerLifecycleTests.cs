@@ -5,6 +5,7 @@ namespace QmlSharp.DevTools.Tests
     public sealed class DevServerLifecycleTests
     {
         [Fact]
+        [Trait("TestId", "DSV-01")]
         public async Task StartAsync_DSV_01_TransitionsFromIdleThroughInitialBuildToRunning()
         {
             ServerHarness harness = CreateHarness();
@@ -34,6 +35,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "DSV-02")]
         public async Task StartAsync_DSV_02_FailedInitialBuildTransitionsToErrorAndShowsOverlay()
         {
             ServerHarness harness = CreateHarness();
@@ -62,6 +64,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "DSV-03")]
         public async Task StopAsync_DSV_03_FromRunningTransitionsThroughStoppingToIdleAndCleansResources()
         {
             ServerHarness harness = CreateHarness();
@@ -88,6 +91,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "DSV-04")]
         public async Task StopAsync_DSV_04_FromErrorTransitionsThroughStoppingToIdleAndHidesOverlay()
         {
             ServerHarness harness = CreateHarness();
@@ -112,6 +116,7 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        [Trait("TestId", "DSV-13")]
         public async Task OnStatusChanged_DSV_13_PublishesPreviousCurrentTimestampAndReason()
         {
             ManualDevToolsClock clock = new()
@@ -200,6 +205,31 @@ namespace QmlSharp.DevTools.Tests
             Assert.Equal(2, harness.Console.BuildSuccessCalls);
             Assert.Equal(1, harness.Console.HotReloadSuccessCalls);
             Assert.False(harness.Overlay.IsVisible);
+        }
+
+        [Fact]
+        public async Task RebuildAsync_RestoreWarning_RemainsRunningAndWarnsWithoutOverlay()
+        {
+            ServerHarness harness = CreateHarness();
+            harness.BuildPipeline.QueueResult(SuccessfulBuildResult(TimeSpan.FromMilliseconds(11), filesCompiled: 2));
+            harness.Compiler.QueueResult(DevToolsTestFixtures.CompilationResultWithSchema(elapsedMilliseconds: 13));
+            harness.HotReload.QueueResult(FakeHotReloadOrchestrator.SuccessfulResult() with
+            {
+                ErrorMessage = "restore failed",
+                FailedStep = HotReloadStep.Restore,
+            });
+            await harness.Server.StartAsync();
+
+            HotReloadResult result = await harness.Server.RebuildAsync();
+
+            Assert.True(result.Success);
+            Assert.Equal(DevServerStatus.Running, harness.Server.Status);
+            Assert.False(harness.Overlay.IsVisible);
+            Assert.Equal(0, harness.Overlay.ShowCalls);
+            Assert.Equal(1, harness.Console.WarnCalls);
+            Assert.Contains("restore failed", harness.Console.Warnings[0], StringComparison.Ordinal);
+            Assert.Equal(1, harness.Console.HotReloadSuccessCalls);
+            Assert.Equal(0, harness.Console.HotReloadErrorCalls);
         }
 
         [Fact]
@@ -529,9 +559,15 @@ namespace QmlSharp.DevTools.Tests
 
             public int HotReloadSuccessCalls { get; private set; }
 
+            public int HotReloadErrorCalls { get; private set; }
+
             public int ServerStoppedCalls { get; private set; }
 
+            public int WarnCalls { get; private set; }
+
             public int ErrorCalls { get; private set; }
+
+            public List<string> Warnings { get; } = new();
 
             public List<string> Errors { get; } = new();
 
@@ -571,6 +607,7 @@ namespace QmlSharp.DevTools.Tests
 
             public void HotReloadError(string message)
             {
+                HotReloadErrorCalls++;
             }
 
             public void RestartRequired(string reason)
@@ -588,6 +625,8 @@ namespace QmlSharp.DevTools.Tests
 
             public void Warn(string message)
             {
+                WarnCalls++;
+                Warnings.Add(message);
             }
 
             public void Error(string message)

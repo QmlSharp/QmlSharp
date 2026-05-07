@@ -160,16 +160,18 @@ namespace QmlSharp.DevTools
                     nukeLoad.Elapsed,
                     hydrate.Elapsed,
                     restore.Elapsed,
-                    totalStart)
-                : CreateFailure(
-                    HotReloadStep.Restore,
+                    totalStart,
+                    warningMessage: null,
+                    warningStep: null)
+                : CreateSuccess(
                     hydrateResult,
                     capture.Elapsed,
                     nukeLoad.Elapsed,
                     hydrate.Elapsed,
                     restore.Elapsed,
+                    totalStart,
                     restore.ErrorMessage ?? "Native snapshot restoration failed.",
-                    totalStart);
+                    HotReloadStep.Restore);
         }
 
         private async Task<int> GetOldInstanceCountAsync(CancellationToken cancellationToken)
@@ -302,7 +304,9 @@ namespace QmlSharp.DevTools
             TimeSpan nukeLoadTime,
             TimeSpan hydrateTime,
             TimeSpan restoreTime,
-            long totalStart)
+            long totalStart,
+            string? warningMessage,
+            HotReloadStep? warningStep)
         {
             return new HotReloadResult(
                 Success: true,
@@ -311,8 +315,8 @@ namespace QmlSharp.DevTools
                 matchResult.Unmatched.Count,
                 new HotReloadPhases(captureTime, nukeLoadTime, hydrateTime, restoreTime),
                 ElapsedOrOneTick(totalStart),
-                ErrorMessage: null,
-                FailedStep: null);
+                warningMessage,
+                warningStep);
         }
 
         private HotReloadResult CreateCaptureFailure(
