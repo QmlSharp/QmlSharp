@@ -17,10 +17,10 @@
     <Project Path="src/QmlSharp.Registry/QmlSharp.Registry.csproj" />
   </Folder>
   <Folder Name="/native/">
-    <Project Path="native/windows/QmlSharp.Native/QmlSharp.Native.vcxproj" />
-    <Project Path="native/windows/QmlSharp.Native.Tests/QmlSharp.Native.Tests.vcxproj" />
-    <Project Path="native/windows/QmlSharp.Native.PerformanceTests/QmlSharp.Native.PerformanceTests.vcxproj" />
-    <Project Path="native/windows/QmlSharp.Native.IntegrationFixture/QmlSharp.Native.IntegrationFixture.vcxproj" />
+    <Project Path="native/windows/QmlSharp.Native/QmlSharp.Native.vcxproj" Id="40bd1541-2729-4a7c-bbf4-fba075486644" />
+    <Project Path="native/windows/QmlSharp.Native.Tests/QmlSharp.Native.Tests.vcxproj" Id="ae35b170-86e4-4c91-a50a-290de0aff649" />
+    <Project Path="native/windows/QmlSharp.Native.PerformanceTests/QmlSharp.Native.PerformanceTests.vcxproj" Id="dbc12364-4232-4667-84e2-f16b1a4ed80a" />
+    <Project Path="native/windows/QmlSharp.Native.IntegrationFixture/QmlSharp.Native.IntegrationFixture.vcxproj" Id="608da7d8-268b-436e-bddf-2205f39ed16b" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/GenerateRegistrySnapshot/QmlSharp.GenerateRegistrySnapshot.csproj" />

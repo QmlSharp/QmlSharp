@@ -20,7 +20,7 @@ defaults:
 jobs:
   build:
     name: Windows x64 (MSBuild)
-    runs-on: windows-2022
+    runs-on: windows-2025-vs2026
     timeout-minutes: 120
     env:
       MSBUILDDISABLENODEREUSE: "1"

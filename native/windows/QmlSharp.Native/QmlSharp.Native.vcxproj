@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <VCProjectVersion>17.0</VCProjectVersion>
+    <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{40BD1541-2729-4A7C-BBF4-FBA075486644}</ProjectGuid>
     <RootNamespace>QmlSharpNative</RootNamespace>
@@ -21,13 +21,13 @@
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -44,11 +44,34 @@
   </PropertyGroup>
   <Import Project="..\QmlSharp.Native.Windows.props" />
   <ItemGroup>
-    <ClCompile Include="$(QmlSharpNativeRoot)src\**\*.cpp" />
-    <ClInclude Include="$(QmlSharpNativeRoot)src\**\*.h" />
-    <ClInclude Include="$(QmlSharpNativeRoot)include\qmlsharp\**\*.h" />
-    <QmlSharpCoreHeaders Include="$(QmlSharpNativeRoot)src\**\*.h" />
-    <QmlSharpPublicHeaders Include="$(QmlSharpNativeRoot)include\qmlsharp\**\*.h" />
+    <ClCompile Include="..\..\src\qmlsharp_abi.cpp" />
+    <ClCompile Include="..\..\src\qmlsharp_diagnostics.cpp" />
+    <ClCompile Include="..\..\src\qmlsharp_effects.cpp" />
+    <ClCompile Include="..\..\src\qmlsharp_engine.cpp" />
+    <ClCompile Include="..\..\src\qmlsharp_error_overlay.cpp" />
+    <ClCompile Include="..\..\src\qmlsharp_errors.cpp" />
+    <ClCompile Include="..\..\src\qmlsharp_hot_reload.cpp" />
+    <ClCompile Include="..\..\src\qmlsharp_instances.cpp" />
+    <ClCompile Include="..\..\src\qmlsharp_metrics.cpp" />
+    <ClCompile Include="..\..\src\qmlsharp_state.cpp" />
+    <ClCompile Include="..\..\src\qmlsharp_type_registry.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\include\qmlsharp\qmlsharp_abi.h" />
+    <ClInclude Include="..\..\include\qmlsharp\qmlsharp_export.h" />
+    <ClInclude Include="..\..\src\qmlsharp_diagnostics.h" />
+    <ClInclude Include="..\..\src\qmlsharp_effects.h" />
+    <ClInclude Include="..\..\src\qmlsharp_engine.h">
+      <RunMoc>true</RunMoc>
+      <MocGroup>core</MocGroup>
+    </ClInclude>
+    <ClInclude Include="..\..\src\qmlsharp_error_overlay.h" />
+    <ClInclude Include="..\..\src\qmlsharp_errors.h" />
+    <ClInclude Include="..\..\src\qmlsharp_hot_reload.h" />
+    <ClInclude Include="..\..\src\qmlsharp_instances.h" />
+    <ClInclude Include="..\..\src\qmlsharp_metrics.h" />
+    <ClInclude Include="..\..\src\qmlsharp_state.h" />
+    <ClInclude Include="..\..\src\qmlsharp_type_registry.h" />
   </ItemGroup>
   <Import Project="..\QmlSharp.Native.Windows.targets" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

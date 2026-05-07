@@ -13,17 +13,9 @@
 
   <Target Name="PrepareQmlSharpQtMocItems" BeforeTargets="GenerateQmlSharpQtMoc">
     <ItemGroup>
-      <QtMoc Include="@(QmlSharpCoreHeaders)">
-        <MocOutput>$(QtMocIntermediateDir)core\%(RecursiveDir)moc_%(Filename).cpp</MocOutput>
-        <MocOutputDirectory>$(QtMocIntermediateDir)core\%(RecursiveDir)</MocOutputDirectory>
-      </QtMoc>
-      <QtMoc Include="@(QmlSharpPublicHeaders)">
-        <MocOutput>$(QtMocIntermediateDir)public\%(RecursiveDir)moc_%(Filename).cpp</MocOutput>
-        <MocOutputDirectory>$(QtMocIntermediateDir)public\%(RecursiveDir)</MocOutputDirectory>
-      </QtMoc>
-      <QtMoc Include="@(QmlSharpFixtureHeaders)">
-        <MocOutput>$(QtMocIntermediateDir)fixtures\%(RecursiveDir)moc_%(Filename).cpp</MocOutput>
-        <MocOutputDirectory>$(QtMocIntermediateDir)fixtures\%(RecursiveDir)</MocOutputDirectory>
+      <QtMoc Include="@(ClInclude)" Condition="'%(ClInclude.RunMoc)' == 'true'">
+        <MocOutput>$(QtMocIntermediateDir)%(ClInclude.MocGroup)\moc_%(Filename).cpp</MocOutput>
+        <MocOutputDirectory>$(QtMocIntermediateDir)%(ClInclude.MocGroup)\</MocOutputDirectory>
       </QtMoc>
     </ItemGroup>
   </Target>
