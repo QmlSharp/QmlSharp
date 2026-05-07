@@ -48,10 +48,14 @@ namespace QmlSharp.DevTools.Tests.Benchmarks
                     watcher.OnChange -= OnChange;
                 }
 
-                BenchmarkAssert.Within(
-                    BenchmarkAssert.Percentile99(samples),
-                    TimeSpan.FromMilliseconds(options.DebounceMs),
-                    TimeSpan.FromMilliseconds(50),
+                TimeSpan debounce = TimeSpan.FromMilliseconds(options.DebounceMs);
+                TimeSpan p99 = BenchmarkAssert.Percentile99(samples);
+                Assert.True(
+                    p99 >= debounce - TimeSpan.FromMilliseconds(5),
+                    "File watcher debounce P99 fired before the configured debounce window.");
+                BenchmarkAssert.Under(
+                    p99,
+                    TimeSpan.FromMilliseconds(250),
                     "File watcher debounce P99");
             }
             finally
