@@ -81,9 +81,10 @@ namespace QmlSharp.DevTools.Tests
                 ".qmltypes",
             ];
 
-            foreach (string sourceFile in Directory.EnumerateFiles(devToolsRoot, "*.cs", SearchOption.AllDirectories))
+            foreach (string sourceText in Directory
+                .EnumerateFiles(devToolsRoot, "*.cs", SearchOption.AllDirectories)
+                .Select(File.ReadAllText))
             {
-                string sourceText = File.ReadAllText(sourceFile);
                 bool writesFile = sourceText.Contains("WriteAllText", StringComparison.Ordinal) ||
                     sourceText.Contains("WriteAllBytes", StringComparison.Ordinal) ||
                     sourceText.Contains("FileStream", StringComparison.Ordinal) ||

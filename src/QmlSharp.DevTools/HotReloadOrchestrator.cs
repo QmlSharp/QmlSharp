@@ -153,6 +153,19 @@ namespace QmlSharp.DevTools
             HotReloadPhaseResult<object?> restore =
                 await RestoreAsync(oldSnapshots, cancellationToken).ConfigureAwait(false);
 
+            if (restore.WasCanceled)
+            {
+                return CreateFailure(
+                    HotReloadStep.Restore,
+                    hydrateResult,
+                    capture.Elapsed,
+                    nukeLoad.Elapsed,
+                    hydrate.Elapsed,
+                    restore.Elapsed,
+                    restore.ErrorMessage ?? "Native snapshot restoration was canceled.",
+                    totalStart);
+            }
+
             return restore.Success
                 ? CreateSuccess(
                     hydrateResult,
@@ -284,7 +297,7 @@ namespace QmlSharp.DevTools
             }
             catch (OperationCanceledException exception)
             {
-                return HotReloadPhaseResult<T>.Failed(ElapsedOrOneTick(phaseStart), exception.Message);
+                return HotReloadPhaseResult<T>.Canceled(ElapsedOrOneTick(phaseStart), exception.Message);
             }
             catch (Exception exception) when (!IsCriticalException(exception))
             {
@@ -500,16 +513,22 @@ namespace QmlSharp.DevTools
             bool Success,
             T? Value,
             TimeSpan Elapsed,
-            string? ErrorMessage)
+            string? ErrorMessage,
+            bool WasCanceled)
         {
             internal static HotReloadPhaseResult<T> Completed(T value, TimeSpan elapsed)
             {
-                return new HotReloadPhaseResult<T>(Success: true, value, elapsed, ErrorMessage: null);
+                return new HotReloadPhaseResult<T>(Success: true, value, elapsed, ErrorMessage: null, WasCanceled: false);
             }
 
             internal static HotReloadPhaseResult<T> Failed(TimeSpan elapsed, string errorMessage)
             {
-                return new HotReloadPhaseResult<T>(Success: false, Value: default, elapsed, errorMessage);
+                return new HotReloadPhaseResult<T>(Success: false, Value: default, elapsed, errorMessage, WasCanceled: false);
+            }
+
+            internal static HotReloadPhaseResult<T> Canceled(TimeSpan elapsed, string errorMessage)
+            {
+                return new HotReloadPhaseResult<T>(Success: false, Value: default, elapsed, errorMessage, WasCanceled: true);
             }
         }
     }

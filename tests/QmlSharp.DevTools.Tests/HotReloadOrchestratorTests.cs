@@ -214,6 +214,25 @@ namespace QmlSharp.DevTools.Tests
         }
 
         [Fact]
+        public async Task ReloadAsync_RestoreCancellation_AbortsWithoutWarningSuccess()
+        {
+            FakeNativeHost nativeHost = new()
+            {
+                Snapshots = ImmutableArray.Create(Snapshot("old-1", "CounterViewModel", "CounterView::__qmlsharp_vm0", ("count", 42))),
+                Instances = ImmutableArray.Create(Info("new-1", "CounterViewModel", "CounterView::__qmlsharp_vm0")),
+                RestoreException = new OperationCanceledException("restore canceled"),
+            };
+            HotReloadOrchestrator orchestrator = CreateOrchestrator(nativeHost);
+
+            HotReloadResult result = await orchestrator.ReloadAsync(CompilationResult());
+
+            Assert.False(result.Success);
+            Assert.Equal(HotReloadStep.Restore, result.FailedStep);
+            Assert.Contains("restore canceled", result.ErrorMessage, StringComparison.Ordinal);
+            Assert.True(nativeHost.RestoreSnapshotsCalled is false);
+        }
+
+        [Fact]
         [Trait("TestId", "HRO-14")]
         public async Task ReloadAsync_StateHydration_OldStatePushedToNewInstance()
         {
