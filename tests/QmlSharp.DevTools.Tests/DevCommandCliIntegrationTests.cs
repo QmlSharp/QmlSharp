@@ -30,6 +30,7 @@ namespace QmlSharp.DevTools.Tests
             Assert.Contains("Starting QmlSharp dev server", output.ToString(), StringComparison.Ordinal);
             Assert.Contains("Dev server ready", output.ToString(), StringComparison.Ordinal);
             Assert.Contains("Dev server stopped", output.ToString(), StringComparison.Ordinal);
+            Assert.Null(factory.Context.ServerOptions.EntryOverride);
         }
 
         [Fact]
@@ -56,6 +57,7 @@ namespace QmlSharp.DevTools.Tests
             Assert.Equal(expectedEntry, factory.Context.CommandOptions.Entry);
             Assert.Equal(expectedEntry, factory.Context.EffectiveConfig.Entry);
             Assert.Equal(expectedEntry, factory.Context.BuildContext.Config.Entry);
+            Assert.Equal(expectedEntry, factory.Context.ServerOptions.EntryOverride);
         }
 
         [Fact]

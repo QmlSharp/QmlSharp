@@ -710,10 +710,14 @@ namespace QmlSharp.DevTools
                 throw new ConfigParseException(ConvertConfigDiagnostics(errors));
             }
 
-            QmlSharpConfig normalizedConfig = NormalizeConfigForDevServer(loadedConfig, projectRoot);
+            QmlSharpConfig normalizedConfig = ApplyEntryOverride(
+                NormalizeConfigForDevServer(loadedConfig, projectRoot),
+                projectRoot,
+                options.EntryOverride);
             DevServerOptions reloadedOptions = options with
             {
                 ProjectRoot = projectRoot,
+                EntryOverride = string.IsNullOrWhiteSpace(options.EntryOverride) ? null : normalizedConfig.Entry,
                 WatcherOptions = options.WatcherOptions with
                 {
                     WatchPaths = normalizedConfig.Dev.WatchPaths,
@@ -1134,6 +1138,16 @@ namespace QmlSharp.DevTools
                     WatchPaths = ResolveWatchPaths(projectRoot, config.Dev.WatchPaths),
                 },
             };
+        }
+
+        private static QmlSharpConfig ApplyEntryOverride(
+            QmlSharpConfig config,
+            string projectRoot,
+            string? entryOverride)
+        {
+            return string.IsNullOrWhiteSpace(entryOverride)
+                ? config
+                : config with { Entry = ResolveProjectRootedPath(projectRoot, entryOverride) };
         }
 
         private static ImmutableArray<string> ResolveWatchPaths(string projectRoot, ImmutableArray<string> watchPaths)

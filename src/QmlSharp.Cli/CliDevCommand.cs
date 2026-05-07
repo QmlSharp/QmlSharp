@@ -155,6 +155,7 @@ namespace QmlSharp.Cli
             string projectRoot = Path.GetFullPath(options.ProjectDir);
             QmlSharpConfig loadedConfig = configLoader.Load(projectRoot);
             string effectiveEntry = ResolveEntry(projectRoot, loadedConfig, options);
+            string? entryOverride = string.IsNullOrWhiteSpace(options.Entry) ? null : effectiveEntry;
             QmlSharpConfig effectiveConfig = loadedConfig with
             {
                 Entry = effectiveEntry,
@@ -182,7 +183,8 @@ namespace QmlSharp.Cli
                 EnableRepl: true,
                 EnableProfiling: true,
                 ConfigPath: Path.Join(projectRoot, "qmlsharp.json"),
-                Headless: options.Headless);
+                Headless: options.Headless,
+                EntryOverride: entryOverride);
 
             return new DevServerCreationContext(
                 effectiveCommandOptions,
