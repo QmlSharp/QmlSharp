@@ -213,8 +213,9 @@ namespace QmlSharp.DevTools
                 return;
             }
 
+            CancelQueuedWatcherRebuilds();
             using AsyncGate.Releaser gate = await lifecycleGate.AcquireAsync().ConfigureAwait(false);
-            await StopCoreAsync().ConfigureAwait(false);
+            await StopCoreAsync(cancelQueuedWatcherRebuilds: false).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
@@ -228,8 +229,9 @@ namespace QmlSharp.DevTools
         public async Task RestartAsync(CancellationToken cancellationToken = default)
         {
             ThrowIfDisposed();
+            CancelQueuedWatcherRebuilds();
             using AsyncGate.Releaser gate = await lifecycleGate.AcquireAsync(cancellationToken).ConfigureAwait(false);
-            await StopCoreAsync().ConfigureAwait(false);
+            await StopCoreAsync(cancelQueuedWatcherRebuilds: false).ConfigureAwait(false);
             await StartCoreAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -241,8 +243,9 @@ namespace QmlSharp.DevTools
                 return;
             }
 
+            CancelQueuedWatcherRebuilds();
             using AsyncGate.Releaser gate = await lifecycleGate.AcquireAsync().ConfigureAwait(false);
-            await StopCoreAsync().ConfigureAwait(false);
+            await StopCoreAsync(cancelQueuedWatcherRebuilds: false).ConfigureAwait(false);
             await DisposeOwnedResourcesAsync().ConfigureAwait(false);
             disposed = true;
         }
