@@ -1,72 +1,71 @@
 # QmlSharp
 
-QmlSharp is a C# + C++ framework and toolchain for building Qt/QML applications. The managed
-toolchain owns compiler, registry, runtime coordination, build orchestration, and dev tools;
-the native side stays a thin Qt/QML shell.
+**Build Qt/QML applications in C#.**
 
-## Step 01.00 bootstrap status
+QmlSharp is a managed framework and toolchain for Qt 6. Views, ViewModels, and
+application logic are written in C# through a fluent, QML-style DSL. The
+toolchain compiles those declarations to QML, schema contracts, native QObject
+glue, and source maps; a thin Qt host loads and runs the generated app.
 
-This branch bootstraps the implementation repository foundation and quality gates only. It does
-not implement real `01-registry` behavior yet.
+## A glance
 
-## Required local tools
+A view, written in C#:
 
-- .NET SDK 10.0.202
-- CMake 4.2 or newer
-- `pre-commit` (optional but recommended)
-- `clang-format` (optional until native formatting hooks become mandatory)
-
-## Bootstrap commands
-
-```powershell
-dotnet restore QmlSharp.slnx
-dotnet build QmlSharp.slnx
-dotnet test QmlSharp.slnx
-cmake --preset windows-debug
-cmake --build --preset debug
-$env:MSBUILDDISABLENODEREUSE = "1"
-dotnet format QmlSharp.slnx --verify-no-changes --no-restore --verbosity minimal
+```csharp
+public static View Counter(CounterViewModel vm) =>
+    Column(
+        Text(vm.State(s => s.Count)).FontSize(24),
+        Button("Increment").OnClicked(vm.Increment)
+    );
 ```
 
-`cmake --preset windows-debug` and `cmake --build --preset debug` are intentionally Qt-free in
-Step 01.00. Real Qt discovery starts in later native-host and build-system steps.
+A ViewModel that exposes state, commands, and effects:
 
-On Windows, run the native preset commands from a Visual Studio developer shell or by calling
-`vcvars64.bat` first so `clang-cl` and `FBuild.exe` are available in `PATH`.
-
-## RequiresQt test policy
-
-Real Qt SDK integration tests use the stable xUnit trait `[Trait("Category", "RequiresQt")]`.
-They discover Qt through `QT_DIR` first and then a Qt `bin` directory on `PATH`; the
-legacy `QMLSHARP_QT_DIR` name is not a QmlSharp discovery contract.
-
-To run the mocked/default test set without real Qt:
-
-```powershell
-dotnet test QmlSharp.slnx --configuration Debug --filter "Category!=RequiresQt"
+```csharp
+[ViewModel]
+public partial class CounterViewModel
+{
+    [State]   public int  Count { get; set; }
+    [Command] public void Increment() => Count++;
+    [Effect]  public void OnCountChanged(int next) { /* ... */ }
+}
 ```
 
-To run only real Qt tests on a machine with Qt installed:
+The QML the compiler emits, loaded by the Qt host:
 
-```powershell
-$env:QT_DIR = "C:\Qt\6.11.0\msvc2022_64"
-dotnet test QmlSharp.slnx --configuration Debug --filter "Category=RequiresQt"
+```qml
+ColumnLayout {
+    Text   { text: vm.count; font.pixelSize: 24 }
+    Button { text: qsTr("Increment"); onClicked: vm.increment() }
+}
 ```
 
-CI jobs that install Qt 6.11.0 may run the full test suite or the `Category=RequiresQt`
-filter explicitly. CI jobs without Qt can use `Category!=RequiresQt` without changing test
-code.
+> Examples are conceptual. The public API is still evolving.
 
-## Implementation traceability
+## How it works
 
-Module step audits, parity notes, and final-gate traceability live in PR descriptions or
-linked GitHub issues. The implementation repository does not keep a committed root `docs/`
-tree for these records. Later implementation reviews should treat the relevant step audit
-PR body or linked issue as the review contract for that wave.
+- **C# is the source of truth.** The fluent DSL describes views; `[State]`,
+  `[Command]`, and `[Effect]` describe ViewModels.
+- **The compiler emits everything else.** QML files, `.schema.json` runtime
+  contracts, native QObject bindings, metadata, and source maps are generated
+  artifacts, not hand-written.
+- **Interop is flat C ABI + P/Invoke.** The native side is a thin Qt shell
+  around `QQmlEngine` and registered types — no COM, no C++/CLI.
+- **Qt 6.11 is the runtime baseline.** The toolchain discovers Qt through
+  `QT_DIR`.
 
-## Local quality workflow
+## Status
 
-```powershell
-pre-commit install
-pre-commit run --all-files
-```
+QmlSharp is in early development. The compiler, runtime contracts, and public
+APIs are still stabilizing and may change between releases.
+
+## Documentation
+
+Full documentation will be published on the QmlSharp GitHub Pages site. Until
+then, this README covers the project at a glance.
+
+Documentation: GitHub Pages site coming soon.
+
+## License
+
+[MIT](LICENSE)
