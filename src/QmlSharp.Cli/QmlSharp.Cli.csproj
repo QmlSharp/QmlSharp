@@ -8,5 +8,6 @@
   <ItemGroup>
     <PackageReference Include="System.CommandLine" />
     <ProjectReference Include="..\QmlSharp.Build\QmlSharp.Build.csproj" />
+    <ProjectReference Include="..\QmlSharp.DevTools\QmlSharp.DevTools.csproj" />
   </ItemGroup>
 </Project>

@@ -92,13 +92,17 @@ namespace QmlSharp.DevTools
     /// <param name="EnableRepl">Whether the REPL is enabled.</param>
     /// <param name="EnableProfiling">Whether profiling is enabled.</param>
     /// <param name="ConfigPath">Optional path to the qmlsharp config file.</param>
+    /// <param name="Headless">Whether the dev session should avoid launching a Qt window.</param>
+    /// <param name="EntryOverride">Optional command-line entry override that must survive config reloads.</param>
     public sealed record DevServerOptions(
         string ProjectRoot,
         FileWatcherOptions WatcherOptions,
         DevConsoleOptions ConsoleOptions,
         bool EnableRepl = true,
         bool EnableProfiling = true,
-        string? ConfigPath = null);
+        string? ConfigPath = null,
+        bool Headless = false,
+        string? EntryOverride = null);
 
 #pragma warning restore CA1003, MA0046, MA0048
 }

@@ -243,6 +243,36 @@ namespace QmlSharp.DevTools.Tests
 
         [Fact]
         [Trait("TestId", "DSV-12")]
+        public async Task ConfigFileChange_DSV_12_PreservesEntryOverrideOnConfigReload()
+        {
+            TestFileWatcher initialWatcher = new();
+            FakeConfigLoader configLoader = new(ReloadedConfig() with
+            {
+                Entry = "./src/ConfigProgram.cs",
+            });
+            DevServerOptions options = ServerOptions() with
+            {
+                EntryOverride = "./src/OverrideProgram.cs",
+            };
+            ServerHarness harness = CreateHarness(
+                options: options,
+                fileWatcher: initialWatcher,
+                configLoader: configLoader);
+            harness.BuildPipeline.QueueResult(DevToolsTestFixtures.SuccessfulBuildResult());
+            harness.BuildPipeline.QueueResult(DevToolsTestFixtures.SuccessfulBuildResult());
+            await harness.Server.StartAsync();
+
+            initialWatcher.Emit(FileChangeBatch("C:/repo/qmlsharp.json"));
+
+            await WaitUntilAsync(() => harness.BuildPipeline.Requests.Count == 2 && harness.Server.Status == DevServerStatus.Running);
+
+            Assert.Equal(1, configLoader.LoadCalls);
+            Assert.Equal("C:/repo/src/OverrideProgram.cs", harness.BuildPipeline.Requests[1].Context.Config.Entry);
+            Assert.Equal("C:/repo/build/dev", harness.BuildPipeline.Requests[1].Context.OutputDir);
+        }
+
+        [Fact]
+        [Trait("TestId", "DSV-12")]
         public async Task ConfigFileChange_DSV_12_FailedRestartLeavesServerInError()
         {
             ServerHarness harness = CreateHarness();

@@ -1,4 +1,8 @@
+using System.Collections.Immutable;
 using QmlSharp.Build;
+using QmlSharp.DevTools;
+
+#pragma warning disable MA0048
 
 namespace QmlSharp.Cli
 {
@@ -11,8 +15,8 @@ namespace QmlSharp.Cli
         /// <summary>Build pipeline used by the build command.</summary>
         public required IBuildPipeline BuildPipeline { get; init; }
 
-        /// <summary>Development session used by the dev command.</summary>
-        public required IDevSession DevSession { get; init; }
+        /// <summary>Dev server factory used by the dev command.</summary>
+        public required ICliDevServerFactory DevServerFactory { get; init; }
 
         /// <summary>Doctor service used by the doctor command.</summary>
         public required IDoctor Doctor { get; init; }
@@ -36,7 +40,7 @@ namespace QmlSharp.Cli
             {
                 ConfigLoader = configLoader,
                 BuildPipeline = buildPipeline,
-                DevSession = new DevSession(configLoader, buildPipeline),
+                DevServerFactory = new DefaultCliDevServerFactory(buildPipeline),
                 Doctor = new Doctor(),
                 DoctorFactory = static projectDir => new Doctor(projectDir),
                 InitService = new InitService(),
@@ -51,4 +55,78 @@ namespace QmlSharp.Cli
             return DoctorFactory is null ? Doctor : DoctorFactory(projectDir);
         }
     }
+
+    internal sealed class DefaultCliDevServerFactory : ICliDevServerFactory
+    {
+        private readonly IBuildPipeline buildPipeline;
+
+        public DefaultCliDevServerFactory(IBuildPipeline buildPipeline)
+        {
+            ArgumentNullException.ThrowIfNull(buildPipeline);
+
+            this.buildPipeline = buildPipeline;
+        }
+
+        public IDevServer Create(DevServerCreationContext context)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
+            IDevToolsBuildPipeline devToolsBuildPipeline = new BuildPipelineAdapter(buildPipeline);
+            return new DevServer(
+                context.ServerOptions,
+                context.BuildContext,
+                new FileWatcher(context.ServerOptions.WatcherOptions),
+                devToolsBuildPipeline,
+                new DevConsole(context.ServerOptions.ConsoleOptions),
+                new ErrorOverlay(NoOpErrorOverlayNativeHost.Instance),
+                new PerfProfiler(context.ServerOptions.EnableProfiling));
+        }
+    }
+
+    internal sealed class BuildPipelineAdapter : IDevToolsBuildPipeline
+    {
+        private readonly IBuildPipeline buildPipeline;
+
+        public BuildPipelineAdapter(IBuildPipeline buildPipeline)
+        {
+            ArgumentNullException.ThrowIfNull(buildPipeline);
+
+            this.buildPipeline = buildPipeline;
+        }
+
+        public Task<BuildResult> BuildAsync(
+            BuildContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return buildPipeline.BuildAsync(context, cancellationToken);
+        }
+
+        public Task<BuildResult> BuildPhasesAsync(
+            BuildContext context,
+            ImmutableArray<BuildPhase> phases,
+            CancellationToken cancellationToken = default)
+        {
+            return buildPipeline.BuildPhasesAsync(context, phases, cancellationToken);
+        }
+
+        public void OnProgress(Action<BuildProgress> callback)
+        {
+            buildPipeline.OnProgress(callback);
+        }
+    }
+
+    internal sealed class NoOpErrorOverlayNativeHost : IErrorOverlayNativeHost
+    {
+        public static NoOpErrorOverlayNativeHost Instance { get; } = new();
+
+        public void ShowError(string title, string message, string? filePath, int line, int column)
+        {
+        }
+
+        public void HideError()
+        {
+        }
+    }
 }
+
+#pragma warning restore MA0048
