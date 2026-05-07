@@ -1,0 +1,25 @@
+using QmlSharp.Core;
+
+namespace DevToolsCounterFlow;
+
+[ViewModel]
+public sealed class CounterViewModel
+{
+    [State]
+    public int Count { get; set; }
+
+    [State]
+    public string Title { get; set; } = "Counter";
+
+    [Command]
+    public void Increment()
+    {
+        Count++;
+    }
+
+    [Command]
+    public void Decrement()
+    {
+        Count--;
+    }
+}

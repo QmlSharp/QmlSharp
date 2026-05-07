@@ -1,0 +1,20 @@
+using QmlSharp.Core;
+using QmlSharp.Dsl;
+
+namespace DevToolsCounterFlow;
+
+public sealed class CounterView : View<CounterViewModel>
+{
+    public override object Build() =>
+        Column().Children(
+            Text().TextBind("Vm.Count.toString()"));
+
+    private static IObjectBuilder Column() => throw new NotImplementedException();
+
+    private static IObjectBuilder Text() => throw new NotImplementedException();
+}
+
+internal static class CounterDslExtensions
+{
+    public static IObjectBuilder TextBind(this IObjectBuilder builder, string expression) => builder;
+}
