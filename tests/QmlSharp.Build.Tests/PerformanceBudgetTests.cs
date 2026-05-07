@@ -147,9 +147,9 @@ namespace QmlSharp.Build.Tests
 
         [Fact]
         [Trait("Category", BuildTestCategories.Performance)]
-        public async Task CleanArtifacts_CompletesUnder500ms()
+        public async Task CleanArtifacts_CompletesWithinPlatformBudget()
         {
-            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(CleanArtifacts_CompletesUnder500ms));
+            using TempDirectory project = BuildTestFixtures.CreateFixtureProject(nameof(CleanArtifacts_CompletesWithinPlatformBudget));
             WriteCleanConfig(project.Path);
             string distDirectory = Path.Join(project.Path, "dist");
             string cacheDirectory = Path.Join(project.Path, ".compiler-cache");
@@ -172,7 +172,7 @@ namespace QmlSharp.Build.Tests
             Assert.True(result.Success);
             Assert.False(Directory.Exists(distDirectory));
             Assert.False(Directory.Exists(cacheDirectory));
-            AssertWithinBudget("clean artifacts", stopwatch.Elapsed, TimeSpan.FromMilliseconds(500));
+            AssertWithinBudget("clean artifacts", stopwatch.Elapsed, GetCleanArtifactsBudget());
         }
 
         private static BuildArtifacts CreateProductLayoutArtifacts(string projectDir)
@@ -214,6 +214,22 @@ namespace QmlSharp.Build.Tests
         private static void AssertWithinBudget(string operation, TimeSpan elapsed, TimeSpan budget)
         {
             Assert.True(elapsed < budget, $"{operation} took {elapsed.TotalMilliseconds:F2} ms; budget is {budget.TotalMilliseconds:F2} ms.");
+        }
+
+        private static TimeSpan GetCleanArtifactsBudget()
+        {
+            return IsWindowsContinuousIntegration()
+                ? TimeSpan.FromSeconds(2)
+                : TimeSpan.FromMilliseconds(500);
+        }
+
+        private static bool IsWindowsContinuousIntegration()
+        {
+            return OperatingSystem.IsWindows()
+                && string.Equals(
+                    Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase);
         }
 
         private static void WriteConfig(string projectDir, string qtDir)
