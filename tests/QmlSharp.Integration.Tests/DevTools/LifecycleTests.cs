@@ -5,7 +5,7 @@ namespace QmlSharp.Integration.Tests.DevTools
 {
     public sealed class LifecycleTests
     {
-        [Fact]
+        [RequiresQtFact]
         [Trait("TestId", "INT-09")]
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.RequiresQt)]

@@ -5,7 +5,7 @@ namespace QmlSharp.Integration.Tests.DevTools
 {
     public sealed class PerfProfilerIntegrationTests
     {
-        [Fact]
+        [RequiresQtFact]
         [Trait("TestId", "INT-08")]
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.Performance)]

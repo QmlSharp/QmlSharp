@@ -5,7 +5,7 @@ namespace QmlSharp.Integration.Tests.DevTools
 {
     public sealed class FullFlowTests
     {
-        [Fact]
+        [RequiresQtFact]
         [Trait("TestId", "INT-01")]
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.RequiresQt)]
@@ -28,7 +28,7 @@ namespace QmlSharp.Integration.Tests.DevTools
             Assert.Equal(1, harness.Server.Stats.HotReloadCount);
         }
 
-        [Fact]
+        [RequiresQtFact]
         [Trait("TestId", "INT-02")]
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.RequiresQt)]
@@ -51,7 +51,7 @@ namespace QmlSharp.Integration.Tests.DevTools
             Assert.Equal(1, harness.Server.Stats.ErrorCount);
         }
 
-        [Fact]
+        [RequiresQtFact]
         [Trait("TestId", "INT-03")]
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.RequiresQt)]
@@ -78,7 +78,7 @@ namespace QmlSharp.Integration.Tests.DevTools
             _ = Assert.Single(harness.NativeHost.ReloadedQmlPaths);
         }
 
-        [Fact]
+        [RequiresQtFact]
         [Trait("TestId", "INT-04")]
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.RequiresQt)]
@@ -102,7 +102,7 @@ namespace QmlSharp.Integration.Tests.DevTools
             Assert.Equal(1, harness.Server.Stats.HotReloadCount);
         }
 
-        [Fact]
+        [RequiresQtFact]
         [Trait("TestId", "INT-05")]
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.RequiresQt)]
@@ -125,7 +125,7 @@ namespace QmlSharp.Integration.Tests.DevTools
             Assert.Equal(1, harness.ControlledWatcher.StopCalls);
         }
 
-        [Fact]
+        [RequiresQtFact]
         [Trait("TestId", "INT-06")]
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.RequiresQt)]
@@ -150,7 +150,7 @@ namespace QmlSharp.Integration.Tests.DevTools
             Assert.Equal(1, harness.Server.Stats.HotReloadCount);
         }
 
-        [Fact]
+        [RequiresQtFact]
         [Trait("TestId", "INT-07")]
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.RequiresQt)]

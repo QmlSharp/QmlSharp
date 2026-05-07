@@ -5,7 +5,7 @@ namespace QmlSharp.Integration.Tests.DevTools
 {
     public sealed class ReplIntegrationTests
     {
-        [Fact]
+        [RequiresQtFact]
         [Trait("TestId", "INT-10")]
         [Trait("Category", TestCategories.Integration)]
         [Trait("Category", TestCategories.QmlRepl)]
