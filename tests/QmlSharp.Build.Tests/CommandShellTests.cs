@@ -1,6 +1,7 @@
 using System.Text.Json;
 using QmlSharp.Build.Tests.Infrastructure;
 using QmlSharp.Cli;
+using QmlSharp.DevTools;
 
 namespace QmlSharp.Build.Tests
 {
@@ -252,43 +253,52 @@ namespace QmlSharp.Build.Tests
         public async Task DC03_DC04_DevHeadlessWithEntryOverrideBindsOptions()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject("dc03-dc04-dev");
-            RecordingDevSession devSession = new();
+            using CancellationTokenSource cancellation = new();
+            RecordingDevServerFactory devServerFactory = new()
+            {
+                OnStart = cancellation.Cancel,
+            };
             QmlSharpConfig config = BuildTestFixtures.CreateDefaultConfig() with
             {
                 Entry = null,
             };
             CliCommandServices services = CreateServices(
                 configLoader: new FakeConfigLoader(config),
-                devSession: devSession);
+                devServerFactory: devServerFactory);
 
             int exitCode = await InvokeAsync(
                 new[] { "dev", "--headless", "--entry", "./src/AltProgram.cs", "--project-dir", project.Path },
-                services);
+                services,
+                cancellation.Token);
 
-            Assert.Equal(CliExitCode.Success, exitCode);
-            Assert.Equal(1, devSession.StartCallCount);
-            Assert.NotNull(devSession.LastOptions);
-            Assert.True(devSession.LastOptions.Headless);
-            Assert.Equal("./src/AltProgram.cs", devSession.LastOptions.Entry);
+            Assert.Equal(CliExitCode.Cancelled, exitCode);
+            Assert.Equal(1, devServerFactory.CreatedServer.StartCallCount);
+            Assert.NotNull(devServerFactory.LastContext);
+            Assert.True(devServerFactory.LastContext.CommandOptions.Headless);
+            Assert.True(devServerFactory.LastContext.ServerOptions.Headless);
+            Assert.Equal(
+                Path.GetFullPath(Path.Join(project.Path, "src", "AltProgram.cs")),
+                devServerFactory.LastContext.CommandOptions.Entry);
         }
 
         [Fact]
         public async Task DevCommand_MissingEntryReturnsCommandError()
         {
             using TempDirectory project = BuildTestFixtures.CreateFixtureProject("dev-missing-entry");
-            RecordingDevSession devSession = new();
+            RecordingDevServerFactory devServerFactory = new();
             QmlSharpConfig config = BuildTestFixtures.CreateDefaultConfig() with
             {
                 Entry = null,
             };
             CliCommandServices services = CreateServices(
                 configLoader: new FakeConfigLoader(config),
-                devSession: devSession);
+                devServerFactory: devServerFactory);
 
             int exitCode = await InvokeAsync(new[] { "dev", "--project-dir", project.Path }, services);
 
             Assert.Equal(CliExitCode.ConfigOrCommandError, exitCode);
-            Assert.Equal(0, devSession.StartCallCount);
+            Assert.Null(devServerFactory.LastContext);
+            Assert.Equal(0, devServerFactory.CreatedServer.StartCallCount);
         }
 
         [Fact]
@@ -472,10 +482,20 @@ namespace QmlSharp.Build.Tests
             return await QmlSharpCli.InvokeAsync(args, services, output, error);
         }
 
+        private static async Task<int> InvokeAsync(
+            string[] args,
+            CliCommandServices services,
+            CancellationToken cancellationToken)
+        {
+            using StringWriter output = new();
+            using StringWriter error = new();
+            return await QmlSharpCli.InvokeAsync(args, services, output, error, cancellationToken);
+        }
+
         private static CliCommandServices CreateServices(
             IConfigLoader? configLoader = null,
             IBuildPipeline? buildPipeline = null,
-            IDevSession? devSession = null,
+            ICliDevServerFactory? devServerFactory = null,
             IDoctor? doctor = null,
             IInitService? initService = null,
             ICleanService? cleanService = null)
@@ -484,7 +504,7 @@ namespace QmlSharp.Build.Tests
             {
                 ConfigLoader = configLoader ?? new FakeConfigLoader(BuildTestFixtures.CreateDefaultConfig()),
                 BuildPipeline = buildPipeline ?? new RecordingBuildPipeline(CreateSuccessfulBuildResult()),
-                DevSession = devSession ?? new RecordingDevSession(),
+                DevServerFactory = devServerFactory ?? new RecordingDevServerFactory(),
                 Doctor = doctor ?? new FakeDoctor(ImmutableArray<DoctorCheckResult>.Empty),
                 InitService = initService ?? new RecordingInitService(CommandServiceResult.Succeeded("Init.")),
                 CleanService = cleanService ?? new RecordingCleanService(CommandServiceResult.Succeeded("Clean.")),
@@ -589,42 +609,71 @@ namespace QmlSharp.Build.Tests
             }
         }
 
-        private sealed class RecordingDevSession : IDevSession
+        private sealed class RecordingDevServerFactory : ICliDevServerFactory
         {
+            public DevServerCreationContext? LastContext { get; private set; }
+
+            public Action? OnStart { get; init; }
+
+            public RecordingDevServer CreatedServer { get; } = new();
+
+            public IDevServer Create(DevServerCreationContext context)
+            {
+                LastContext = context;
+                CreatedServer.OnStart = OnStart;
+                return CreatedServer;
+            }
+        }
+
+        private sealed class RecordingDevServer : IDevServer
+        {
+            public Action? OnStart { get; set; }
+
             public int StartCallCount { get; private set; }
 
-            public DevCommandOptions? LastOptions { get; private set; }
+            public int StopCallCount { get; private set; }
 
-            public DevSessionState State { get; private set; } = DevSessionState.Stopped;
+            public DevServerStatus Status { get; private set; } = DevServerStatus.Running;
 
-            public BuildResult? LastBuild { get; private set; }
+            public ServerStats Stats { get; } = new(
+                1,
+                0,
+                0,
+                0,
+                TimeSpan.Zero,
+                TimeSpan.Zero,
+                TimeSpan.Zero);
 
-            public Task StartAsync(DevCommandOptions options, CancellationToken cancellationToken = default)
+            public IRepl? Repl => null;
+
+            public event Action<DevServerStatusChangedEvent> OnStatusChanged = static _ => { };
+
+            public Task StartAsync(CancellationToken cancellationToken = default)
             {
                 StartCallCount++;
-                LastOptions = options;
-                State = DevSessionState.Running;
-                LastBuild = CreateSuccessfulBuildResult();
+                OnStart?.Invoke();
                 return Task.CompletedTask;
             }
 
-            public Task<BuildResult> RebuildAsync()
+            public Task StopAsync()
             {
-                LastBuild = CreateSuccessfulBuildResult();
-                return Task.FromResult(LastBuild);
+                StopCallCount++;
+                Status = DevServerStatus.Idle;
+                return Task.CompletedTask;
             }
 
-            public void OnBuildComplete(Action<BuildResult> callback)
+            public Task<HotReloadResult> RebuildAsync(CancellationToken cancellationToken = default)
             {
+                throw new NotSupportedException();
             }
 
-            public void OnStateChanged(Action<DevSessionState> callback)
+            public Task RestartAsync(CancellationToken cancellationToken = default)
             {
+                throw new NotSupportedException();
             }
 
             public ValueTask DisposeAsync()
             {
-                State = DevSessionState.Stopped;
                 return ValueTask.CompletedTask;
             }
         }

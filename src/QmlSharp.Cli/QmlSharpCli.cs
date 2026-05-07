@@ -3,7 +3,6 @@ using System.CommandLine.Parsing;
 using QmlSharp.Build;
 using BuildShellCommand = QmlSharp.Build.BuildCommand;
 using CleanShellCommand = QmlSharp.Build.CleanCommand;
-using DevShellCommand = QmlSharp.Build.DevCommand;
 using DoctorShellCommand = QmlSharp.Build.DoctorCommand;
 using InitShellCommand = QmlSharp.Build.InitCommand;
 
@@ -25,7 +24,7 @@ namespace QmlSharp.Cli
             ICommandOutput commandOutput = new TextWriterCommandOutput(output, error);
             RootCommand root = new("QmlSharp command-line tool.");
             root.Add(CreateBuildCommand(services, commandOutput));
-            root.Add(CreateDevCommand(services, commandOutput));
+            root.Add(CreateDevCommand(services, commandOutput, output));
             root.Add(CreateDoctorCommand(services, commandOutput));
             root.Add(CreateInitCommand(services, commandOutput));
             root.Add(CreateCleanCommand(services, commandOutput));
@@ -122,7 +121,10 @@ namespace QmlSharp.Cli
             return command;
         }
 
-        private static Command CreateDevCommand(CliCommandServices services, ICommandOutput output)
+        private static Command CreateDevCommand(
+            CliCommandServices services,
+            ICommandOutput output,
+            TextWriter devConsoleOutput)
         {
             Option<bool> headlessOption = new("--headless");
             Option<string> entryOption = new("--entry");
@@ -139,7 +141,11 @@ namespace QmlSharp.Cli
                     Entry = parseResult.GetValue(entryOption),
                     ProjectDir = parseResult.GetValue(projectDirOption) ?? ".",
                 };
-                DevShellCommand shell = new(services.ConfigLoader, services.DevSession, output);
+                CliDevCommand shell = new(
+                    services.ConfigLoader,
+                    services.DevServerFactory,
+                    output,
+                    devConsoleOutput);
                 return shell.ExecuteAsync(options, cancellationToken);
             });
             return command;
