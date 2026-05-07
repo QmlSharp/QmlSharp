@@ -622,6 +622,12 @@ namespace QmlSharp.DevTools
             hotReloadCount++;
             totalHotReloadTime += reloadResult.TotalTime > TimeSpan.Zero ? reloadResult.TotalTime : elapsed;
             errorOverlay.Hide();
+            if (reloadResult.FailedStep == HotReloadStep.Restore &&
+                !string.IsNullOrWhiteSpace(reloadResult.ErrorMessage))
+            {
+                console.Warn(reloadResult.ErrorMessage);
+            }
+
             console.HotReloadSuccess(reloadResult);
             runningSince ??= clock.UtcNow;
             TransitionTo(DevServerStatus.Running, "Hot reload succeeded.");

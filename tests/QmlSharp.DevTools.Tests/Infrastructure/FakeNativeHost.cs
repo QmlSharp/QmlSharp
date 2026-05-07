@@ -47,6 +47,10 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
 
         public Exception? RestoreException { get; set; }
 
+        public Exception? GetInstancesException { get; set; }
+
+        public bool ClearGetInstancesExceptionAfterThrow { get; set; }
+
         public Action? BeforeCapture { get; set; }
 
         public Action? BeforeReload { get; set; }
@@ -115,6 +119,17 @@ namespace QmlSharp.DevTools.Tests.Infrastructure
         public Task<IReadOnlyList<InstanceInfo>> GetInstancesAsync(CancellationToken cancellationToken = default)
         {
             callOrder.Add("instances");
+            if (GetInstancesException is not null)
+            {
+                Exception exception = GetInstancesException;
+                if (ClearGetInstancesExceptionAfterThrow)
+                {
+                    GetInstancesException = null;
+                }
+
+                throw exception;
+            }
+
             return Task.FromResult(Instances);
         }
 
