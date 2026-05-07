@@ -76,34 +76,6 @@
       }
     },
     {
-      "name": "windows-vsbase",
-      "hidden": true,
-      "inherits": ["base"],
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      },
-      "generator": "Visual Studio 18 2026",
-      "architecture": {
-        "value": "x64",
-        "strategy": "set"
-      },
-      "cacheVariables": {
-        "CMAKE_GENERATOR_TOOLSET": "ClangCL",
-        "CMAKE_C_COMPILER": "clang-cl",
-        "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded"
-      }
-    },
-    {
-      "name": "windows-vs",
-      "displayName": "Windows x64 (Visual Studio 2026)",
-      "description": "Multi-config VS 2026 build (Debug and Release in one solution)",
-      "inherits": ["windows-vsbase"],
-      "binaryDir": "${sourceDir}/build/vs"
-    },
-    {
       "name": "linux-base",
       "hidden": true,
       "inherits": ["base"],
@@ -239,20 +211,6 @@
       "displayName": "CI",
       "nativeToolOptions": ["-cache", "-summary"],
       "targets": ["all"]
-    },
-    {
-      "name": "windows-vs-debug",
-      "configurePreset": "windows-vs",
-      "displayName": "Windows VS Debug",
-      "configuration": "Debug",
-      "targets": ["ALL_BUILD"]
-    },
-    {
-      "name": "windows-vs-release",
-      "configurePreset": "windows-vs",
-      "displayName": "Windows VS Release",
-      "configuration": "Release",
-      "targets": ["ALL_BUILD"]
     },
     {
       "name": "linux-debug",

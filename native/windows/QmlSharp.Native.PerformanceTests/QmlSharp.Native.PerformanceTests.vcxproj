@@ -41,6 +41,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <TargetName>qmlsharp_native_performance_tests</TargetName>
+    <QmlSharpBuildNativeCoreSources>true</QmlSharpBuildNativeCoreSources>
   </PropertyGroup>
   <Import Project="..\QmlSharp.Native.Windows.props" />
   <ItemDefinitionGroup>
@@ -49,37 +50,11 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\qmlsharp_abi.cpp" />
-    <ClCompile Include="..\..\src\qmlsharp_diagnostics.cpp" />
-    <ClCompile Include="..\..\src\qmlsharp_effects.cpp" />
-    <ClCompile Include="..\..\src\qmlsharp_engine.cpp" />
-    <ClCompile Include="..\..\src\qmlsharp_error_overlay.cpp" />
-    <ClCompile Include="..\..\src\qmlsharp_errors.cpp" />
-    <ClCompile Include="..\..\src\qmlsharp_hot_reload.cpp" />
-    <ClCompile Include="..\..\src\qmlsharp_instances.cpp" />
-    <ClCompile Include="..\..\src\qmlsharp_metrics.cpp" />
-    <ClCompile Include="..\..\src\qmlsharp_state.cpp" />
-    <ClCompile Include="..\..\src\qmlsharp_type_registry.cpp" />
     <ClCompile Include="..\..\tests\native_host_performance_tests.cpp" />
     <ClCompile Include="..\..\tests\fixtures\RegistrationCounterViewModel.cpp" />
     <ClCompile Include="..\..\tests\fixtures\RegistrationStatusViewModel.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\include\qmlsharp\qmlsharp_abi.h" />
-    <ClInclude Include="..\..\include\qmlsharp\qmlsharp_export.h" />
-    <ClInclude Include="..\..\src\qmlsharp_diagnostics.h" />
-    <ClInclude Include="..\..\src\qmlsharp_effects.h" />
-    <ClInclude Include="..\..\src\qmlsharp_engine.h">
-      <RunMoc>true</RunMoc>
-      <MocGroup>core</MocGroup>
-    </ClInclude>
-    <ClInclude Include="..\..\src\qmlsharp_error_overlay.h" />
-    <ClInclude Include="..\..\src\qmlsharp_errors.h" />
-    <ClInclude Include="..\..\src\qmlsharp_hot_reload.h" />
-    <ClInclude Include="..\..\src\qmlsharp_instances.h" />
-    <ClInclude Include="..\..\src\qmlsharp_metrics.h" />
-    <ClInclude Include="..\..\src\qmlsharp_state.h" />
-    <ClInclude Include="..\..\src\qmlsharp_type_registry.h" />
     <ClInclude Include="..\..\tests\fixtures\RegistrationCounterViewModel.h">
       <RunMoc>true</RunMoc>
       <MocGroup>fixtures</MocGroup>
